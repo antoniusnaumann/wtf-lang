@@ -722,39 +722,243 @@ mod tests {
 
         assert_eq!(tokens, expected_tokens);
     }
+
+    #[test]
+    fn test_record_declaration() {
+        let input = r#"
+    record point {
+        x: s32
+        y: s32
+    }
+    "#;
+
+        let mut lexer = Lexer::new(input);
+
+        let expected_tokens = vec![
+            Token::Record,
+            Token::Identifier("point".into()),
+            Token::LeftBrace,
+            Token::Identifier("x".into()),
+            Token::Colon,
+            Token::Identifier("s32".into()),
+            Token::Identifier("y".into()),
+            Token::Colon,
+            Token::Identifier("s32".into()),
+            Token::RightBrace,
+            Token::Eof,
+        ];
+
+        let mut tokens = Vec::new();
+
+        loop {
+            let spanned_tok = lexer.next_token();
+            tokens.push(spanned_tok.token.clone());
+            if matches!(spanned_tok.token, Token::Eof) {
+                break;
+            }
+        }
+
+        assert_eq!(tokens, expected_tokens);
+    }
+
+    #[test]
+    fn test_function_declaration() {
+        let input = r#"
+    func add(a: s32, b: s32) -> s32 {
+        a + b
+    }
+    "#;
+
+        let mut lexer = Lexer::new(input);
+
+        let expected_tokens = vec![
+            Token::Func,
+            Token::Identifier("add".into()),
+            Token::LeftParen,
+            Token::Identifier("a".into()),
+            Token::Colon,
+            Token::Identifier("s32".into()),
+            Token::Comma,
+            Token::Identifier("b".into()),
+            Token::Colon,
+            Token::Identifier("s32".into()),
+            Token::RightParen,
+            Token::Arrow,
+            Token::Identifier("s32".into()),
+            Token::LeftBrace,
+            Token::Identifier("a".into()),
+            Token::Plus,
+            Token::Identifier("b".into()),
+            Token::RightBrace,
+            Token::Eof,
+        ];
+
+        let mut tokens = Vec::new();
+
+        loop {
+            let spanned_tok = lexer.next_token();
+            tokens.push(spanned_tok.token.clone());
+            if matches!(spanned_tok.token, Token::Eof) {
+                break;
+            }
+        }
+
+        assert_eq!(tokens, expected_tokens);
+    }
+
+    #[test]
+    fn test_immutable_variable_declaration() {
+        let input = r#"
+    let p1 = point {
+        x: 5,
+        y: 10
+    }
+    "#;
+
+        let mut lexer = Lexer::new(input);
+
+        let expected_tokens = vec![
+            Token::Let,
+            Token::Identifier("p1".into()),
+            Token::Equal,
+            Token::Identifier("point".into()),
+            Token::LeftBrace,
+            Token::Identifier("x".into()),
+            Token::Colon,
+            Token::IntegerLiteral(5),
+            Token::Comma,
+            Token::Identifier("y".into()),
+            Token::Colon,
+            Token::IntegerLiteral(10),
+            Token::RightBrace,
+            Token::Eof,
+        ];
+
+        let mut tokens = Vec::new();
+
+        loop {
+            let token = lexer.next_token();
+            tokens.push(token.token.clone());
+            if matches!(token.token, Token::Eof) {
+                break;
+            }
+        }
+
+        assert_eq!(tokens, expected_tokens);
+    }
+
+    #[test]
+    fn test_mutable_variable_declaration() {
+        let input = r#"
+    var p2 = point {
+        x: 5,
+        y: 10
+    }
+    "#;
+
+        let mut lexer = Lexer::new(input);
+
+        let expected_tokens = vec![
+            Token::Var,
+            Token::Identifier("p2".into()),
+            Token::Equal,
+            Token::Identifier("point".into()),
+            Token::LeftBrace,
+            Token::Identifier("x".into()),
+            Token::Colon,
+            Token::IntegerLiteral(5),
+            Token::Comma,
+            Token::Identifier("y".into()),
+            Token::Colon,
+            Token::IntegerLiteral(10),
+            Token::RightBrace,
+            Token::Eof,
+        ];
+
+        let mut tokens = Vec::new();
+
+        loop {
+            let token = lexer.next_token();
+            tokens.push(token.token.clone());
+            if matches!(token.token, Token::Eof) {
+                break;
+            }
+        }
+
+        assert_eq!(tokens, expected_tokens);
+    }
+
+    #[test]
+    fn test_field_assignment() {
+        let input = r#"
+    p2.x = 15
+    "#;
+
+        let mut lexer = Lexer::new(input);
+
+        let expected_tokens = vec![
+            Token::Identifier("p2".into()),
+            Token::Dot,
+            Token::Identifier("x".into()),
+            Token::Equal,
+            Token::IntegerLiteral(15),
+            Token::Eof,
+        ];
+
+        let mut tokens = Vec::new();
+
+        loop {
+            let token = lexer.next_token();
+            tokens.push(token.token.clone());
+            if matches!(token.token, Token::Eof) {
+                break;
+            }
+        }
+
+        assert_eq!(tokens, expected_tokens);
+    }
+
+    #[test]
+    fn test_if_statement_with_comparison() {
+        let input = r#"
+    if p2.x == 15 {
+        p2.x = p2.x + 1
+    }
+    "#;
+
+        let mut lexer = Lexer::new(input);
+
+        let expected_tokens = vec![
+            Token::If,
+            Token::Identifier("p2".into()),
+            Token::Dot,
+            Token::Identifier("x".into()),
+            Token::DoubleEqual,
+            Token::IntegerLiteral(15),
+            Token::LeftBrace,
+            Token::Identifier("p2".into()),
+            Token::Dot,
+            Token::Identifier("x".into()),
+            Token::Equal,
+            Token::Identifier("p2".into()),
+            Token::Dot,
+            Token::Identifier("x".into()),
+            Token::Plus,
+            Token::IntegerLiteral(1),
+            Token::RightBrace,
+            Token::Eof,
+        ];
+
+        let mut tokens = Vec::new();
+
+        loop {
+            let token = lexer.next_token();
+            tokens.push(token.token.clone());
+            if matches!(token.token, Token::Eof) {
+                break;
+            }
+        }
+
+        assert_eq!(tokens, expected_tokens);
+    }
 }
-
-// More to test:
-
-// record point {
-//     x: s32
-//     y: s32
-// }
-
-// func add(a: s32, b: s32) -> s32 {
-//     a + b
-// }
-
-// let p1 = point {
-//     x: 5,
-//     y: 10
-// }
-
-// var p2 = point {
-//     x: 5,
-//     y: 10
-// }
-
-// p2.x = 15
-
-// if p2.x == 15 {
-//     p2.x = p2.x + 1
-// }
-
-// p2?.x
-
-// p2.x++
-
-// value in list
-
-// !
