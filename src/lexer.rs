@@ -1,26 +1,37 @@
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
-    // Keywords
+    // Definition
     Func,
     Constructor,
     Record,
     Resource,
     Enum,
     Variant,
+
+    // Declaration
     Let,
     Var,
+
+    // Conditionals
     If,
     Else,
     Match,
-    Use,
-    Import,
-    Export,
-    Package,
-    Contains, // For 'in'
+
+    // Loops
+    For,
+    While,
 
     // Control Flow
     Return,
     Throw,
+    Break,
+    Continue,
+
+    // Imports
+    Use,
+    Import,
+    Export,
+    Package,
 
     // Identifiers and Literals
     Identifier(String),
@@ -29,36 +40,38 @@ pub enum Token {
     StringLiteral(String),
 
     // Operators
-    Plus,
-    Minus,
-    Asterisk,
-    Slash,
-    Equal,
-    DoubleEqual,
-    NotEqual,
-    GreaterThan,
-    LessThan,
-    GreaterEqual,
-    LessEqual,
-    Arrow,
-    QuestionMark,
-    SafeCall, // ?.
-    Bang,     // !
-    Concat,   // ++
+    Plus,         // +
+    Minus,        // -
+    Asterisk,     // *
+    Slash,        // /
+    Equal,        // =
+    DoubleEqual,  // ==
+    NotEqual,     // !=
+    GreaterThan,  // >
+    LessThan,     // <
+    GreaterEqual, // >=
+    LessEqual,    // <=
+    Arrow,        // ->
+    DoubleArrow,  // =>
+    QuestionMark, // ?
+    SafeCall,     // ?.
+    Bang,         // !
+    Concat,       // ++
+    Contains,     // in
 
     // Punctuation
-    LeftParen,
-    RightParen,
-    LeftBrace,
-    RightBrace,
-    LeftBracket,
-    RightBracket,
-    Comma,
-    Semicolon,
-    Colon,
-    Dot,
-    DoubleColon,
-    At,
+    LeftParen,    // (
+    RightParen,   // )
+    LeftBrace,    // {
+    RightBrace,   // }
+    LeftBracket,  // [
+    RightBracket, // ]
+    Comma,        // ,
+    Semicolon,    // ;
+    Colon,        // :
+    Dot,          // .
+    DoubleColon,  // ::
+    At,           // @
 
     // Special tokens
     Newline,
@@ -207,6 +220,9 @@ impl Lexer {
                 if self.current_char == Some('=') {
                     self.read_char();
                     Token::DoubleEqual
+                } else if self.current_char == Some('>') {
+                    self.read_char();
+                    Token::DoubleArrow
                 } else {
                     Token::Equal
                 }
@@ -348,6 +364,10 @@ impl Lexer {
             "in" => Token::Contains,
             "return" => Token::Return,
             "throw" => Token::Throw,
+            "continue" => Token::Continue,
+            "break" => Token::Break,
+            "for" => Token::For,
+            "while" => Token::While,
             _ => Token::Identifier(ident),
         }
     }
@@ -663,6 +683,7 @@ mod tests {
             Token::Identifier("int_val".into()),
             Token::Equal,
             Token::IntegerLiteral(42),
+            Token::Newline,
             Token::Let,
             Token::Identifier("float_val".into()),
             Token::Equal,
@@ -729,6 +750,7 @@ mod tests {
         }
 
         let expected_tokens = vec![
+            Token::Newline,
             Token::Package,
             Token::Identifier("documentation".into()),
             Token::Colon,
@@ -736,6 +758,7 @@ mod tests {
             Token::At,
             Token::Invalid("1.0.0".into()),
             Token::Semicolon,
+            Token::Newline,
             Token::Use,
             Token::Identifier("wasi".into()),
             Token::Colon,
@@ -757,24 +780,27 @@ mod tests {
     #[test]
     fn test_record_declaration() {
         let input = r#"
-    record point {
-        x: s32
-        y: s32
-    }
-    "#;
+            record point {
+                x: s32
+                y: s32
+            }"#;
 
         let mut lexer = Lexer::new(input);
 
         let expected_tokens = vec![
+            Token::Newline,
             Token::Record,
             Token::Identifier("point".into()),
             Token::LeftBrace,
+            Token::Newline,
             Token::Identifier("x".into()),
             Token::Colon,
             Token::Identifier("s32".into()),
+            Token::Newline,
             Token::Identifier("y".into()),
             Token::Colon,
             Token::Identifier("s32".into()),
+            Token::Newline,
             Token::RightBrace,
             Token::Eof,
         ];
@@ -795,10 +821,9 @@ mod tests {
     #[test]
     fn test_function_declaration() {
         let input = r#"
-    func add(a: s32, b: s32) -> s32 {
-        a + b
-    }
-    "#;
+            func add(a: s32, b: s32) -> s32 {
+                a + b
+            }"#;
 
         let mut lexer = Lexer::new(input);
 
@@ -827,7 +852,7 @@ mod tests {
         let mut tokens = Vec::new();
 
         loop {
-            let spanned_tok = lexer.next_token();
+            let spanned_tok = lexer.next_skip_newline();
             tokens.push(spanned_tok.token.clone());
             if matches!(spanned_tok.token, Token::Eof) {
                 break;
@@ -839,12 +864,10 @@ mod tests {
 
     #[test]
     fn test_immutable_variable_declaration() {
-        let input = r#"
-    let p1 = point {
-        x: 5,
-        y: 10
-    }
-    "#;
+        let input = r#"let p1 = point {
+                                x: 5, 
+                                y: 10, 
+                             }"#;
 
         let mut lexer = Lexer::new(input);
 
@@ -854,13 +877,17 @@ mod tests {
             Token::Equal,
             Token::Identifier("point".into()),
             Token::LeftBrace,
+            Token::Newline,
             Token::Identifier("x".into()),
             Token::Colon,
             Token::IntegerLiteral(5),
             Token::Comma,
+            Token::Newline,
             Token::Identifier("y".into()),
             Token::Colon,
             Token::IntegerLiteral(10),
+            Token::Comma,
+            Token::Newline,
             Token::RightBrace,
             Token::Eof,
         ];
@@ -881,11 +908,11 @@ mod tests {
     #[test]
     fn test_mutable_variable_declaration() {
         let input = r#"
-    var p2 = point {
-        x: 5,
-        y: 10
-    }
-    "#;
+            var p2 = point {
+                x: 5,
+                y: 10
+            }
+            "#;
 
         let mut lexer = Lexer::new(input);
 
@@ -909,7 +936,7 @@ mod tests {
         let mut tokens = Vec::new();
 
         loop {
-            let token = lexer.next_token();
+            let token = lexer.next_skip_newline();
             tokens.push(token.token.clone());
             if matches!(token.token, Token::Eof) {
                 break;
@@ -921,9 +948,7 @@ mod tests {
 
     #[test]
     fn test_field_assignment() {
-        let input = r#"
-    p2.x = 15
-    "#;
+        let input = r#"p2.x = 15"#;
 
         let mut lexer = Lexer::new(input);
 
@@ -951,11 +976,9 @@ mod tests {
 
     #[test]
     fn test_if_statement_with_comparison() {
-        let input = r#"
-    if p2.x == 15 {
-        p2.x = p2.x + 1
-    }
-    "#;
+        let input = r#"if p2.x == 15 {
+                                 p2.x = p2.x + 1
+                             }"#;
 
         let mut lexer = Lexer::new(input);
 
@@ -967,6 +990,7 @@ mod tests {
             Token::DoubleEqual,
             Token::IntegerLiteral(15),
             Token::LeftBrace,
+            Token::Newline,
             Token::Identifier("p2".into()),
             Token::Dot,
             Token::Identifier("x".into()),
@@ -976,6 +1000,7 @@ mod tests {
             Token::Identifier("x".into()),
             Token::Plus,
             Token::IntegerLiteral(1),
+            Token::Newline,
             Token::RightBrace,
             Token::Eof,
         ];
@@ -986,6 +1011,49 @@ mod tests {
             let token = lexer.next_token();
             tokens.push(token.token.clone());
             if matches!(token.token, Token::Eof) {
+                break;
+            }
+        }
+
+        assert_eq!(tokens, expected_tokens);
+    }
+
+    #[test]
+    fn test_preserve_newline_after_comment() {
+        let input = r#"
+            record point {
+                x: s32 // This comment should not change the token order
+                y: s32
+                // z: s32 <- This introduces a second newline token: (newline _comment newline) instead of (newline)
+            }"#;
+
+        let mut lexer = Lexer::new(input);
+
+        let expected_tokens = vec![
+            Token::Newline,
+            Token::Record,
+            Token::Identifier("point".into()),
+            Token::LeftBrace,
+            Token::Newline,
+            Token::Identifier("x".into()),
+            Token::Colon,
+            Token::Identifier("s32".into()),
+            Token::Newline,
+            Token::Identifier("y".into()),
+            Token::Colon,
+            Token::Identifier("s32".into()),
+            Token::Newline,
+            Token::Newline,
+            Token::RightBrace,
+            Token::Eof,
+        ];
+
+        let mut tokens = Vec::new();
+
+        loop {
+            let spanned_tok = lexer.next_token();
+            tokens.push(spanned_tok.token.clone());
+            if matches!(spanned_tok.token, Token::Eof) {
                 break;
             }
         }

@@ -1,9 +1,9 @@
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Module {
     pub declarations: Vec<Declaration>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Declaration {
     Function(FunctionDeclaration),
     Record(RecordDeclaration),
@@ -16,7 +16,7 @@ pub enum Declaration {
     Use(UseDeclaration),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FunctionDeclaration {
     pub name: String,
     pub parameters: Vec<Parameter>,
@@ -24,19 +24,19 @@ pub struct FunctionDeclaration {
     pub body: Block,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ConstructorDeclaration {
     pub parameters: Vec<Parameter>,
     pub body: Block,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecordDeclaration {
     pub name: String,
     pub fields: Vec<Field>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ResourceDeclaration {
     pub name: String,
     pub fields: Vec<Field>,
@@ -44,54 +44,54 @@ pub struct ResourceDeclaration {
     pub methods: Vec<FunctionDeclaration>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnumDeclaration {
     pub name: String,
     pub variants: Vec<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VariantDeclaration {
     pub name: String,
     pub cases: Vec<VariantCase>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VariantCase {
     pub name: String,
     pub associated_type: Option<TypeAnnotation>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImportDeclaration {
     pub path: String,
     pub items: Vec<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExportDeclaration {
     pub items: Vec<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PackageDeclaration {
     pub name: String,
     pub version: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UseDeclaration {
     pub module_path: String,
     pub items: Vec<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Parameter {
     pub name: String,
     pub type_annotation: TypeAnnotation,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypeAnnotation {
     Simple(String),
     List(Box<TypeAnnotation>),
@@ -103,22 +103,23 @@ pub enum TypeAnnotation {
     Tuple(Vec<TypeAnnotation>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Block {
     pub statements: Vec<Statement>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Field {
     pub name: String,
     pub type_annotation: TypeAnnotation,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
     VariableDeclaration(VariableDeclaration),
     Assignment {
         target: Expression,
+        op: AssignmentOperator,
         value: Expression,
     },
     ExpressionStatement(Expression),
@@ -132,7 +133,7 @@ pub enum Statement {
     ForStatement(ForStatement),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct VariableDeclaration {
     pub mutable: bool,
     pub name: String,
@@ -140,39 +141,39 @@ pub struct VariableDeclaration {
     pub value: Expression,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct IfStatement {
     pub condition: Expression,
     pub then_branch: Block,
     pub else_branch: Option<Block>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MatchStatement {
     pub expression: Expression,
     pub arms: Vec<MatchArm>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MatchArm {
     pub pattern: Pattern,
     pub body: Block,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct WhileStatement {
     pub condition: Expression,
     pub body: Block,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ForStatement {
     pub variable: String,
     pub iterable: Expression,
     pub body: Block,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Pattern {
     Identifier(String),
     Literal(Literal),
@@ -182,7 +183,7 @@ pub enum Pattern {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
     Literal(Literal),
     Identifier(String),
@@ -221,7 +222,7 @@ pub enum Expression {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
     Integer(i64),
     Float(f64),
@@ -230,12 +231,9 @@ pub enum Literal {
     None,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BinaryOperator {
-    Add,          // '+'
-    Subtract,     // '-'
-    Multiply,     // '*'
-    Divide,       // '/'
+    Arithmetic(ArithmeticOperator),
     Equal,        // '=='
     NotEqual,     // '!='
     GreaterThan,  // '>'
@@ -246,8 +244,28 @@ pub enum BinaryOperator {
     Contains,     // 'in'
 }
 
-#[derive(Debug, Clone, PartialEq)]
+impl From<ArithmeticOperator> for BinaryOperator {
+    fn from(value: ArithmeticOperator) -> Self {
+        BinaryOperator::Arithmetic(value)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ArithmeticOperator {
+    Add,      // '+'
+    Subtract, // '-'
+    Multiply, // '*'
+    Divide,   // '/'
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UnaryOperator {
     Negate, // '-'
     Not,    // '!'
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AssignmentOperator {
+    Assign,                   // '='
+    OpAssign(BinaryOperator), // e.g. '+='
 }
