@@ -75,14 +75,29 @@ pub struct ExportDeclaration {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PackageDeclaration {
-    pub name: String,
-    pub version: String,
+    pub path: ModulePath,
+    pub version: Option<Version>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UseDeclaration {
-    pub module_path: String,
-    pub items: Vec<String>,
+    pub module_path: ModulePath,
+    pub interface: String,
+    pub types: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModulePath {
+    pub owner: String,
+    pub package: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Version {
+    pub major: u64,
+    pub minor: u64,
+    pub patch: u64,
+    pub extras: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

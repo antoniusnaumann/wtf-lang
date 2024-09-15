@@ -1,7 +1,6 @@
-// parser.rs
-
-use crate::ast::*;
 use crate::lexer::{Lexer, SpannedToken, Token};
+
+use wtf_ast::*;
 
 #[derive(Clone, Debug)]
 pub struct ParserError {
@@ -773,15 +772,59 @@ impl Parser {
     }
 
     fn parse_export_declaration(&mut self) -> Result<ExportDeclaration> {
-        todo!("TODO: Implement export parsing")
+        todo!("TODO: Implement export parsing. Maybe this should just be a keyword on types and functions directly")
     }
 
     fn parse_package_declaration(&mut self) -> Result<PackageDeclaration> {
-        todo!("TODO: Implement package parsing")
+        self.expect_token(Token::Package)?;
+        let path = self.parse_path()?;
+
+        let version = if self.current.token == Token::At {
+            self.advance_tokens();
+            Some(self.parse_version()?)
+        } else {
+            None
+        };
+
+        Ok(PackageDeclaration { path, version })
     }
 
     fn parse_use_declaration(&mut self) -> Result<UseDeclaration> {
-        todo!("TODO: Implement 'use' parsing")
+        self.expect_token(Token::Use)?;
+        let module_path = self.parse_path()?;
+
+        self.expect_token(Token::Slash)?;
+        let interface = self.expect_identifier()?;
+
+        self.expect_token(Token::Dot)?;
+        self.expect_token(Token::LeftBrace)?;
+        let mut types = Vec::new();
+        while self.current.token != Token::RightBrace && types.is_empty()
+            || self.expect_token(Token::Comma).is_ok()
+        {
+            let ty = self.expect_identifier()?;
+            types.push(ty);
+        }
+
+        self.expect_token(Token::RightBrace)?;
+
+        Ok(UseDeclaration {
+            module_path,
+            interface,
+            types,
+        })
+    }
+
+    fn parse_path(&mut self) -> Result<ModulePath> {
+        let owner = self.expect_identifier()?;
+        self.expect_token(Token::Colon)?;
+        let package = self.expect_identifier()?;
+
+        Ok(ModulePath { owner, package })
+    }
+
+    fn parse_version(&mut self) -> Result<Version> {
+        todo!("Parse version string")
     }
 }
 
@@ -1083,15 +1126,51 @@ mod tests {
     #[test]
     fn test_parse_use_declaration() -> Result<()> {
         let input = r#"
-        use external:io::{print, println}
+        use external:io/printer.{print}
         "#;
 
         let lexer = Lexer::new(input);
         let mut parser = Parser::new(lexer);
         let module = parser.parse_module()?;
 
-        // TODO: Implement parse_use_declaration and update the test
-        assert!(module.declarations.is_empty());
+        let expected_ast = Module {
+            declarations: vec![Declaration::Use(UseDeclaration {
+                module_path: ModulePath {
+                    owner: "external".to_owned(),
+                    package: "io".to_owned(),
+                },
+                interface: "printer".to_owned(),
+                types: vec!["print".to_owned()],
+            })],
+        };
+
+        assert_eq!(module, expected_ast);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_use_declaration_two_imports() -> Result<()> {
+        let input = r#"
+        use external:io/printer.{print, println}
+        "#;
+
+        let lexer = Lexer::new(input);
+        let mut parser = Parser::new(lexer);
+        let module = parser.parse_module()?;
+
+        let expected_ast = Module {
+            declarations: vec![Declaration::Use(UseDeclaration {
+                module_path: ModulePath {
+                    owner: "external".to_owned(),
+                    package: "io".to_owned(),
+                },
+                interface: "printer".to_owned(),
+                types: vec!["print".to_owned(), "println".to_owned()],
+            })],
+        };
+
+        assert_eq!(module, expected_ast);
 
         Ok(())
     }

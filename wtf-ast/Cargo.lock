@@ -5,10 +5,3 @@ version = 3
 [[package]]
 name = "wtf-ast"
 version = "0.1.0"
-
-[[package]]
-name = "wtf-lang"
-version = "0.1.0"
-dependencies = [
- "wtf-ast",
-]

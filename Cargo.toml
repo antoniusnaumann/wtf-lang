@@ -1,6 +1,24 @@
-[package]
-name = "wtf-lang"
-version = "0.1.0"
+[workspace.package]
+authors = ["Antonius Naumann"]
 edition = "2021"
+version = "0.0.0"
+license = "MIT"
 
-[dependencies]
+[workspace.dependencies]
+
+# Uncomment this for a top level executable
+# [package]
+# name = "wtf-lang"
+# description = "WebAssembly Types & Functions"
+
+# authors.workspace = true
+# edition.workspace = true
+# version.workspace = true
+# license.workspace = true
+
+[workspace]
+resolver = "2"
+members = [
+  "wtf-ast",
+  "wtf-parser"
+]
