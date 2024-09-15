@@ -1,0 +1,147 @@
+// Updated example_code.txt
+
+package test:all_features@1.0.0;
+
+use external:math::{sqrt, pow}
+use external:io::{print, println}
+
+// Record definition with fields
+record point {
+    x: f64
+    y: f64
+}
+
+// Resource with constructor and methods
+resource counter {
+    value: s32
+
+    constructor(initial: s32) {
+        self.value = initial
+    }
+
+    func increment() {
+        self.value = self.value + 1
+    }
+
+    func get_value() -> s32 {
+        return self.value
+    }
+}
+
+// Enum definition
+enum direction {
+    north
+    east
+    south
+    west
+}
+
+// Variant (sum type) with associated values
+variant result<T, E> {
+    ok(value: T)
+    err(error: E)
+}
+
+// Function with parameters, return type, and block
+func calculate_distance(p1: point, p2: point) -> f64 {
+    let dx = p2.x - p1.x
+    let dy = p2.y - p1.y
+    let distance = sqrt(dx * dx + dy * dy)
+    return distance
+}
+
+// Main function demonstrating various features
+func main() {
+    // Variable declarations
+    let origin = point {
+        x: 0.0,
+        y: 0.0
+    }
+
+    var current_position = point {
+        x: 10.0,
+        y: 5.0
+    }
+
+    // Mutable variable assignment
+    current_position.x = current_position.x + 5.0
+
+    // Function call
+    let distance = calculate_distance(origin, current_position)
+    println("Distance: " ++ distance.to_string())
+
+    // Resource usage
+    var cnt = counter(0)
+    cnt.increment()
+    println("Counter value: " ++ cnt.get_value().to_string())
+
+    // If statement with else branch
+    if cnt.value > 10 {
+        println("Counter is greater than 10")
+    } else {
+        println("Counter is less than or equal to 10")
+    }
+
+    // While loop
+    while cnt.value < 5 {
+        cnt.increment()
+        if cnt.value == 3 {
+            continue
+        }
+        println("Counter in loop: " ++ cnt.value.to_string())
+    }
+
+    // For loop
+    for i in 0..5 {
+        println("For loop iteration: " ++ i.to_string())
+        if i == 2 {
+            break  // Break without value
+        }
+    }
+
+    // Match statement with patterns
+    let dir = direction::east
+    match dir {
+        direction::north => println("Going north")
+        direction::east => println("Going east")
+        direction::south => println("Going south")
+        direction::west => println("Going west")
+    }
+
+    // Using option type with auto-wrapping
+    let optional_value: option<s32> = 42  // 'some(42)' is auto-wrapped
+    let value = optional_value?.to_string()
+    println("Optional value: " ++ value)
+
+    // Using result type with yeet operator and error propagation
+    let computation = compute(10, 0, 5)!
+    println("Computation result: " ++ computation.to_string())
+
+    // Expression statement
+    print("End of main function")
+}
+
+// Function that uses divide and propagates errors with '!'
+func compute(a: s32, b: s32, c: s32) -> result<s32, string> {
+    let div = divide(a, b)!
+    let result = div + c
+    return result  // 'ok(result)' is auto-wrapped
+}
+
+// Function that returns a result type, using 'throw' for errors
+func divide(a: s32, b: s32) -> result<s32, string> {
+    if b == 0 {
+        throw "Division by zero"  // Preferred idiomatic error handling
+    }
+    return a / b  // 'ok(a / b)' is auto-wrapped
+}
+
+// Function demonstrating finding a number without 'break' with value
+func find_number(numbers: list<s32>, target: s32) -> option<s32> {
+    for num in numbers {
+        if num == target {
+            return num  // 'some(num)' is auto-wrapped
+        }
+    }
+    return none
+}

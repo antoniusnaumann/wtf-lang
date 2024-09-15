@@ -61,6 +61,7 @@ pub enum Token {
     At,
 
     // Special tokens
+    Newline,
     Eof,
     Invalid(String),
 }
@@ -116,12 +117,32 @@ impl Lexer {
         }
     }
 
+    pub fn next_skip_newline(&mut self) -> SpannedToken {
+        loop {
+            let token = self.next_token();
+            if token.token != Token::Newline {
+                return token;
+            }
+        }
+    }
+
     pub fn next_token(&mut self) -> SpannedToken {
         self.skip_whitespace();
 
         let start_pos = self.position;
 
         let token = match self.current_char {
+            Some(c) if c.is_newline() => {
+                while let Some(c) = self.current_char {
+                    if c.is_whitespace() || c.is_newline() {
+                        self.read_char();
+                    } else {
+                        break;
+                    }
+                }
+
+                Token::Newline
+            }
             Some('/') => {
                 if self.peek_char() == Some('/') {
                     // TODO: Add support for doc comments which get added to AST
@@ -159,7 +180,7 @@ impl Lexer {
                     Token::Plus
                 }
             }
-            Some(c) if is_letter(c) => {
+            Some(c) if c.is_ident_char() => {
                 let identifier = self.read_identifier();
                 self.lookup_identifier(identifier)
             }
@@ -278,7 +299,7 @@ impl Lexer {
 
     fn skip_whitespace(&mut self) {
         while let Some(c) = self.current_char {
-            if c.is_whitespace() {
+            if c.is_whitespace() && !c.is_newline() {
                 self.read_char();
             } else {
                 break;
@@ -293,13 +314,12 @@ impl Lexer {
             }
             self.read_char();
         }
-        self.read_char(); // Consume the newline
     }
 
     fn read_identifier(&mut self) -> String {
         let start_pos = self.position;
         while let Some(c) = self.current_char {
-            if is_letter(c) || c.is_digit(10) {
+            if c.is_ident_char() || c.is_digit(10) {
                 self.read_char();
             } else {
                 break;
@@ -380,8 +400,19 @@ impl Lexer {
     }
 }
 
-fn is_letter(c: char) -> bool {
-    c.is_ascii_lowercase() || c == '_'
+trait CharExt {
+    fn is_ident_char(self) -> bool;
+    fn is_newline(self) -> bool;
+}
+
+impl CharExt for char {
+    fn is_ident_char(self) -> bool {
+        self.is_ascii_lowercase() || self == '_'
+    }
+
+    fn is_newline(self) -> bool {
+        self == '\n' || self == '\r'
+    }
 }
 
 #[cfg(test)]
