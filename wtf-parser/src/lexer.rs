@@ -57,7 +57,8 @@ pub enum Token {
     SafeCall,     // ?.
     Bang,         // !
     Concat,       // ++
-    Contains,     // in
+    // Remove,    // --
+    Contains, // in
 
     // Punctuation
     LeftParen,    // (

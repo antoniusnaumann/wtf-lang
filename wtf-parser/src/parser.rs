@@ -1110,7 +1110,32 @@ mod tests {
     #[test]
     fn test_parse_package_declaration() -> Result<()> {
         let input = r#"
-        package test:all_features@1.0.0;
+        package test:all_features
+        "#;
+
+        let lexer = Lexer::new(input);
+        let mut parser = Parser::new(lexer);
+        let module = parser.parse_module()?;
+
+        let expected_ast = Module {
+            declarations: vec![Declaration::Package(PackageDeclaration {
+                path: ModulePath {
+                    owner: "test".to_owned(),
+                    package: "all_features".to_owned(),
+                },
+                version: None,
+            })],
+        };
+
+        assert_eq!(module, expected_ast);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_package_declaration_versioned() -> Result<()> {
+        let input = r#"
+        package test:all_features@1.0.0
         "#;
 
         let lexer = Lexer::new(input);
