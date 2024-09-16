@@ -1,9 +1,7 @@
-// Updated example_code.txt
-
 package test:all_features@1.0.0;
 
-use external:math::{sqrt, pow}
-use external:io::{print, println}
+use external:math/math.{sqrt, pow}
+use external:io/printer.{print, println}
 
 // Record definition with fields
 record point {
@@ -20,7 +18,7 @@ resource counter {
     }
 
     func increment() {
-        self.value = self.value + 1
+        self.value += 1
     }
 
     func get_value() -> s32 {
@@ -37,9 +35,9 @@ enum direction {
 }
 
 // Variant (sum type) with associated values
-variant result<T, E> {
-    ok(value: T)
-    err(error: E)
+variant color {
+    rgb(r: s8, g: s8, b: s8)
+    grayscale(luminance: s8)
 }
 
 // Function with parameters, return type, and block
@@ -47,6 +45,7 @@ func calculate_distance(p1: point, p2: point) -> f64 {
     let dx = p2.x - p1.x
     let dy = p2.y - p1.y
     let distance = sqrt(dx * dx + dy * dy)
+
     return distance
 }
 
@@ -100,12 +99,11 @@ func main() {
     }
 
     // Match statement with patterns
-    let dir = direction::east
+    let dir = east
     match dir {
-        direction::north => println("Going north")
-        direction::east => println("Going east")
-        direction::south => println("Going south")
-        direction::west => println("Going west")
+        north => println("Going north")
+        east => println("Going east")
+        let other => println("Going \(other)")
     }
 
     // Using option type with auto-wrapping
