@@ -191,6 +191,39 @@ cnt.increment()
 let val = cnt.get_value()
 ```
 
+**Implementing a resource:**
+```wtf
+resource vehicle {
+    func drive()
+}
+
+resource car {
+    func drive() { 
+        // ...
+    }
+
+    func honk() {
+        // ...
+    }
+}
+
+resource electric_car {
+    func drive() {
+        // ...
+    }
+
+    func honk() {
+        // ...
+    }
+
+    func charge() {
+        //...
+    }
+}
+```
+Similar to structural typing in records, resources can also conform to other resources. In the example above, a `car` can be passed whereever a `vehicle` is expected, as `car` implements all methods of `vehicle`. Note that `vehicle` here is an abstract resource: It does not implement any of its methods. Resources must either implement all or none of their methods.
+This mechanism also works for concrete resources, so an `electric_car` can be used whenever a `car` is expected.
+
 ## Enums
 
 Enums define a type with a fixed set of constant values:
@@ -298,7 +331,7 @@ while cnt.value < 5 {
     if cnt.value == 3 {
         continue
     }
-    println("Counter in loop: " ++ cnt.value.to_string())
+    println("Counter in loop: " + cnt.value.to_string())
 }
 ```
 
@@ -311,7 +344,7 @@ Iterate over a range or collection:
 
 ```wtf
 for i in 0..5 {
-    println("For loop iteration: " ++ i.to_string())
+    println("For loop iteration: " + i.to_string())
     if i == 2 {
         break  // Break without value
     }
@@ -430,7 +463,7 @@ match maybe {
 As seen in the last section, strings support string interpolation:
 ```wtf
 func say_hello(name: string?) -> string {
-    "Hello, \(name ?? "World")"
+    "Hello, \(name ? "World")"
 }
 ```
 - `\()` is used for string interpolation
@@ -455,7 +488,6 @@ print("Point: \(point:#v)")
 - Comparison Operators: `==`, `!=`, `>`, `<`, `>=`, `<=`
 - Logical Operators: `&&`, `||`, `!`
 - Assignment Operators: `=`, `+=`, `-=`, `*=`, `/=`
-- Concatenation Operator: `++` (for strings)
 - Range Operator: `..` (for loops)
 - Safe Access Operator: `?.` (for optional chaining)
 
