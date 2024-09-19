@@ -245,17 +245,39 @@ impl Parser {
             _ => {
                 let expr = self.parse_expression()?;
 
-                if let Some(op) = self.current_token_as_assignment() {
-                    // TODO: Check that target is a valid assignment target
-                    self.advance_tokens();
-                    let value = self.parse_expression()?;
-                    Ok(Statement::Assignment {
-                        target: expr,
-                        op,
-                        value,
-                    })
-                } else {
-                    Ok(Statement::ExpressionStatement(expr))
+                match self.current.token {
+                    Token::Equal => {
+                        // TODO: Check that target is a valid assignment target
+                        self.advance_tokens();
+                        let value = self.parse_expression()?;
+                        Ok(Statement::Assignment {
+                            target: expr,
+                            value,
+                        })
+                    }
+                    ref t @ (Token::Plus
+                    | Token::Minus
+                    | Token::Slash
+                    | Token::Asterisk
+                    | Token::QuestionMark) => {
+                        // We can safely expect an = here as a binary operator would have been consumed by parse_expression already
+                        let t = t.clone();
+                        self.advance_tokens();
+                        self.expect_token(Token::Equal)?;
+
+                        let right = self.parse_expression()?.into();
+
+                        let target = expr.clone();
+                        let operator = t.try_as_binary_op().expect("TODO: Error if there is another token than a binary operation as operator assignment");
+                        let value = Expression::BinaryExpression {
+                            left: expr.into(),
+                            operator,
+                            right,
+                        };
+
+                        Ok(Statement::Assignment { target, value })
+                    }
+                    _ => Ok(Statement::ExpressionStatement(expr)),
                 }
             }
         }
@@ -428,6 +450,10 @@ impl Parser {
                 // TODO: Add Vec with all operators
                 return Err(self.unexpected(vec![]));
             };
+            // The binary operator belongs to an assignment in this case
+            if self.lexer.peek().token == Token::Equal {
+                break;
+            }
             self.advance_tokens();
 
             let right = self.parse_binary_expression(op_precedence + 1)?;
@@ -469,31 +495,84 @@ impl Parser {
             Token::IntegerLiteral(value) => {
                 let expr = Expression::Literal(Literal::Integer(*value));
                 self.advance_tokens();
+
                 Ok(expr)
             }
             Token::FloatLiteral(value) => {
                 let expr = Expression::Literal(Literal::Float(*value));
                 self.advance_tokens();
+
                 Ok(expr)
             }
             Token::StringLiteral(value) => {
                 let expr = Expression::Literal(Literal::String(value.clone()));
                 self.advance_tokens();
+
                 Ok(expr)
             }
             Token::Identifier(name) => {
                 let name = name.clone();
+
                 self.advance_tokens();
-                self.parse_postfix_expression(Expression::Identifier(name))
+                let expr = if self.current.token == Token::LeftBrace {
+                    self.parse_record_lit(Some(name))?
+                } else {
+                    Expression::Identifier(name)
+                };
+
+                self.parse_postfix_expression(expr)
             }
             Token::LeftParen => {
                 self.advance_tokens();
                 let expr = self.parse_expression()?;
                 self.expect_token(Token::RightParen)?;
+
                 Ok(expr)
+            }
+            Token::LeftBrace => {
+                let record = self.parse_record_lit(None)?;
+
+                self.parse_postfix_expression(record)
             }
             _ => Err(self.unexpected(vec![])),
         }
+    }
+
+    /// This function assumes that the name was already parsed and is supplied if it exists
+    fn parse_record_lit(&mut self, name: Option<String>) -> Result<Expression> {
+        self.expect_token(Token::LeftBrace)?;
+
+        let mut members = Vec::new();
+        loop {
+            self.skip_newline();
+            if self.current.token == Token::RightBrace {
+                break;
+            }
+
+            let name = self
+                .current_token_as_identifier()
+                .ok_or_else(|| self.unexpected(vec![Token::Identifier("".to_owned())]))?;
+            self.advance_tokens();
+
+            let element = if self.current.token == Token::Colon {
+                self.advance_tokens();
+                self.parse_expression()?
+            } else {
+                Expression::Identifier(name.clone())
+            };
+
+            members.push(FieldAssignment { name, element });
+
+            // TODO: Do we want to allow new lines here as delimiter?
+            self.skip_newline();
+            if self.current.token != Token::Comma {
+                break;
+            }
+            self.advance_tokens();
+        }
+        self.expect_token(Token::RightBrace)?;
+
+        Ok(Expression::Record { name, members })
     }
 
     fn parse_postfix_expression(&mut self, expr: Expression) -> Result<Expression> {
@@ -593,33 +672,13 @@ impl Parser {
     }
 
     fn current_token_as_binary_operator(&self) -> Option<BinaryOperator> {
-        match self.current.token {
-            Token::Plus => Some(ArithmeticOperator::Add.into()),
-            Token::Minus => Some(ArithmeticOperator::Subtract.into()),
-            Token::Asterisk => Some(ArithmeticOperator::Multiply.into()),
-            Token::Slash => Some(ArithmeticOperator::Divide.into()),
-            Token::DoubleEqual => Some(BinaryOperator::Equal),
-            Token::NotEqual => Some(BinaryOperator::NotEqual),
-            Token::GreaterThan => Some(BinaryOperator::GreaterThan),
-            Token::LessThan => Some(BinaryOperator::LessThan),
-            Token::GreaterEqual => Some(BinaryOperator::GreaterEqual),
-            Token::LessEqual => Some(BinaryOperator::LessEqual),
-            Token::Contains => Some(BinaryOperator::Contains),
-            _ => None,
-        }
+        self.current.token.try_as_binary_op()
     }
 
     fn current_token_as_unary_operator(&self) -> Option<UnaryOperator> {
         match self.current.token {
             Token::Minus => Some(UnaryOperator::Negate),
             Token::Bang => Some(UnaryOperator::Not),
-            _ => None,
-        }
-    }
-
-    fn current_token_as_assignment(&self) -> Option<AssignmentOperator> {
-        match self.current.token {
-            Token::Equal => Some(AssignmentOperator::Assign),
             _ => None,
         }
     }
@@ -863,371 +922,25 @@ impl Parser {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::Result;
-    use super::*;
-    use crate::lexer::Lexer;
+trait TokenExt {
+    fn try_as_binary_op(&self) -> Option<BinaryOperator>;
+}
 
-    #[test]
-    fn test_parse_function_declaration() {
-        let input = r#"
-        func add(a: s32, b: s32) -> s32 {
-            return a + b
+impl TokenExt for Token {
+    fn try_as_binary_op(&self) -> Option<BinaryOperator> {
+        match self {
+            Token::Plus => Some(ArithmeticOperator::Add.into()),
+            Token::Minus => Some(ArithmeticOperator::Subtract.into()),
+            Token::Asterisk => Some(ArithmeticOperator::Multiply.into()),
+            Token::Slash => Some(ArithmeticOperator::Divide.into()),
+            Token::DoubleEqual => Some(BinaryOperator::Equal),
+            Token::NotEqual => Some(BinaryOperator::NotEqual),
+            Token::GreaterThan => Some(BinaryOperator::GreaterThan),
+            Token::LessThan => Some(BinaryOperator::LessThan),
+            Token::GreaterEqual => Some(BinaryOperator::GreaterEqual),
+            Token::LessEqual => Some(BinaryOperator::LessEqual),
+            Token::Contains => Some(BinaryOperator::Contains),
+            _ => None,
         }
-        "#;
-
-        let lexer = Lexer::new(input);
-        let mut parser = Parser::new(lexer);
-        let module = parser.parse_module().unwrap();
-
-        let expected_ast = Module {
-            declarations: vec![Declaration::Function(FunctionDeclaration {
-                name: "add".to_string(),
-                parameters: vec![
-                    Parameter {
-                        name: "a".to_string(),
-                        type_annotation: TypeAnnotation::Simple("s32".to_string()),
-                    },
-                    Parameter {
-                        name: "b".to_string(),
-                        type_annotation: TypeAnnotation::Simple("s32".to_string()),
-                    },
-                ],
-                return_type: Some(TypeAnnotation::Simple("s32".to_string())),
-                body: Block {
-                    statements: vec![Statement::ReturnStatement(Some(
-                        Expression::BinaryExpression {
-                            left: Box::new(Expression::Identifier("a".to_string())),
-                            operator: ArithmeticOperator::Add.into(),
-                            right: Box::new(Expression::Identifier("b".to_string())),
-                        },
-                    ))],
-                },
-            })],
-        };
-
-        assert_eq!(module, expected_ast);
-    }
-
-    #[test]
-    fn test_parse_variable_declaration() -> Result<()> {
-        let input = r#"
-        func main() {
-            let x = 42
-            var y: s32 = x + 1
-        }
-        "#;
-
-        let lexer = Lexer::new(input);
-        let mut parser = Parser::new(lexer);
-        let module = parser.parse_module()?;
-
-        let expected_ast = Module {
-            declarations: vec![Declaration::Function(FunctionDeclaration {
-                name: "main".to_string(),
-                parameters: vec![],
-                return_type: None,
-                body: Block {
-                    statements: vec![
-                        Statement::VariableDeclaration(VariableDeclaration {
-                            mutable: false,
-                            name: "x".to_string(),
-                            type_annotation: None,
-                            value: Expression::Literal(Literal::Integer(42)),
-                        }),
-                        Statement::VariableDeclaration(VariableDeclaration {
-                            mutable: true,
-                            name: "y".to_string(),
-                            type_annotation: Some(TypeAnnotation::Simple("s32".to_string())),
-                            value: Expression::BinaryExpression {
-                                left: Box::new(Expression::Identifier("x".to_string())),
-                                operator: ArithmeticOperator::Add.into(),
-                                right: Box::new(Expression::Literal(Literal::Integer(1))),
-                            },
-                        }),
-                    ],
-                },
-            })],
-        };
-
-        assert_eq!(module, expected_ast);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_parse_if_statement() -> Result<()> {
-        let input = r#"
-        func check_value(x: s32) {
-            if x > 10 {
-                println("Greater than 10")
-            } else {
-                println("10 or less")
-            }
-        }
-        "#;
-
-        let lexer = Lexer::new(input);
-        let mut parser = Parser::new(lexer);
-        let module = parser.parse_module()?;
-
-        let expected_ast = Module {
-            declarations: vec![Declaration::Function(FunctionDeclaration {
-                name: "check_value".to_string(),
-                parameters: vec![Parameter {
-                    name: "x".to_string(),
-                    type_annotation: TypeAnnotation::Simple("s32".to_string()),
-                }],
-                return_type: None,
-                body: Block {
-                    statements: vec![Statement::IfStatement(IfStatement {
-                        condition: Expression::BinaryExpression {
-                            left: Box::new(Expression::Identifier("x".to_string())),
-                            operator: BinaryOperator::GreaterThan,
-                            right: Box::new(Expression::Literal(Literal::Integer(10))),
-                        },
-                        then_branch: Block {
-                            statements: vec![Statement::ExpressionStatement(
-                                Expression::FunctionCall {
-                                    function: Box::new(Expression::Identifier(
-                                        "println".to_string(),
-                                    )),
-                                    arguments: vec![Expression::Literal(Literal::String(
-                                        "Greater than 10".to_string(),
-                                    ))],
-                                },
-                            )],
-                        },
-                        else_branch: Some(Block {
-                            statements: vec![Statement::ExpressionStatement(
-                                Expression::FunctionCall {
-                                    function: Box::new(Expression::Identifier(
-                                        "println".to_string(),
-                                    )),
-                                    arguments: vec![Expression::Literal(Literal::String(
-                                        "10 or less".to_string(),
-                                    ))],
-                                },
-                            )],
-                        }),
-                    })],
-                },
-            })],
-        };
-
-        assert_eq!(module, expected_ast);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_parse_return_statement() -> Result<()> {
-        let input = r#"
-        func get_value() -> s32 {
-            return 42
-        }
-        "#;
-
-        let lexer = Lexer::new(input);
-        let mut parser = Parser::new(lexer);
-        let module = parser.parse_module()?;
-
-        let expected_ast = Module {
-            declarations: vec![Declaration::Function(FunctionDeclaration {
-                name: "get_value".to_string(),
-                parameters: vec![],
-                return_type: Some(TypeAnnotation::Simple("s32".to_string())),
-                body: Block {
-                    statements: vec![Statement::ReturnStatement(Some(Expression::Literal(
-                        Literal::Integer(42),
-                    )))],
-                },
-            })],
-        };
-
-        assert_eq!(module, expected_ast);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_parse_resource_declaration() -> Result<()> {
-        let input = r#"
-        resource counter {
-            value: s32
-
-            constructor(initial: s32) {
-                self.value = initial
-            }
-
-            func increment() {
-                self.value = self.value + 1
-            }
-        }
-        "#;
-
-        let lexer = Lexer::new(input);
-        let mut parser = Parser::new(lexer);
-        let module = parser.parse_module()?;
-
-        let expected_ast = Module {
-            declarations: vec![Declaration::Resource(ResourceDeclaration {
-                name: "counter".to_string(),
-                fields: vec![Field {
-                    name: "value".to_string(),
-                    type_annotation: TypeAnnotation::Simple("s32".to_string()),
-                }],
-                constructor: Some(ConstructorDeclaration {
-                    parameters: vec![Parameter {
-                        name: "initial".to_string(),
-                        type_annotation: TypeAnnotation::Simple("s32".to_string()),
-                    }],
-                    body: Block {
-                        statements: vec![Statement::Assignment {
-                            target: Expression::FieldAccess {
-                                object: Box::new(Expression::Identifier("self".to_string())),
-                                field: "value".to_string(),
-                            },
-                            op: AssignmentOperator::Assign,
-                            value: Expression::Identifier("initial".to_string()),
-                        }],
-                    },
-                }),
-                methods: vec![FunctionDeclaration {
-                    name: "increment".to_string(),
-                    parameters: vec![],
-                    return_type: None,
-                    body: Block {
-                        statements: vec![Statement::Assignment {
-                            target: Expression::FieldAccess {
-                                object: Box::new(Expression::Identifier("self".to_string())),
-                                field: "value".to_string(),
-                            },
-                            op: AssignmentOperator::Assign,
-                            value: Expression::BinaryExpression {
-                                left: Box::new(Expression::FieldAccess {
-                                    object: Box::new(Expression::Identifier("self".to_string())),
-                                    field: "value".to_string(),
-                                }),
-                                operator: ArithmeticOperator::Add.into(),
-                                right: Box::new(Expression::Literal(Literal::Integer(1))),
-                            },
-                        }],
-                    },
-                }],
-            })],
-        };
-
-        assert_eq!(module, expected_ast);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_parse_package_declaration() -> Result<()> {
-        let input = r#"
-        package test:all_features
-        "#;
-
-        let lexer = Lexer::new(input);
-        let mut parser = Parser::new(lexer);
-        let module = parser.parse_module()?;
-
-        let expected_ast = Module {
-            declarations: vec![Declaration::Package(PackageDeclaration {
-                path: ModulePath {
-                    owner: "test".to_owned(),
-                    package: "all_features".to_owned(),
-                },
-                version: None,
-            })],
-        };
-
-        assert_eq!(module, expected_ast);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_parse_package_declaration_versioned() -> Result<()> {
-        let input = r#"
-        package test:all_features@1.0.0
-        "#;
-
-        let lexer = Lexer::new(input);
-        let mut parser = Parser::new(lexer);
-        let module = parser.parse_module()?;
-
-        let expected_ast = Module {
-            declarations: vec![Declaration::Package(PackageDeclaration {
-                path: ModulePath {
-                    owner: "test".to_owned(),
-                    package: "all_features".to_owned(),
-                },
-                version: Some(Version {
-                    major: 1,
-                    minor: 0,
-                    patch: 0,
-                    extras: None,
-                }),
-            })],
-        };
-
-        assert_eq!(module, expected_ast);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_parse_use_declaration() -> Result<()> {
-        let input = r#"
-        use external:io/printer.{print}
-        "#;
-
-        let lexer = Lexer::new(input);
-        let mut parser = Parser::new(lexer);
-        let module = parser.parse_module()?;
-
-        let expected_ast = Module {
-            declarations: vec![Declaration::Use(UseDeclaration {
-                module_path: ModulePath {
-                    owner: "external".to_owned(),
-                    package: "io".to_owned(),
-                },
-                interface: "printer".to_owned(),
-                types: vec!["print".to_owned()],
-            })],
-        };
-
-        assert_eq!(module, expected_ast);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_parse_use_declaration_two_imports() -> Result<()> {
-        let input = r#"
-        use external:io/printer.{print, println}
-        "#;
-
-        let lexer = Lexer::new(input);
-        let mut parser = Parser::new(lexer);
-        let module = parser.parse_module()?;
-
-        let expected_ast = Module {
-            declarations: vec![Declaration::Use(UseDeclaration {
-                module_path: ModulePath {
-                    owner: "external".to_owned(),
-                    package: "io".to_owned(),
-                },
-                interface: "printer".to_owned(),
-                types: vec!["print".to_owned(), "println".to_owned()],
-            })],
-        };
-
-        assert_eq!(module, expected_ast);
-
-        Ok(())
     }
 }

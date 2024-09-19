@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, rc::Rc};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
@@ -113,15 +113,16 @@ pub struct SpannedToken {
     pub span: Span,
 }
 
+#[derive(Debug, Clone)]
 pub struct Lexer {
-    input: Vec<char>,
+    input: Rc<[char]>,
     position: usize,
     current_char: Option<char>,
 }
 
 impl Lexer {
     pub fn new(input: &str) -> Self {
-        let input: Vec<_> = input.chars().collect();
+        let input: Rc<[char]> = input.chars().collect();
         let current_char = if input.is_empty() {
             None
         } else {
@@ -328,6 +329,12 @@ impl Lexer {
                 end: end_pos,
             },
         }
+    }
+
+    // TODO: PERF: This currently clones the whole lexer (including its input, which is extremely wasteful. This could be solved by making the input borrowed instead)
+    pub fn peek(&self) -> SpannedToken {
+        let mut peeker = self.clone();
+        peeker.next_token()
     }
 
     fn skip_whitespace(&mut self) {

@@ -127,7 +127,6 @@ pub enum Statement {
     VariableDeclaration(VariableDeclaration),
     Assignment {
         target: Expression,
-        op: AssignmentOperator,
         value: Expression,
     },
     ExpressionStatement(Expression),
@@ -228,6 +227,16 @@ pub enum Expression {
         collection: Box<Expression>,
         index: Box<Expression>,
     },
+    Record {
+        name: Option<String>,
+        members: Vec<FieldAssignment>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FieldAssignment {
+    pub name: String,
+    pub element: Expression,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -269,10 +278,4 @@ pub enum ArithmeticOperator {
 pub enum UnaryOperator {
     Negate, // '-'
     Not,    // '!'
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum AssignmentOperator {
-    Assign,                   // '='
-    OpAssign(BinaryOperator), // e.g. '+='
 }
