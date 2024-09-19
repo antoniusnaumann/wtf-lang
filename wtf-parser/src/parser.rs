@@ -529,6 +529,28 @@ impl Parser {
 
                 Ok(expr)
             }
+            Token::LeftBracket => {
+                let mut elements = Vec::new();
+                loop {
+                    self.advance_tokens();
+                    self.skip_newline();
+
+                    if self.current.token == Token::RightBracket {
+                        break;
+                    }
+
+                    elements.push(self.parse_expression()?);
+                    self.skip_newline();
+
+                    if self.current.token != Token::Comma {
+                        break;
+                    }
+                }
+
+                self.expect_token(Token::RightBracket)?;
+
+                Ok(Expression::ListLiteral(elements))
+            }
             Token::LeftBrace => {
                 let record = self.parse_record_lit(None)?;
 

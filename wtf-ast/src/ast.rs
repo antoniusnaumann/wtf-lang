@@ -231,6 +231,7 @@ pub enum Expression {
         name: Option<String>,
         members: Vec<FieldAssignment>,
     },
+    ListLiteral(Vec<Expression>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
