@@ -255,7 +255,6 @@ pub enum BinaryOperator {
     LessThan,     // '<'
     GreaterEqual, // '>='
     LessEqual,    // '<='
-    Concat,       // '++'
     Contains,     // 'in'
 }
 

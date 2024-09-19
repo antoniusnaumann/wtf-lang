@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use crate::lexer::{Lexer, SpannedToken, Token};
 
 use wtf_ast::*;
@@ -604,7 +606,6 @@ impl Parser {
             Token::LessThan => Some(BinaryOperator::LessThan),
             Token::GreaterEqual => Some(BinaryOperator::GreaterEqual),
             Token::LessEqual => Some(BinaryOperator::LessEqual),
-            Token::Concat => Some(BinaryOperator::Concat),
             Token::Contains => Some(BinaryOperator::Contains),
             _ => None,
         }
@@ -631,7 +632,6 @@ impl Parser {
                 ArithmeticOperator::Multiply | ArithmeticOperator::Divide => Some(7),
                 ArithmeticOperator::Add | ArithmeticOperator::Subtract => Some(6),
             },
-            BinaryOperator::Concat => Some(5),
             BinaryOperator::GreaterThan
             | BinaryOperator::LessThan
             | BinaryOperator::GreaterEqual
@@ -824,7 +824,48 @@ impl Parser {
     }
 
     fn parse_version(&mut self) -> Result<Version> {
-        todo!("Parse version string")
+        let version_string = match &self.current.token {
+            Token::VersionLiteral(s) => s.to_owned(),
+            t @ Token::FloatLiteral(_) => {
+                if let Token::VersionLiteral(s) = t.try_as_version_literal().into_owned() {
+                    s
+                } else {
+                    return Err(self.unexpected(vec![Token::VersionLiteral("".to_owned())]));
+                }
+            }
+            _ => {
+                return Err(self.unexpected(vec![Token::VersionLiteral("".to_owned())]));
+            }
+        };
+
+        let mut parts = version_string.split(".");
+        let major = parts
+            .next()
+            .expect("TODO: parser error on invalid version string");
+        let minor = parts.next();
+        let patch = parts.next();
+        let extras = parts.next();
+
+        self.advance_tokens();
+
+        Ok(Version {
+            major: major
+                .parse()
+                .expect("TODO: Parser error on invalid major version"),
+            minor: minor
+                .map(|m| {
+                    m.parse()
+                        .expect("TODO: Parser error on invalid minor version")
+                })
+                .unwrap_or_default(),
+            patch: patch
+                .map(|p| {
+                    p.parse()
+                        .expect("TODO: Parser error on invalid patch version")
+                })
+                .unwrap_or_default(),
+            extras: extras.map(str::to_owned),
+        })
     }
 }
 
@@ -1142,8 +1183,22 @@ mod tests {
         let mut parser = Parser::new(lexer);
         let module = parser.parse_module()?;
 
-        // TODO: Implement parse_package_declaration and update the test
-        assert!(module.declarations.is_empty());
+        let expected_ast = Module {
+            declarations: vec![Declaration::Package(PackageDeclaration {
+                path: ModulePath {
+                    owner: "test".to_owned(),
+                    package: "all_features".to_owned(),
+                },
+                version: Some(Version {
+                    major: 1,
+                    minor: 0,
+                    patch: 0,
+                    extras: None,
+                }),
+            })],
+        };
+
+        assert_eq!(module, expected_ast);
 
         Ok(())
     }

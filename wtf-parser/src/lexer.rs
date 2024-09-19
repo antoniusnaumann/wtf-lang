@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     // Definition
@@ -39,6 +41,8 @@ pub enum Token {
     FloatLiteral(f64),
     StringLiteral(String),
 
+    VersionLiteral(String),
+
     // Operators
     Plus,         // +
     Minus,        // -
@@ -78,6 +82,24 @@ pub enum Token {
     Newline,
     Eof,
     Invalid(String),
+}
+
+impl Token {
+    pub fn try_as_version_literal(&self) -> Cow<Token> {
+        match self {
+            Token::FloatLiteral(f) => {
+                let token_str = f.to_string();
+                // TODO: proper version string validation
+                if !token_str.contains('f') && !token_str.contains('+') && !token_str.contains('-')
+                {
+                    Cow::Owned(Token::VersionLiteral(token_str.to_owned()))
+                } else {
+                    Cow::Borrowed(self)
+                }
+            }
+            _ => Cow::Borrowed(self),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -187,12 +209,7 @@ impl Lexer {
             }
             Some('+') => {
                 self.read_char();
-                if self.current_char == Some('+') {
-                    self.read_char();
-                    Token::Concat
-                } else {
-                    Token::Plus
-                }
+                Token::Plus
             }
             Some(c) if c.is_ident_char() => {
                 let identifier = self.read_identifier();
@@ -375,13 +392,13 @@ impl Lexer {
 
     fn read_number(&mut self) -> Token {
         let start_pos = self.position;
-        let mut is_float = false;
+        let mut dots = 0;
 
         while let Some(c) = self.current_char {
             if c.is_digit(10) {
                 self.read_char();
             } else if c == '.' && self.peek_char().map_or(false, |next_c| next_c.is_digit(10)) {
-                is_float = true;
+                dots += 1;
                 self.read_char(); // Consume '.'
                 self.read_char(); // Consume digit after '.'
             } else {
@@ -391,16 +408,24 @@ impl Lexer {
 
         let number_str: String = self.input[start_pos..self.position].iter().collect();
 
-        if is_float {
-            match number_str.parse::<f64>() {
-                Ok(num) => Token::FloatLiteral(num),
-                Err(_) => Token::Invalid(number_str), // Handle error appropriately
+        match dots {
+            0 => {
+                match number_str.parse::<i64>() {
+                    Ok(num) => Token::IntegerLiteral(num),
+                    Err(_) => Token::Invalid(number_str), // Handle error appropriately
+                }
             }
-        } else {
-            match number_str.parse::<i64>() {
-                Ok(num) => Token::IntegerLiteral(num),
-                Err(_) => Token::Invalid(number_str), // Handle error appropriately
+            1 => {
+                match number_str.parse::<f64>() {
+                    Ok(num) => Token::FloatLiteral(num),
+                    Err(_) => Token::Invalid(number_str), // Handle error appropriately
+                }
             }
+            2 if number_str.starts_with(|c: char| c.is_digit(10)) => {
+                // TODO: Parse version literal and validate properly
+                Token::VersionLiteral(number_str)
+            }
+            _ => Token::Invalid(number_str),
         }
     }
 
@@ -473,31 +498,6 @@ mod tests {
         let expected_tokens = vec![
             Token::Bang,
             Token::Identifier("condition".into()),
-            Token::Eof,
-        ];
-
-        let mut tokens = Vec::new();
-
-        loop {
-            let spanned_tok = lexer.next_token();
-            tokens.push(spanned_tok.token.clone());
-            if matches!(spanned_tok.token, Token::Eof) {
-                break;
-            }
-        }
-
-        assert_eq!(tokens, expected_tokens);
-    }
-
-    #[test]
-    fn test_concat() {
-        let input = "str1 ++ str2";
-        let mut lexer = Lexer::new(input);
-
-        let expected_tokens = vec![
-            Token::Identifier("str1".into()),
-            Token::Concat,
-            Token::Identifier("str2".into()),
             Token::Eof,
         ];
 
@@ -757,7 +757,7 @@ mod tests {
             Token::Colon,
             Token::Identifier("http".into()),
             Token::At,
-            Token::Invalid("1.0.0".into()),
+            Token::VersionLiteral("1.0.0".into()),
             Token::Semicolon,
             Token::Newline,
             Token::Use,
