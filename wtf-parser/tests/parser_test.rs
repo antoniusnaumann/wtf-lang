@@ -126,6 +126,7 @@ fn test_parse_resource_declaration() -> Result<()> {
                         target: Expression::FieldAccess {
                             object: Box::new(Expression::Identifier("self".to_string())),
                             field: "value".to_string(),
+                            safe: false,
                         },
                         value: Expression::Identifier("initial".to_string()),
                     }],
@@ -140,11 +141,13 @@ fn test_parse_resource_declaration() -> Result<()> {
                         target: Expression::FieldAccess {
                             object: Box::new(Expression::Identifier("self".to_string())),
                             field: "value".to_string(),
+                            safe: false,
                         },
                         value: Expression::BinaryExpression {
                             left: Box::new(Expression::FieldAccess {
                                 object: Box::new(Expression::Identifier("self".to_string())),
                                 field: "value".to_string(),
+                                safe: false,
                             }),
                             operator: ArithmeticOperator::Add.into(),
                             right: Box::new(Expression::Literal(Literal::Integer(1))),
@@ -182,11 +185,13 @@ fn test_parse_plus_assign() -> Result<()> {
                     target: Expression::FieldAccess {
                         object: Box::new(Expression::Identifier("self".to_string())),
                         field: "value".to_string(),
+                        safe: false,
                     },
                     value: Expression::BinaryExpression {
                         left: Box::new(Expression::FieldAccess {
                             object: Box::new(Expression::Identifier("self".to_string())),
                             field: "value".to_string(),
+                            safe: false,
                         }),
                         operator: ArithmeticOperator::Add.into(),
                         right: Box::new(Expression::Literal(Literal::Integer(1))),

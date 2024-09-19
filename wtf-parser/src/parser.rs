@@ -603,19 +603,25 @@ impl Parser {
         loop {
             if self.has(Token::LeftParen) {
                 result = self.parse_function_call(result)?;
-            } else if self.has(Token::Dot) {
+            } else if self.has(Token::Dot) || self.has(Token::SafeCall) {
+                let safe = self.has(Token::SafeCall);
                 self.advance_tokens();
                 let field = self.expect_identifier()?;
-                result = Expression::FieldAccess {
-                    object: Box::new(result),
-                    field,
-                };
-            } else if self.has(Token::SafeCall) {
-                self.advance_tokens();
-                let field = self.expect_identifier()?;
-                result = Expression::SafeFieldAccess {
-                    object: Box::new(result),
-                    field,
+                // TODO: Parse parameter
+                result = if self.has(Token::LeftParen) {
+                    let arguments = self.parse_arguments()?;
+                    Expression::MethodCall {
+                        receiver: result.into(),
+                        method: field,
+                        arguments,
+                        safe,
+                    }
+                } else {
+                    Expression::FieldAccess {
+                        object: Box::new(result),
+                        field,
+                        safe,
+                    }
                 };
             } else if self.has(Token::LeftBracket) {
                 self.advance_tokens();
@@ -634,6 +640,15 @@ impl Parser {
     }
 
     fn parse_function_call(&mut self, function: Expression) -> Result<Expression> {
+        let arguments = self.parse_arguments()?;
+
+        Ok(Expression::FunctionCall {
+            function: Box::new(function),
+            arguments,
+        })
+    }
+
+    fn parse_arguments(&mut self) -> Result<Vec<Expression>> {
         self.expect_token(Token::LeftParen)?;
 
         let mut arguments = Vec::new();
@@ -655,10 +670,7 @@ impl Parser {
 
         self.expect_token(Token::RightParen)?;
 
-        Ok(Expression::FunctionCall {
-            function: Box::new(function),
-            arguments,
-        })
+        Ok(arguments)
     }
 
     fn parse_literal(&mut self) -> Result<Literal> {

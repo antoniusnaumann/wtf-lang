@@ -214,14 +214,14 @@ pub enum Expression {
         receiver: Box<Expression>,
         method: String,
         arguments: Vec<Expression>,
+        /// Whether the safe-call operator (?.) or the member access operator (.) is used
+        safe: bool,
     },
     FieldAccess {
         object: Box<Expression>,
         field: String,
-    },
-    SafeFieldAccess {
-        object: Box<Expression>,
-        field: String,
+        /// Whether the safe-call operator (?.) or the member access operator (.) is used
+        safe: bool,
     },
     IndexAccess {
         collection: Box<Expression>,
