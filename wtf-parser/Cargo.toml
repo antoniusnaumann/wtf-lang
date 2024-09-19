@@ -1,5 +1,5 @@
 [package]
-name = "wtf-lang"
+name = "wtf-parser"
 version = "0.1.0"
 edition = "2021"
 

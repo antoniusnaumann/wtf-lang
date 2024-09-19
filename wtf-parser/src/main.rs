@@ -1,4 +1,4 @@
-use wtf_lang::lexer::{Lexer, Token};
+use wtf_parser::lexer::{Lexer, Token};
 
 fn main() {
     let input = r#"
