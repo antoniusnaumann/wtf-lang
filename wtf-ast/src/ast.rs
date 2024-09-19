@@ -10,7 +10,6 @@ pub enum Declaration {
     Resource(ResourceDeclaration),
     Enum(EnumDeclaration),
     Variant(VariantDeclaration),
-    Import(ImportDeclaration),
     Export(ExportDeclaration),
     Package(PackageDeclaration),
     Use(UseDeclaration),
@@ -60,12 +59,6 @@ pub struct VariantDeclaration {
 pub struct VariantCase {
     pub name: String,
     pub associated_type: Option<TypeAnnotation>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ImportDeclaration {
-    pub path: String,
-    pub items: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

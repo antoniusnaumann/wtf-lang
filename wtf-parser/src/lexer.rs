@@ -31,7 +31,6 @@ pub enum Token {
 
     // Imports
     Use,
-    Import,
     Export,
     Package,
 
@@ -376,7 +375,6 @@ impl Lexer {
             "else" => Token::Else,
             "match" => Token::Match,
             "use" => Token::Use,
-            "import" => Token::Import,
             "export" => Token::Export,
             "package" => Token::Package,
             "in" => Token::Contains,

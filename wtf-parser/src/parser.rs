@@ -95,7 +95,6 @@ impl Parser {
             Token::Resource => self.parse_resource_declaration().map(Declaration::Resource),
             Token::Enum => self.parse_enum_declaration().map(Declaration::Enum),
             Token::Variant => self.parse_variant_declaration().map(Declaration::Variant),
-            Token::Import => self.parse_import_declaration().map(Declaration::Import),
             Token::Export => self.parse_export_declaration().map(Declaration::Export),
             Token::Package => self.parse_package_declaration().map(Declaration::Package),
             Token::Use => self.parse_use_declaration().map(Declaration::Use),
@@ -105,7 +104,6 @@ impl Parser {
                 Token::Resource,
                 Token::Enum,
                 Token::Variant,
-                Token::Import,
                 Token::Export,
                 Token::Package,
                 Token::Use,
@@ -767,10 +765,6 @@ impl Parser {
         Ok(VariantDeclaration { name, cases })
     }
 
-    fn parse_import_declaration(&mut self) -> Result<ImportDeclaration> {
-        todo!("TODO: Implement import parsing")
-    }
-
     fn parse_export_declaration(&mut self) -> Result<ExportDeclaration> {
         todo!("TODO: Implement export parsing. Maybe this should just be a keyword on types and functions directly")
     }
@@ -1126,24 +1120,6 @@ mod tests {
         };
 
         assert_eq!(module, expected_ast);
-
-        Ok(())
-    }
-
-    // Tests for methods with TODOs
-
-    #[test]
-    fn test_parse_import_declaration() -> Result<()> {
-        let input = r#"
-        import math
-        "#;
-
-        let lexer = Lexer::new(input);
-        let mut parser = Parser::new(lexer);
-        let module = parser.parse_module()?;
-
-        // TODO: Implement parse_import_declaration and update the test
-        assert!(module.declarations.is_empty());
 
         Ok(())
     }
