@@ -729,6 +729,7 @@ impl Parser {
             | BinaryOperator::LessEqual => Some(4),
             BinaryOperator::Equal | BinaryOperator::NotEqual => Some(3),
             BinaryOperator::Contains => Some(2),
+            BinaryOperator::NullCoalesce => Some(1),
         }
     }
 
@@ -974,6 +975,7 @@ impl TokenExt for Token {
             Token::GreaterEqual => Some(BinaryOperator::GreaterEqual),
             Token::LessEqual => Some(BinaryOperator::LessEqual),
             Token::Contains => Some(BinaryOperator::Contains),
+            Token::QuestionMark => Some(BinaryOperator::NullCoalesce),
             _ => None,
         }
     }

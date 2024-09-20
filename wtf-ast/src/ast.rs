@@ -259,6 +259,7 @@ pub enum BinaryOperator {
     GreaterEqual, // '>='
     LessEqual,    // '<='
     Contains,     // 'in'
+    NullCoalesce, // '?'
 }
 
 impl From<ArithmeticOperator> for BinaryOperator {
