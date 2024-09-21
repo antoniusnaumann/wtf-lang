@@ -771,6 +771,18 @@ impl Parser {
         }
     }
 
+    /// Parses a delimiter token (newline or comma) and returns it if one was parsed
+    fn parse_delimiter(&mut self) -> Option<Token> {
+        if self.current.token != Token::Newline && self.current.token != Token::Comma {
+            return None;
+        }
+        let token = self.current.token.clone();
+        self.advance_tokens();
+        self.skip_newline();
+
+        Some(token)
+    }
+
     fn parse_record_declaration(&mut self) -> Result<RecordDeclaration> {
         self.expect_token(Token::Record)?;
         let name = self.expect_identifier()?;
@@ -788,11 +800,9 @@ impl Parser {
                 type_annotation,
             });
 
-            if self.current.token != Token::Newline || self.current.token != Token::Comma {
+            if self.parse_delimiter().is_none() {
                 break;
             }
-            self.advance_tokens();
-            self.skip_newline();
         }
 
         self.skip_newline();
@@ -861,15 +871,20 @@ impl Parser {
         self.expect_token(Token::Enum)?;
         let name = self.expect_identifier()?;
         self.expect_token(Token::LeftBrace)?;
+        self.skip_newline();
 
         let mut variants = Vec::new();
 
         while !self.has(Token::RightBrace) && !self.has(Token::Eof) {
             let variant_name = self.expect_identifier()?;
             variants.push(variant_name);
-            // Optional: Handle commas or newlines between variants
+
+            if self.parse_delimiter().is_none() {
+                break;
+            }
         }
 
+        self.skip_newline();
         self.expect_token(Token::RightBrace)?;
 
         Ok(EnumDeclaration { name, variants })
@@ -879,26 +894,45 @@ impl Parser {
         self.expect_token(Token::Variant)?;
         let name = self.expect_identifier()?;
         self.expect_token(Token::LeftBrace)?;
+        self.skip_newline();
 
         let mut cases = Vec::new();
 
         while !self.has(Token::RightBrace) && !self.has(Token::Eof) {
             let case_name = self.expect_identifier()?;
-            let associated_type = if self.has(Token::LeftParen) {
+            let mut associated_types = Vec::new();
+
+            if self.has(Token::LeftParen) {
                 self.advance_tokens();
-                let type_annotation = self.parse_type_annotation()?;
+                self.skip_newline();
+
+                while !self.has(Token::RightParen) && !self.has(Token::Eof) {
+                    let field_name = self.expect_identifier()?;
+                    self.expect_token(Token::Colon)?;
+                    let type_annotation = self.parse_type_annotation()?;
+                    associated_types.push(Field {
+                        name: field_name,
+                        type_annotation,
+                    });
+
+                    if self.parse_delimiter().is_none() {
+                        break;
+                    }
+                }
+                self.skip_newline();
                 self.expect_token(Token::RightParen)?;
-                Some(type_annotation)
-            } else {
-                None
-            };
+            }
             cases.push(VariantCase {
                 name: case_name,
-                associated_type,
+                associated_types,
             });
-            // Optional: Handle commas or newlines between cases
+
+            if self.parse_delimiter().is_none() {
+                break;
+            }
         }
 
+        self.skip_newline();
         self.expect_token(Token::RightBrace)?;
 
         Ok(VariantDeclaration { name, cases })

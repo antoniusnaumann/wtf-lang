@@ -58,7 +58,7 @@ pub struct VariantDeclaration {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VariantCase {
     pub name: String,
-    pub associated_type: Option<TypeAnnotation>,
+    pub associated_types: Vec<Field>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
