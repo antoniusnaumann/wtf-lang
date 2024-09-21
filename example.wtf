@@ -73,7 +73,7 @@ func demo_variables() {
     var counter = counter(0)
     counter.increment()
     let count = counter.get_value()
-    println("Counter value: " ++ count.to_string())
+    println("Counter value: " + count.to_string())
 }
 
 // Function that demonstrates control flow
@@ -93,12 +93,12 @@ func demo_control_flow() {
         if counter.value == 3 {
             continue  // Skip printing when value is 3
         }
-        println("Counter in loop: " ++ counter.value.to_string())
+        println("Counter in loop: " + counter.value.to_string())
     }
 
     // For loop with range and break statement
     for i in 0..5 {
-        println("For loop iteration: " ++ i.to_string())
+        println("For loop iteration: " + i.to_string())
         if i == 2 {
             break  // Exit the loop when i is 2
         }
@@ -109,32 +109,32 @@ func demo_control_flow() {
 func demo_functions_and_errors() {
     // Function call
     let sum = add(5, 7)
-    println("Sum: " ++ sum.to_string())
+    println("Sum: " + sum.to_string())
 
     // Option type with auto-wrapping
     let optional_value: option<s32> = 42  // Automatically wrapped as `some(42)`
 
     // Optional chaining to safely access methods
     let value_string = optional_value?.to_string()
-    println("Optional value as string: " ++ (value_string ? "none"))
+    println("Optional value as string: " + (value_string ? "none"))
 
     // Null-coalescing operator to provide a default value
     let default_value = optional_value ? 5
-    println("Default value: " ++ default_value.to_string())
+    println("Default value: " + default_value.to_string())
 
     // Optional assignment operator
     var maybe_value: s32?
     maybe_value ?= 10  // Assigns 10 if maybe_value is none
-    println("Maybe value: " ++ (maybe_value?.to_string() ? "none"))
+    println("Maybe value: " + (maybe_value?.to_string() ? "none"))
 
     // Using the function with error propagation
     let computation_result = compute(10, 2, 5)!
-    println("Computation result: " ++ computation_result.to_string())
+    println("Computation result: " + computation_result.to_string())
 
     // Handling errors using match statement
     match compute(10, 0, 5) {
-        ok(let value) => println("Computation succeeded: " ++ value.to_string())
-        err(let error) => println("Computation failed: " ++ error)
+        ok(let value) => println("Computation succeeded: " + value.to_string())
+        err(let error) => println("Computation failed: " + error)
     }
 }
 
@@ -176,7 +176,7 @@ func demo_strings_and_operators() {
 
     // Using arithmetic operators
     let total = 5 + 3 * 2 - 4 / 2  // total is 9
-    println("Total: " ++ total.to_string())
+    println("Total: " + total.to_string())
 
     // Using comparison and logical operators
     let boolean_value = true
@@ -191,14 +191,14 @@ func demo_strings_and_operators() {
     number *= 2  // number is now 8
     number /= 4  // number is now 2
 
-    // Using concatenation operator for strings
-    let message = "Hello" ++ ", World!"
+    // Using add operator to concat strings
+    let message = "Hello" + ", World!"
     println(message)
 
     // Safe access operator with optional resource
     var optional_counter: Counter? = Counter(5)
     let counter_value = optional_counter?.get_value()
-    println("Optional counter value: " ++ (counter_value?.to_string() ? "none"))
+    println("Optional counter value: " + (counter_value?.to_string() ? "none"))
 
     // Using a list with shorthand syntax
     let number_list: [s32] = [1, 2, 3, 4, 5]
