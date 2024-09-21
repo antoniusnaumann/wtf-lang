@@ -34,6 +34,11 @@ pub enum Token {
     Export,
     Package,
 
+    // Literals
+    True,
+    False,
+    None,
+
     // Identifiers and Literals
     Identifier(String),
     IntegerLiteral(i64),
@@ -391,6 +396,9 @@ impl Lexer {
             "break" => Token::Break,
             "for" => Token::For,
             "while" => Token::While,
+            "none" => Token::None,
+            "true" => Token::True,
+            "false" => Token::False,
             _ => Token::Identifier(ident),
         }
     }

@@ -145,7 +145,7 @@ pub struct VariableDeclaration {
     pub mutable: bool,
     pub name: String,
     pub type_annotation: Option<TypeAnnotation>,
-    pub value: Expression,
+    pub value: Option<Expression>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -67,17 +67,17 @@ fn test_parse_variable_declaration() -> Result<()> {
                         mutable: false,
                         name: "x".to_string(),
                         type_annotation: None,
-                        value: Expression::Literal(Literal::Integer(42)),
+                        value: Some(Expression::Literal(Literal::Integer(42))),
                     }),
                     Statement::VariableDeclaration(VariableDeclaration {
                         mutable: true,
                         name: "y".to_string(),
                         type_annotation: Some(TypeAnnotation::Simple("s32".to_string())),
-                        value: Expression::BinaryExpression {
+                        value: Some(Expression::BinaryExpression {
                             left: Box::new(Expression::Identifier("x".to_string())),
                             operator: ArithmeticOperator::Add.into(),
                             right: Box::new(Expression::Literal(Literal::Integer(1))),
-                        },
+                        }),
                     }),
                 ],
             },

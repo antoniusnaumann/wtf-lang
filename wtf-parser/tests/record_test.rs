@@ -27,7 +27,7 @@ fn test_parse_record_literal_with_type() -> Result<()> {
                     mutable: false,
                     name: "point".to_string(),
                     type_annotation: None,
-                    value: Expression::Record {
+                    value: Some(Expression::Record {
                         name: Some("point".to_string()),
                         members: vec![
                             FieldAssignment {
@@ -39,7 +39,7 @@ fn test_parse_record_literal_with_type() -> Result<()> {
                                 element: Expression::Literal(Literal::Float(2.0)),
                             },
                         ],
-                    },
+                    }),
                 })],
             },
         })],
@@ -75,7 +75,7 @@ fn test_parse_record_literal_without_type() -> Result<()> {
                     mutable: false,
                     name: "point".to_string(),
                     type_annotation: None,
-                    value: Expression::Record {
+                    value: Some(Expression::Record {
                         name: None,
                         members: vec![
                             FieldAssignment {
@@ -87,7 +87,7 @@ fn test_parse_record_literal_without_type() -> Result<()> {
                                 element: Expression::Literal(Literal::Float(2.0)),
                             },
                         ],
-                    },
+                    }),
                 })],
             },
         })],
@@ -126,7 +126,7 @@ fn test_parse_nested_record_literal() -> Result<()> {
                     mutable: false,
                     name: "person".to_string(),
                     type_annotation: None,
-                    value: Expression::Record {
+                    value: Some(Expression::Record {
                         name: None,
                         members: vec![
                             FieldAssignment {
@@ -154,7 +154,7 @@ fn test_parse_nested_record_literal() -> Result<()> {
                                 },
                             },
                         ],
-                    },
+                    }),
                 })],
             },
         })],
@@ -190,7 +190,7 @@ fn test_parse_record_literal_with_expressions() -> Result<()> {
                     mutable: false,
                     name: "rectangle".to_string(),
                     type_annotation: None,
-                    value: Expression::Record {
+                    value: Some(Expression::Record {
                         name: None,
                         members: vec![
                             FieldAssignment {
@@ -212,7 +212,7 @@ fn test_parse_record_literal_with_expressions() -> Result<()> {
                                 },
                             },
                         ],
-                    },
+                    }),
                 })],
             },
         })],
@@ -248,7 +248,7 @@ fn test_parse_record_literal_with_type_and_expressions() -> Result<()> {
                     mutable: false,
                     name: "circle".to_string(),
                     type_annotation: None,
-                    value: Expression::Record {
+                    value: Some(Expression::Record {
                         name: Some("shape".to_string()),
                         members: vec![
                             FieldAssignment {
@@ -272,7 +272,7 @@ fn test_parse_record_literal_with_type_and_expressions() -> Result<()> {
                                 },
                             },
                         ],
-                    },
+                    }),
                 })],
             },
         })],
@@ -308,7 +308,7 @@ fn test_parse_record_literal_with_list_field() -> Result<()> {
                     mutable: false,
                     name: "data".to_string(),
                     type_annotation: None,
-                    value: Expression::Record {
+                    value: Some(Expression::Record {
                         name: None,
                         members: vec![
                             FieldAssignment {
@@ -327,7 +327,7 @@ fn test_parse_record_literal_with_list_field() -> Result<()> {
                                 )),
                             },
                         ],
-                    },
+                    }),
                 })],
             },
         })],
@@ -360,10 +360,10 @@ fn test_parse_empty_record_literal() -> Result<()> {
                     mutable: false,
                     name: "empty".to_string(),
                     type_annotation: None,
-                    value: Expression::Record {
+                    value: Some(Expression::Record {
                         name: None,
                         members: vec![],
-                    },
+                    }),
                 })],
             },
         })],
@@ -403,7 +403,7 @@ fn test_parse_record_literal_with_spread() -> Result<()> {
                     mutable: false,
                     name: "point3d".to_string(),
                     type_annotation: None,
-                    value: Expression::Record {
+                    value: Some(Expression::Record {
                         name: None,
                         members: vec![
                             // Assuming we have a FieldAssignment variant for spread
@@ -416,7 +416,7 @@ fn test_parse_record_literal_with_spread() -> Result<()> {
                                 element: Expression::Literal(Literal::Float(3.0)),
                             },
                         ],
-                    },
+                    }),
                 })],
             },
         })],

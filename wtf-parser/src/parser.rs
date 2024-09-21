@@ -169,22 +169,46 @@ impl Parser {
     }
 
     fn parse_type_annotation(&mut self) -> Result<TypeAnnotation> {
+        self.parse_type_annotation_with_postfix(true)
+    }
+
+    /// Parses a type annotation, e.g. of a record field or a variable declaration
+    ///
+    /// Arguments:
+    /// - allow_postfix: Whether the type in this position allows for postfix '?' or '!'. In some positions (e.g. error types, this should be false)
+    fn parse_type_annotation_with_postfix(
+        &mut self,
+        allow_postfix: bool,
+    ) -> Result<TypeAnnotation> {
+        // Handle syntactic sugar for list types ('[T]') first
+        if self.current.token == Token::LeftBracket {
+            self.advance_tokens();
+            self.skip_newline();
+
+            let inner = self.parse_type_annotation()?;
+
+            self.skip_newline();
+            self.expect_token(Token::RightBracket)?;
+
+            return Ok(TypeAnnotation::List(inner.into()));
+        }
+
         if let Token::Identifier(name) = self.current.token.clone() {
             let type_name = name.clone();
             self.advance_tokens();
 
-            match type_name.as_str() {
+            let mut ty = match type_name.as_str() {
                 "list" => {
                     self.expect_token(Token::LessThan)?;
                     let inner_type = self.parse_type_annotation()?;
                     self.expect_token(Token::GreaterThan)?;
-                    Ok(TypeAnnotation::List(Box::new(inner_type)))
+                    TypeAnnotation::List(Box::new(inner_type))
                 }
                 "option" => {
                     self.expect_token(Token::LessThan)?;
                     let inner_type = self.parse_type_annotation()?;
                     self.expect_token(Token::GreaterThan)?;
-                    Ok(TypeAnnotation::Option(Box::new(inner_type)))
+                    TypeAnnotation::Option(Box::new(inner_type))
                 }
                 "result" => {
                     self.expect_token(Token::LessThan)?;
@@ -192,13 +216,43 @@ impl Parser {
                     self.expect_token(Token::Comma)?;
                     let err_type = self.parse_type_annotation()?;
                     self.expect_token(Token::GreaterThan)?;
-                    Ok(TypeAnnotation::Result {
+                    TypeAnnotation::Result {
                         ok_type: Box::new(ok_type),
                         err_type: Box::new(err_type),
-                    })
+                    }
                 }
-                _ => Ok(TypeAnnotation::Simple(type_name)),
+                _ => TypeAnnotation::Simple(type_name),
+            };
+
+            if allow_postfix {
+                loop {
+                    match self.current.token {
+                        Token::QuestionMark => {
+                            self.advance_tokens();
+                            ty = TypeAnnotation::Option(ty.into());
+                        }
+                        Token::Bang => {
+                            self.advance_tokens();
+
+                            let err = match self.current.token {
+                                Token::Identifier(_) | Token::LeftBracket => {
+                                    self.parse_type_annotation_with_postfix(false)?
+                                }
+                                _ => TypeAnnotation::Simple("error".to_owned()),
+                            };
+
+                            ty = TypeAnnotation::Result {
+                                ok_type: ty.into(),
+                                err_type: err.into(),
+                            }
+                        }
+                        // TODO: Allow grouping with parens? would clash with tuple type annotations though
+                        _ => break,
+                    }
+                }
             }
+
+            Ok(ty)
         } else {
             // TODO: Add expected ast nodes
             Err(self.unexpected(vec![]))
@@ -207,15 +261,14 @@ impl Parser {
 
     fn parse_block(&mut self) -> Result<Block> {
         self.expect_token(Token::LeftBrace)?;
+        self.skip_newline();
 
         let mut statements = Vec::new();
 
         while !self.has(Token::RightBrace) && !self.has(Token::Eof) {
-            if let Ok(stmt) = self.parse_statement() {
-                statements.push(stmt);
-            } else {
-                self.advance_tokens();
-            }
+            let stmt = self.parse_statement()?;
+            statements.push(stmt);
+            self.skip_newline();
         }
 
         self.expect_token(Token::RightBrace)?;
@@ -284,7 +337,11 @@ impl Parser {
     }
 
     fn parse_variable_declaration(&mut self) -> Result<VariableDeclaration> {
-        let mutable = self.has(Token::Var);
+        let mutable = match self.current.token {
+            Token::Var => true,
+            Token::Let => false,
+            _ => return Err(self.unexpected(vec![Token::Var, Token::Let])),
+        };
         self.advance_tokens();
 
         let name = self.expect_identifier()?;
@@ -296,9 +353,14 @@ impl Parser {
             None
         };
 
-        self.expect_token(Token::Equal)?;
-
-        let value = self.parse_expression()?;
+        self.skip_newline();
+        let value = if self.current.token == Token::Equal {
+            self.advance_tokens();
+            self.skip_newline();
+            Some(self.parse_expression()?)
+        } else {
+            None
+        };
 
         Ok(VariableDeclaration {
             mutable,
@@ -492,24 +554,6 @@ impl Parser {
 
     fn parse_primary_expression(&mut self) -> Result<Expression> {
         match &self.current.token {
-            Token::IntegerLiteral(value) => {
-                let expr = Expression::Literal(Literal::Integer(*value));
-                self.advance_tokens();
-
-                Ok(expr)
-            }
-            Token::FloatLiteral(value) => {
-                let expr = Expression::Literal(Literal::Float(*value));
-                self.advance_tokens();
-
-                Ok(expr)
-            }
-            Token::StringLiteral(value) => {
-                let expr = Expression::Literal(Literal::String(value.clone()));
-                self.advance_tokens();
-
-                Ok(expr)
-            }
             Token::Identifier(name) => {
                 let name = name.clone();
 
@@ -556,7 +600,7 @@ impl Parser {
 
                 self.parse_postfix_expression(record)
             }
-            _ => Err(self.unexpected(vec![])),
+            _ => Ok(Expression::Literal(self.parse_literal()?)),
         }
     }
 
@@ -674,24 +718,18 @@ impl Parser {
     }
 
     fn parse_literal(&mut self) -> Result<Literal> {
-        match &self.current.token {
-            Token::IntegerLiteral(value) => {
-                let lit = Literal::Integer(*value);
-                self.advance_tokens();
-                Ok(lit)
-            }
-            Token::FloatLiteral(value) => {
-                let lit = Literal::Float(*value);
-                self.advance_tokens();
-                Ok(lit)
-            }
-            Token::StringLiteral(value) => {
-                let lit = Literal::String(value.clone());
-                self.advance_tokens();
-                Ok(lit)
-            }
+        let lit = match &self.current.token {
+            Token::IntegerLiteral(value) => Literal::Integer(*value),
+            Token::FloatLiteral(value) => Literal::Float(*value),
+            Token::StringLiteral(value) => Literal::String(value.clone()),
+            Token::True => Literal::Boolean(true),
+            Token::False => Literal::Boolean(false),
+            Token::None => Literal::None,
             _ => todo!("TODO: Add parser error that can list expected AST nodes!"),
-        }
+        };
+        self.advance_tokens();
+
+        Ok(lit)
     }
 
     fn expect_identifier(&mut self) -> Result<String> {
