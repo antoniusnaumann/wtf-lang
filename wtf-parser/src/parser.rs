@@ -212,13 +212,13 @@ impl Parser {
                 }
                 "result" => {
                     self.expect_token(Token::LessThan)?;
-                    let ok_type = self.parse_type_annotation()?;
+                    let ok = self.parse_type_annotation()?;
                     self.expect_token(Token::Comma)?;
-                    let err_type = self.parse_type_annotation()?;
+                    let err = self.parse_type_annotation()?;
                     self.expect_token(Token::GreaterThan)?;
                     TypeAnnotation::Result {
-                        ok_type: Box::new(ok_type),
-                        err_type: Box::new(err_type),
+                        ok: Box::new(ok),
+                        err: Box::new(err),
                     }
                 }
                 _ => TypeAnnotation::Simple(type_name),
@@ -242,8 +242,8 @@ impl Parser {
                             };
 
                             ty = TypeAnnotation::Result {
-                                ok_type: ty.into(),
-                                err_type: err.into(),
+                                ok: ty.into(),
+                                err: err.into(),
                             }
                         }
                         // TODO: Allow grouping with parens? would clash with tuple type annotations though
@@ -775,6 +775,7 @@ impl Parser {
         self.expect_token(Token::Record)?;
         let name = self.expect_identifier()?;
         self.expect_token(Token::LeftBrace)?;
+        self.skip_newline();
 
         let mut fields = Vec::new();
 
@@ -786,9 +787,15 @@ impl Parser {
                 name: field_name,
                 type_annotation,
             });
-            // Optional: Handle commas or newlines between fields
+
+            if self.current.token != Token::Newline || self.current.token != Token::Comma {
+                break;
+            }
+            self.advance_tokens();
+            self.skip_newline();
         }
 
+        self.skip_newline();
         self.expect_token(Token::RightBrace)?;
 
         Ok(RecordDeclaration { name, fields })

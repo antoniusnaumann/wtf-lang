@@ -105,8 +105,8 @@ pub enum TypeAnnotation {
     List(Box<TypeAnnotation>),
     Option(Box<TypeAnnotation>),
     Result {
-        ok_type: Box<TypeAnnotation>,
-        err_type: Box<TypeAnnotation>,
+        ok: Box<TypeAnnotation>,
+        err: Box<TypeAnnotation>,
     },
     Tuple(Vec<TypeAnnotation>),
 }
