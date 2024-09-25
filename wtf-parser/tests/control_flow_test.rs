@@ -92,3 +92,36 @@ fn test_parse_return_statement() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_parse_throw_statement() -> Result<()> {
+    let input = r#"
+        func get_value() -> s32! {
+            throw "Not implemented"
+        }
+        "#;
+
+    let lexer = Lexer::new(input);
+    let mut parser = Parser::new(lexer);
+    let module = parser.parse_module()?;
+
+    let expected_ast = Module {
+        declarations: vec![Declaration::Function(FunctionDeclaration {
+            name: "get_value".to_string(),
+            parameters: vec![],
+            return_type: Some(TypeAnnotation::Result {
+                ok: TypeAnnotation::Simple("s32".to_owned()).into(),
+                err: TypeAnnotation::Simple("error".to_owned()).into(),
+            }),
+            body: Block {
+                statements: vec![Statement::ThrowStatement(Expression::Literal(
+                    Literal::String("Not implemented".to_owned()),
+                ))],
+            },
+        })],
+    };
+
+    assert_eq!(module, expected_ast);
+
+    Ok(())
+}
