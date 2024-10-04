@@ -13,7 +13,7 @@ fn test_parse_enum_declaration() -> Result<()> {
     "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     let expected_ast = Module {
@@ -39,7 +39,7 @@ fn test_parse_variant_declaration_without_associated_types() -> Result<()> {
     "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     let expected_ast = Module {
@@ -77,7 +77,7 @@ fn test_parse_variant_declaration_with_associated_types() -> Result<()> {
     "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     let expected_ast = Module {
@@ -117,7 +117,7 @@ fn test_parse_variant_declaration_with_mixed_cases() -> Result<()> {
     "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     // Assuming that the associated type for 'failure' is a tuple of the types
@@ -159,7 +159,7 @@ fn test_parse_empty_enum_declaration() -> Result<()> {
     "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
 
     // Depending on language specifications, an enum with no cases may or may not be allowed.
     // For the purpose of the test, we will assume it is allowed.

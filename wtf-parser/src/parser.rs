@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{error::Error, fmt::Debug};
 
 use crate::lexer::{Lexer, SpannedToken, Token};
 
@@ -18,7 +18,12 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(mut lexer: Lexer) -> Self {
+    pub fn new(source: &str) -> Self {
+        let lexer = Lexer::new(source);
+        Self::with_lexer(lexer)
+    }
+
+    pub fn with_lexer(mut lexer: Lexer) -> Self {
         let current = lexer.next_token();
         Parser { lexer, current }
     }

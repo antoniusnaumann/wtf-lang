@@ -19,7 +19,7 @@ license = "MIT"
 [workspace]
 resolver = "2"
 members = [
-  "wtf-ast",
+  "wtf-ast", "wtf-encode",
   "wtf-parser", 
   "wtf-wasm"
 ]

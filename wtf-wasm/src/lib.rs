@@ -10,7 +10,7 @@ pub use wasm_encoder::{ComponentValType as Type, Instruction, PrimitiveValType a
 
 pub struct Function<'a> {
     pub params: Vec<(String, Type)>,
-    pub result: Type,
+    pub result: Option<Type>,
     pub name: String,
     pub instructions: Vec<Instruction<'a>>,
     pub export: bool,
@@ -63,14 +63,11 @@ impl<'a> ComponentBuilder<'a> {
         // self.component_instances.export_items(exports);
     }
 
-    pub fn encode_fn(
-        &mut self,
-        function: Function<'a>,
-    ) -> Option<(String, ComponentExportKind, u32)> {
+    fn encode_fn(&mut self, function: Function<'a>) -> Option<(String, ComponentExportKind, u32)> {
         use CanonicalLowering as Lower;
         let idx = self.encode_lowered_fn(
             function.params.iter().map(Lower::lower).collect(),
-            vec![function.result.lower()],
+            function.result.lower(),
             &function.name,
             &function.instructions,
         );
@@ -135,15 +132,16 @@ impl<'a> ComponentBuilder<'a> {
         let mut exports = vec![];
         for (idx, function) in self.functions {
             let (type_idx, mut encoder) = self.inner.type_function();
-            encoder
-                .params(
-                    function
-                        .params
-                        .iter()
-                        .map(|(s, t)| (s.deref(), t.clone()))
-                        .collect::<Vec<_>>(),
-                )
-                .result(function.result);
+            encoder.params(
+                function
+                    .params
+                    .iter()
+                    .map(|(s, t)| (s.deref(), t.clone()))
+                    .collect::<Vec<_>>(),
+            );
+            if let Some(result) = function.result {
+                encoder.result(result);
+            }
             self.inner
                 .core_alias_export(0, &function.name, ExportKind::Func);
             self.inner.lift_func(idx, type_idx, vec![]);
@@ -216,5 +214,17 @@ impl CanonicalLowering for (String, Type) {
 
     fn lower(&self) -> Self::Out {
         self.1.lower()
+    }
+}
+
+impl CanonicalLowering for Option<Type> {
+    type Out = Vec<ValType>;
+
+    fn lower(&self) -> Self::Out {
+        if let Some(inner) = self {
+            vec![inner.lower()]
+        } else {
+            Vec::new()
+        }
     }
 }

@@ -1,5 +1,5 @@
 [package]
-name = "wtf-parser"
+name = "wtf-encode"
 authors.workspace = true
 edition.workspace = true
 version.workspace = true
@@ -7,3 +7,5 @@ license.workspace = true
 
 [dependencies]
 wtf-ast = { path = "../wtf-ast" }
+wtf-wasm = { path = "../wtf-wasm" }
+wtf-parser = { path = "../wtf-parser" }

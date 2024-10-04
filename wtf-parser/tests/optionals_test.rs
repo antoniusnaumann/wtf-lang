@@ -11,7 +11,7 @@ fn test_parse_optional_chaining() -> Result<()> {
     "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     let expected_ast = Module {
@@ -49,7 +49,7 @@ fn test_parse_null_coalescing_operator() -> Result<()> {
     "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     let expected_ast = Module {
@@ -86,7 +86,7 @@ fn test_parse_optional_assignment_operator() -> Result<()> {
     "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     let expected_ast = Module {
@@ -121,7 +121,7 @@ fn test_parse_optional_type_with_init() -> Result<()> {
     "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     let expected_ast = Module {
@@ -156,7 +156,7 @@ fn test_parse_optional_type() -> Result<()> {
     "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     // Assuming that uninitialized variables default to 'none' for optional types
@@ -192,7 +192,7 @@ fn test_parse_optional_type_with_init_shorthand() -> Result<()> {
     "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     let expected_ast = Module {
@@ -227,7 +227,7 @@ fn test_parse_optional_type_shorthand() -> Result<()> {
     "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     let expected_ast = Module {

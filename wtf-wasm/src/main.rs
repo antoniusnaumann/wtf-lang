@@ -7,20 +7,9 @@ use wtf_wasm::{ComponentBuilder, Function, Instance, Instruction, PrimitiveType,
 fn main() {
     let mut comp = ComponentBuilder::new();
 
-    // comp.encode_fn(
-    //     vec![ValType::I32, ValType::I32],
-    //     vec![ValType::I32],
-    //     "run",
-    //     &[
-    //         Instruction::LocalGet(0),
-    //         Instruction::LocalGet(1),
-    //         Instruction::I32Add,
-    //         Instruction::End,
-    //     ],
-    // );
     let functions = vec![Function {
         params: vec![],
-        result: Type::Primitive(PrimitiveType::S32),
+        result: Some(Type::Primitive(PrimitiveType::S32)),
         name: "run".to_owned(),
         instructions: vec![Instruction::I32Const(21), Instruction::End],
         export: true,
@@ -37,7 +26,7 @@ fn main() {
                 ("a".to_owned(), Type::Primitive(PrimitiveType::S32)),
                 ("b".to_owned(), Type::Primitive(PrimitiveType::S32)),
             ],
-            result: Type::Primitive(PrimitiveType::S32),
+            result: Some(Type::Primitive(PrimitiveType::S32)),
             name: "add".to_owned(),
             instructions: vec![
                 Instruction::LocalGet(0),

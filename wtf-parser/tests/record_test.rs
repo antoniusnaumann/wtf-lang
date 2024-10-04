@@ -14,7 +14,7 @@ fn test_parse_record_literal_with_type() -> Result<()> {
         "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     let expected_ast = Module {
@@ -62,7 +62,7 @@ fn test_parse_record_literal_without_type() -> Result<()> {
         "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     let expected_ast = Module {
@@ -113,7 +113,7 @@ fn test_parse_nested_record_literal() -> Result<()> {
         "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     let expected_ast = Module {
@@ -177,7 +177,7 @@ fn test_parse_record_literal_with_expressions() -> Result<()> {
         "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     let expected_ast = Module {
@@ -235,7 +235,7 @@ fn test_parse_record_literal_with_type_and_expressions() -> Result<()> {
         "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     let expected_ast = Module {
@@ -295,7 +295,7 @@ fn test_parse_record_literal_with_list_field() -> Result<()> {
         "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     let expected_ast = Module {
@@ -347,7 +347,7 @@ fn test_parse_empty_record_literal() -> Result<()> {
         "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     let expected_ast = Module {
@@ -389,7 +389,7 @@ fn test_parse_record_literal_with_spread() -> Result<()> {
     // Assuming that the parser and AST support spread syntax
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     // The expected AST needs to account for the spread operator

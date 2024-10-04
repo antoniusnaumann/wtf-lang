@@ -19,11 +19,20 @@ dependencies = [
 
 [[package]]
 name = "wtf-ast"
-version = "0.1.0"
+version = "0.0.0"
+
+[[package]]
+name = "wtf-encode"
+version = "0.0.0"
+dependencies = [
+ "wtf-ast",
+ "wtf-parser",
+ "wtf-wasm",
+]
 
 [[package]]
 name = "wtf-parser"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "wtf-ast",
 ]

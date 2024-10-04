@@ -15,7 +15,7 @@ fn test_parse_if_statement() -> Result<()> {
         "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     let expected_ast = Module {
@@ -72,7 +72,7 @@ fn test_parse_return_statement() -> Result<()> {
         "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     let expected_ast = Module {
@@ -102,7 +102,7 @@ fn test_parse_throw_statement() -> Result<()> {
         "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     let expected_ast = Module {
