@@ -6,4 +6,4 @@ version.workspace = true
 license.workspace = true
 
 [dependencies]
-wasm-encoder = "0.218.0"
+wasm-encoder = "0.217.0"

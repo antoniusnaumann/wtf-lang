@@ -95,7 +95,7 @@ impl<'a> ComponentBuilder<'a> {
         name: impl AsRef<str>,
         instructions: &[Instruction],
     ) -> u32 {
-        self.types.ty().function(params, results);
+        self.types.function(params, results);
 
         // Encode the function section.
         self.signatures.function(self.module_count);
@@ -141,6 +141,9 @@ impl<'a> ComponentBuilder<'a> {
             );
             if let Some(result) = function.result {
                 encoder.result(result);
+            } else {
+                let r: [(&str, Type); 0] = [];
+                encoder.results(r);
             }
             self.inner
                 .core_alias_export(0, &function.name, ExportKind::Func);

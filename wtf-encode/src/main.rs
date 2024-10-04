@@ -2,6 +2,7 @@ use std::{
     error::Error,
     fs::File,
     io::{Read, Write},
+    iter,
 };
 
 use wtf_ast::TypeAnnotation;
@@ -40,6 +41,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .statements
                     .into_iter()
                     .map(|st| todo!("Create instructions from statements"))
+                    .chain(iter::once(Instruction::End))
                     .collect();
                 let fun = Function {
                     params,
