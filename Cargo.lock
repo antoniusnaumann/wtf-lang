@@ -7,6 +7,13 @@ name = "wtf-ast"
 version = "0.1.0"
 
 [[package]]
+name = "wtf-hir"
+version = "0.1.0"
+dependencies = [
+ "wtf-ast",
+]
+
+[[package]]
 name = "wtf-parser"
 version = "0.1.0"
 dependencies = [

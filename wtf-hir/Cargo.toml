@@ -1,0 +1,8 @@
+[package]
+name = "wtf-hir"
+version = "0.1.0"
+edition = "2021"
+authors = ["Marcel Garus"]
+
+[dependencies]
+wtf-ast = { path = "../wtf-ast" }
