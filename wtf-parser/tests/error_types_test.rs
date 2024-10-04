@@ -11,7 +11,7 @@ fn test_parse_function_return_type_with_result() -> Result<()> {
     "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     let expected_ast = Module {
@@ -40,7 +40,7 @@ fn test_parse_record_field_with_result_type() -> Result<()> {
     "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     let expected_ast = Module {
@@ -70,7 +70,7 @@ fn test_parse_function_return_type_with_result_default_error() -> Result<()> {
     "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     let expected_ast = Module {
@@ -99,7 +99,7 @@ fn test_parse_record_field_with_result_type_default_error() -> Result<()> {
     "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     // Assuming default error type 'error'
@@ -130,7 +130,7 @@ fn test_parse_function_return_type_result_optional() -> Result<()> {
     "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     // 'mytype!myerror?' is equivalent to 'option<result<mytype, myerror>>'
@@ -160,7 +160,7 @@ fn test_parse_record_field_with_result_optional_type() -> Result<()> {
     "#;
 
     let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
+    let mut parser = Parser::with_lexer(lexer);
     let module = parser.parse_module()?;
 
     // 'mytype!myerror?' is equivalent to 'option<result<mytype, myerror>>'
