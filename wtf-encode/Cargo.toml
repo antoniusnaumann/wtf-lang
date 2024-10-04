@@ -9,3 +9,4 @@ license.workspace = true
 wtf-ast = { path = "../wtf-ast" }
 wtf-wasm = { path = "../wtf-wasm" }
 wtf-parser = { path = "../wtf-parser" }
+wasmparser = "0.218.0"

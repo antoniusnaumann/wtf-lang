@@ -1,13 +1,12 @@
 use std::{
     error::Error,
     fs::File,
-    io::{self, Read, Write},
-    os::unix::fs::FileExt,
+    io::{Read, Write},
 };
 
-use wtf_ast::{Parameter, TypeAnnotation};
+use wtf_ast::TypeAnnotation;
 use wtf_parser::parser::Parser;
-use wtf_wasm::{ComponentBuilder, Function, Instance, Type};
+use wtf_wasm::{ComponentBuilder, Function, Instance, Instruction, Type};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut file = File::open("main.wtf")?;
@@ -36,12 +35,17 @@ fn main() -> Result<(), Box<dyn Error>> {
                     .map(|p| (p.name, convert_type(p.type_annotation)))
                     .collect();
                 let result = f.return_type.map(convert_type);
+                let instructions: Vec<Instruction> = f
+                    .body
+                    .statements
+                    .into_iter()
+                    .map(|st| todo!("Create instructions from statements"))
+                    .collect();
                 let fun = Function {
                     params,
                     result,
                     name: f.name,
-                    // TODO: encode instructtions
-                    instructions: vec![],
+                    instructions,
                     // TODO: only export functions with export keyword
                     export: true,
                 };
@@ -63,8 +67,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
     builder.encode_instance(instance);
 
+    let wasm_bytes = builder.finish();
+    println!("{:?}", wasmparser::validate(&wasm_bytes).err());
+
+    let _ = std::fs::remove_file("output.wasm");
     let mut file = File::create("output.wasm")?;
-    file.write_all(content.as_bytes())?;
+
+    file.write_all(&wasm_bytes)?;
 
     Ok(())
 }
