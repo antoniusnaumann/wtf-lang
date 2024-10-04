@@ -1,0 +1,9 @@
+[package]
+name = "wtf-compiler"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wtf-ast = { path = "../wtf-ast" }
+wtf-parser = { path = "../wtf-parser" }
+wtf-hir = { path = "../wtf-hir" }
