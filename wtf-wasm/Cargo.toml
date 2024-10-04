@@ -1,0 +1,9 @@
+[package]
+name = "wtf-wasm"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+wasm-encoder = "0.218.0"

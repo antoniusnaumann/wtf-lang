@@ -3,6 +3,21 @@
 version = 3
 
 [[package]]
+name = "leb128"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "884e2677b40cc8c339eaefcb701c32ef1fd2493d71118dc0ca4b6a736c93bd67"
+
+[[package]]
+name = "wasm-encoder"
+version = "0.218.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22b896fa8ceb71091ace9bcb81e853f54043183a1c9667cf93422c40252ffa0a"
+dependencies = [
+ "leb128",
+]
+
+[[package]]
 name = "wtf-ast"
 version = "0.1.0"
 
@@ -11,4 +26,11 @@ name = "wtf-parser"
 version = "0.1.0"
 dependencies = [
  "wtf-ast",
+]
+
+[[package]]
+name = "wtf-wasm"
+version = "0.0.0"
+dependencies = [
+ "wasm-encoder",
 ]

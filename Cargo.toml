@@ -20,5 +20,6 @@ license = "MIT"
 resolver = "2"
 members = [
   "wtf-ast",
-  "wtf-parser"
+  "wtf-parser", 
+  "wtf-wasm"
 ]
