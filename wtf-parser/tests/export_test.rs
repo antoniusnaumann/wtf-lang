@@ -168,7 +168,7 @@ mod tests {
             declarations: vec![Declaration::Export(ExportDeclaration {
                 item: Box::new(Declaration::Enum(EnumDeclaration {
                     name: "color".to_owned(),
-                    variants: vec!["red".to_owned(), "green".to_owned(), "blue".to_owned()],
+                    cases: vec!["red".to_owned(), "green".to_owned(), "blue".to_owned()],
                 })),
             })],
         };

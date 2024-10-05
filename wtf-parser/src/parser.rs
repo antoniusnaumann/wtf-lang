@@ -910,7 +910,10 @@ impl Parser {
         self.skip_newline();
         self.expect_token(Token::RightBrace)?;
 
-        Ok(EnumDeclaration { name, variants })
+        Ok(EnumDeclaration {
+            name,
+            cases: variants,
+        })
     }
 
     fn parse_variant_declaration(&mut self) -> Result<VariantDeclaration> {

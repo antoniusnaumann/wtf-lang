@@ -46,7 +46,7 @@ pub struct ResourceDeclaration {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnumDeclaration {
     pub name: String,
-    pub variants: Vec<String>,
+    pub cases: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

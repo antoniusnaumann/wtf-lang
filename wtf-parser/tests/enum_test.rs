@@ -19,7 +19,7 @@ fn test_parse_enum_declaration() -> Result<()> {
     let expected_ast = Module {
         declarations: vec![Declaration::Enum(EnumDeclaration {
             name: "color".to_string(),
-            variants: vec!["red".to_string(), "green".to_string(), "blue".to_string()],
+            cases: vec!["red".to_string(), "green".to_string(), "blue".to_string()],
         })],
         package: None,
         uses: vec![],
@@ -177,7 +177,7 @@ fn test_parse_empty_enum_declaration() -> Result<()> {
     let expected_ast = Module {
         declarations: vec![Declaration::Enum(EnumDeclaration {
             name: "empty_enum".to_string(),
-            variants: vec![],
+            cases: vec![],
         })],
         package: None,
         uses: vec![],
