@@ -904,6 +904,7 @@ impl Parser {
             if self.parse_delimiter().is_none() {
                 break;
             }
+            self.skip_newline();
         }
 
         self.skip_newline();
@@ -940,8 +941,8 @@ impl Parser {
                     if self.parse_delimiter().is_none() {
                         break;
                     }
+                    self.skip_newline();
                 }
-                self.skip_newline();
                 self.expect_token(Token::RightParen)?;
             }
             cases.push(VariantCase {
@@ -961,7 +962,10 @@ impl Parser {
     }
 
     fn parse_export_declaration(&mut self) -> Result<ExportDeclaration> {
-        todo!("TODO: Implement export parsing. Maybe this should just be a keyword on types and functions directly")
+        self.expect_token(Token::Export)?;
+        let item = self.parse_declaration()?.into();
+
+        Ok(ExportDeclaration { item })
     }
 
     fn parse_package_declaration(&mut self) -> Result<PackageDeclaration> {

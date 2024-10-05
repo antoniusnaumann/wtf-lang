@@ -12,10 +12,7 @@ pub struct Module {
 pub enum Type {
     List(Box<Type>),
     Option(Box<Type>),
-    Result {
-        ok: Box<Type>,
-        err: Box<Type>,
-    },
+    Result { ok: Box<Type>, err: Box<Type> },
     Record(HashMap<String, Type>),
     Resource(ResourceType),
     Enum(HashSet<String>),
