@@ -1,8 +1,28 @@
 use wtf_hir as hir;
 use wtf_wasm::{ComponentBuilder, Function, Instance, Instruction, PrimitiveType, Type};
 
+// PERF: use hash map here if search turns out to be slow
+#[derive(Debug, Default)]
+struct TypeLookup(Vec<Type>);
+
+impl TypeLookup {
+    /// Adds the type if it does not exist yet and returns its index afterwards
+    fn insert(&mut self, ty: Type) -> usize {
+        let found = self.0.iter().position(|&t| t == ty);
+        match found {
+            Some(i) => i,
+            None => {
+                self.0.push(ty);
+                self.0.len() - 1
+            }
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct Encoder<'a> {
+    // Lookup of all internal type definitions to their index
+    types: TypeLookup,
     builder: ComponentBuilder<'a>,
 }
 
@@ -12,7 +32,7 @@ impl<'a> Encoder<'a> {
     }
 
     pub fn encode(mut self, module: hir::Module) -> Encoder<'a> {
-        let instance = module.convert();
+        let instance = module.convert(&mut self.types);
         self.builder.encode_instance(instance);
 
         self
@@ -26,15 +46,19 @@ impl<'a> Encoder<'a> {
 trait Convert<'a> {
     type Output;
 
-    fn convert(self) -> Self::Output;
+    fn convert(self, lookup: &mut TypeLookup) -> Self::Output;
 }
 
 impl<'a> Convert<'a> for hir::Module {
     type Output = Instance<'a>;
 
-    fn convert(self) -> Self::Output {
-        let types = self.types.into_iter().map(Convert::convert).collect();
-        let functions = self.functions.into_iter().map(Convert::convert).collect();
+    fn convert(self, lookup: &mut TypeLookup) -> Self::Output {
+        let types = self.types.into_iter().map(|t| t.convert(lookup)).collect();
+        let functions = self
+            .functions
+            .into_iter()
+            .map(|t| t.convert(lookup))
+            .collect();
 
         Instance {
             name: "todo".to_owned(),
@@ -47,7 +71,7 @@ impl<'a> Convert<'a> for hir::Module {
 impl Convert<'_> for (String, hir::Type) {
     type Output = Type;
 
-    fn convert(self) -> Self::Output {
+    fn convert(self, lookup: &mut TypeLookup) -> Self::Output {
         todo!()
     }
 }
@@ -55,14 +79,14 @@ impl Convert<'_> for (String, hir::Type) {
 impl<'a> Convert<'a> for (String, hir::Function) {
     type Output = Function<'a>;
 
-    fn convert(self) -> Self::Output {
+    fn convert(self, lookup: &mut TypeLookup) -> Self::Output {
         let (name, func) = self;
         let params: Vec<_> = func
             .parameters
             .into_iter()
-            .map(|(name, ty)| (name, ty.convert()))
+            .map(|(name, ty)| (name, ty.convert(lookup)))
             .collect();
-        let result = func.return_type.map(|result| result.convert());
+        let result = func.return_type.map(|result| result.convert(lookup));
         // TODO: @Marcel, can you handle this?
         // let instructions: Vec<Instruction> = func
         //     .body
@@ -87,7 +111,7 @@ impl<'a> Convert<'a> for (String, hir::Function) {
 impl Convert<'_> for hir::Type {
     type Output = Type;
 
-    fn convert(self) -> Self::Output {
+    fn convert(self, lookup: &mut TypeLookup) -> Self::Output {
         match self {
             hir::Type::List(_) => todo!(),
             hir::Type::Option(_) => todo!(),
@@ -97,7 +121,7 @@ impl Convert<'_> for hir::Type {
             hir::Type::Enum(_) => todo!(),
             hir::Type::Variant(_) => todo!(),
             hir::Type::Tuple(_) => todo!(),
-            hir::Type::Builtin(ty) => Type::Primitive(ty.convert()),
+            hir::Type::Builtin(ty) => Type::Primitive(ty.convert(lookup)),
         }
     }
 }
@@ -105,7 +129,7 @@ impl Convert<'_> for hir::Type {
 impl Convert<'_> for hir::PrimitiveType {
     type Output = PrimitiveType;
 
-    fn convert(self) -> Self::Output {
+    fn convert(self, lookup: &mut TypeLookup) -> Self::Output {
         match self {
             hir::PrimitiveType::Bool => PrimitiveType::Bool,
             hir::PrimitiveType::S8 => PrimitiveType::S8,
