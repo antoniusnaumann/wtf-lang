@@ -38,6 +38,8 @@ fn test_parse_function_declaration() {
                 ))],
             },
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -82,6 +84,8 @@ fn test_parse_variable_declaration() -> Result<()> {
                 ],
             },
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -156,6 +160,8 @@ fn test_parse_resource_declaration() -> Result<()> {
                 },
             }],
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -199,6 +205,8 @@ fn test_parse_plus_assign() -> Result<()> {
                 }],
             },
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -217,13 +225,15 @@ fn test_parse_package_declaration() -> Result<()> {
     let module = parser.parse_module()?;
 
     let expected_ast = Module {
-        declarations: vec![Declaration::Package(PackageDeclaration {
+        package: Some(PackageDeclaration {
             path: ModulePath {
                 owner: "test".to_owned(),
                 package: "all_features".to_owned(),
             },
             version: None,
-        })],
+        }),
+        uses: vec![],
+        declarations: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -242,7 +252,7 @@ fn test_parse_package_declaration_versioned() -> Result<()> {
     let module = parser.parse_module()?;
 
     let expected_ast = Module {
-        declarations: vec![Declaration::Package(PackageDeclaration {
+        package: Some(PackageDeclaration {
             path: ModulePath {
                 owner: "test".to_owned(),
                 package: "all_features".to_owned(),
@@ -253,7 +263,9 @@ fn test_parse_package_declaration_versioned() -> Result<()> {
                 patch: 0,
                 extras: None,
             }),
-        })],
+        }),
+        uses: vec![],
+        declarations: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -272,14 +284,16 @@ fn test_parse_use_declaration() -> Result<()> {
     let module = parser.parse_module()?;
 
     let expected_ast = Module {
-        declarations: vec![Declaration::Use(UseDeclaration {
+        package: None,
+        uses: vec![UseDeclaration {
             module_path: ModulePath {
                 owner: "external".to_owned(),
                 package: "io".to_owned(),
             },
             interface: "printer".to_owned(),
             types: vec!["print".to_owned()],
-        })],
+        }],
+        declarations: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -298,14 +312,16 @@ fn test_parse_use_declaration_two_imports() -> Result<()> {
     let module = parser.parse_module()?;
 
     let expected_ast = Module {
-        declarations: vec![Declaration::Use(UseDeclaration {
+        declarations: vec![],
+        uses: vec![UseDeclaration {
             module_path: ModulePath {
                 owner: "external".to_owned(),
                 package: "io".to_owned(),
             },
             interface: "printer".to_owned(),
             types: vec!["print".to_owned(), "println".to_owned()],
-        })],
+        }],
+        package: None,
     };
 
     assert_eq!(module, expected_ast);

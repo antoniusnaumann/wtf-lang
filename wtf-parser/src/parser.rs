@@ -1,4 +1,4 @@
-use std::{error::Error, fmt::Debug};
+use std::fmt::Debug;
 
 use crate::lexer::{Lexer, SpannedToken, Token};
 
@@ -73,6 +73,21 @@ impl Parser {
     }
 
     pub fn parse_module(&mut self) -> Result<Module> {
+        self.skip_newline();
+        let package = if self.current.token == Token::Package {
+            Some(self.parse_package_declaration()?)
+        } else {
+            None
+        };
+
+        self.skip_newline();
+
+        let mut uses = Vec::new();
+        while self.current.token == Token::Use {
+            uses.push(self.parse_use_declaration()?);
+            self.skip_newline();
+        }
+
         let mut declarations = Vec::new();
 
         while self.current.token != Token::Eof {
@@ -90,7 +105,11 @@ impl Parser {
             }
         }
 
-        Ok(Module { declarations })
+        Ok(Module {
+            package,
+            declarations,
+            uses,
+        })
     }
 
     fn parse_declaration(&mut self) -> Result<Declaration> {
@@ -101,9 +120,7 @@ impl Parser {
             Token::Enum => self.parse_enum_declaration().map(Declaration::Enum),
             Token::Variant => self.parse_variant_declaration().map(Declaration::Variant),
             Token::Export => self.parse_export_declaration().map(Declaration::Export),
-            Token::Package => self.parse_package_declaration().map(Declaration::Package),
-            Token::Use => self.parse_use_declaration().map(Declaration::Use),
-            _ => Err(self.unexpected(vec![
+            _t => Err(self.unexpected(vec![
                 Token::Func,
                 Token::Record,
                 Token::Resource,

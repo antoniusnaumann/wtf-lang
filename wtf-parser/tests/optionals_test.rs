@@ -33,6 +33,8 @@ fn test_parse_optional_chaining() -> Result<()> {
                 })],
             },
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -70,6 +72,8 @@ fn test_parse_null_coalescing_operator() -> Result<()> {
                 })],
             },
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -105,6 +109,8 @@ fn test_parse_optional_assignment_operator() -> Result<()> {
                 }],
             },
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -140,6 +146,8 @@ fn test_parse_optional_type_with_init() -> Result<()> {
                 })],
             },
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -176,6 +184,8 @@ fn test_parse_optional_type() -> Result<()> {
                 })],
             },
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -211,6 +221,8 @@ fn test_parse_optional_type_with_init_shorthand() -> Result<()> {
                 })],
             },
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -246,6 +258,8 @@ fn test_parse_optional_type_shorthand() -> Result<()> {
                 })],
             },
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);

@@ -24,6 +24,8 @@ fn test_parse_function_return_type_with_result() -> Result<()> {
             }),
             body: Block { statements: vec![] },
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -54,6 +56,8 @@ fn test_parse_record_field_with_result_type() -> Result<()> {
                 },
             }],
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -83,6 +87,8 @@ fn test_parse_function_return_type_with_result_default_error() -> Result<()> {
             }),
             body: Block { statements: vec![] },
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -114,6 +120,8 @@ fn test_parse_record_field_with_result_type_default_error() -> Result<()> {
                 },
             }],
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -144,6 +152,8 @@ fn test_parse_function_return_type_result_optional() -> Result<()> {
             }))),
             body: Block { statements: vec![] }, // Empty function body
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -175,6 +185,8 @@ fn test_parse_record_field_with_result_optional_type() -> Result<()> {
                 })),
             }],
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);

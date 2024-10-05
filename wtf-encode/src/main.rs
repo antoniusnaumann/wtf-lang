@@ -58,8 +58,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             wtf_ast::Declaration::Enum(_) => todo!(),
             wtf_ast::Declaration::Variant(_) => todo!(),
             wtf_ast::Declaration::Export(_) => todo!(),
-            wtf_ast::Declaration::Package(_) => todo!(),
-            wtf_ast::Declaration::Use(_) => todo!(),
         }
     }
 

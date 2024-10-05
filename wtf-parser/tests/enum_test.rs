@@ -21,6 +21,8 @@ fn test_parse_enum_declaration() -> Result<()> {
             name: "color".to_string(),
             variants: vec!["red".to_string(), "green".to_string(), "blue".to_string()],
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -60,6 +62,8 @@ fn test_parse_variant_declaration_without_associated_types() -> Result<()> {
                 },
             ],
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -100,6 +104,8 @@ fn test_parse_variant_declaration_with_associated_types() -> Result<()> {
                 },
             ],
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -145,6 +151,8 @@ fn test_parse_variant_declaration_with_mixed_cases() -> Result<()> {
                 },
             ],
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -171,6 +179,8 @@ fn test_parse_empty_enum_declaration() -> Result<()> {
             name: "empty_enum".to_string(),
             variants: vec![],
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
