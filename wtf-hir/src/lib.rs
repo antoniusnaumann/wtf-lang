@@ -29,13 +29,13 @@ pub struct ResourceType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionSignature {
     param_types: Vec<Type>,
-    return_type: Type,
+    return_type: Option<Type>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Function {
     pub parameters: Vec<(String, Type)>,
-    pub return_type: Type,
+    pub return_type: Option<Type>,
     pub expressions: Vec<Expression>,
     pub body: Id,
 }

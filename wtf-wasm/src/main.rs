@@ -16,11 +16,13 @@ fn main() {
     }];
     comp.encode_instance(Instance {
         name: "wasi:cli/run@0.2.0".to_owned(),
+        types: vec![],
         functions,
     });
 
     comp.encode_instance(Instance {
         name: "antoniusnaumann:example/math".to_owned(),
+        types: vec![],
         functions: vec![Function {
             params: vec![
                 ("a".to_owned(), Type::Primitive(PrimitiveType::S32)),

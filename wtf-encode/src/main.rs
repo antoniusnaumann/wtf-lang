@@ -34,6 +34,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let instance = Instance {
         name: "antoniusnaumann:example/main".to_owned(),
         functions,
+        types: vec![],
     };
     builder.encode_instance(instance);
 

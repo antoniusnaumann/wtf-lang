@@ -8,6 +8,7 @@ use wasm_encoder::{
 // wasm encoder re-exports
 pub use wasm_encoder::{ComponentValType as Type, Instruction, PrimitiveValType as PrimitiveType};
 
+#[derive(Debug)]
 pub struct Function<'a> {
     pub params: Vec<(String, Type)>,
     pub result: Option<Type>,
@@ -16,11 +17,14 @@ pub struct Function<'a> {
     pub export: bool,
 }
 
+#[derive(Debug)]
 pub struct Instance<'a> {
     pub name: String,
     pub functions: Vec<Function<'a>>,
+    pub types: Vec<Type>,
 }
 
+#[derive(Debug, Default)]
 pub struct ComponentBuilder<'a> {
     types: TypeSection,
     signatures: FunctionSection,
@@ -37,17 +41,7 @@ pub struct ComponentBuilder<'a> {
 // Probably embed https://docs.rs/wasm-encoder/latest/wasm_encoder/struct.ComponentBuilder.html and use the lower_func method from there
 impl<'a> ComponentBuilder<'a> {
     pub fn new() -> ComponentBuilder<'a> {
-        ComponentBuilder {
-            types: TypeSection::new(),
-            signatures: FunctionSection::new(),
-            exports: ExportSection::new(),
-            codes: CodeSection::new(),
-            functions: Vec::new(),
-            module_count: 0,
-            component_count: 0,
-            component_lookup: HashMap::new(),
-            inner: wasm_encoder::ComponentBuilder::default(),
-        }
+        Self::default()
     }
 
     pub fn encode_instance(&mut self, instance: Instance<'a>) {
