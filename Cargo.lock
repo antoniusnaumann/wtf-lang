@@ -180,6 +180,7 @@ version = "0.0.0"
 dependencies = [
  "wasmparser",
  "wtf-ast",
+ "wtf-hir",
  "wtf-parser",
  "wtf-wasm",
 ]

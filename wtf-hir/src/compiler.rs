@@ -4,7 +4,7 @@ use wtf_ast::{self as ast, ResourceDeclaration};
 
 use crate::{Module, ResourceType, Type};
 
-fn compile(ast: ast::Module) -> Module {
+pub fn compile(ast: ast::Module) -> Module {
     Module {
         types: compile_types(ast),
         functions: HashMap::new(),
@@ -36,8 +36,6 @@ fn type_name(declaration: ast::Declaration) -> Option<String> {
         ast::Declaration::Enum(decl) => Some(decl.name),
         ast::Declaration::Variant(decl) => Some(decl.name),
         ast::Declaration::Export(_) => None,
-        ast::Declaration::Package(_) => None,
-        ast::Declaration::Use(_) => None,
     }
 }
 fn compile_type_declaration(

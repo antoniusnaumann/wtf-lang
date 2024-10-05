@@ -1,4 +1,6 @@
-// mod compiler;
+mod compiler;
+
+pub use compiler::compile;
 
 use std::collections::{HashMap, HashSet};
 
