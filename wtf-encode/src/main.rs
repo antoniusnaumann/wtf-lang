@@ -7,7 +7,7 @@ use std::{
 
 use wtf_ast::{Declaration, TypeAnnotation};
 use wtf_parser::parser::Parser;
-use wtf_wasm::{ComponentBuilder, Function, Instance, Instruction, Type};
+use wtf_wasm::{ComponentBuilder, Function, Instance, Instruction, Type, TypeRef};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut file = File::open("main.wtf")?;
@@ -84,9 +84,9 @@ fn convert_declaration(declaration: Declaration, export: bool) -> Function<'stat
     }
 }
 
-fn convert_type(ty: TypeAnnotation) -> Type {
+fn convert_type(ty: TypeAnnotation) -> TypeRef {
     match ty {
-        wtf_ast::TypeAnnotation::Simple(s) => Type::Primitive(match s.as_str() {
+        wtf_ast::TypeAnnotation::Simple(s) => TypeRef::Primitive(match s.as_str() {
             "s32" => wtf_wasm::PrimitiveType::S32,
             _ => todo!(),
         }),

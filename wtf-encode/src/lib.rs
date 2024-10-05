@@ -1,5 +1,5 @@
 use wtf_hir as hir;
-use wtf_wasm::{ComponentBuilder, Function, Instance, Instruction, PrimitiveType, Type};
+use wtf_wasm::{ComponentBuilder, Function, Instance, Instruction, PrimitiveType, Type, TypeRef};
 
 // PERF: use hash map here if search turns out to be slow
 #[derive(Debug, Default)]
@@ -7,15 +7,17 @@ struct TypeLookup(Vec<Type>);
 
 impl TypeLookup {
     /// Adds the type if it does not exist yet and returns its index afterwards
-    fn insert(&mut self, ty: Type) -> usize {
-        let found = self.0.iter().position(|&t| t == ty);
-        match found {
+    fn insert(&mut self, ty: Type) -> u32 {
+        let found = self.0.iter().position(|t| *t == ty);
+        let idx = match found {
             Some(i) => i,
             None => {
                 self.0.push(ty);
                 self.0.len() - 1
             }
-        }
+        };
+
+        idx as u32
     }
 }
 
@@ -109,19 +111,35 @@ impl<'a> Convert<'a> for (String, hir::Function) {
 }
 
 impl Convert<'_> for hir::Type {
-    type Output = Type;
+    type Output = TypeRef;
 
     fn convert(self, lookup: &mut TypeLookup) -> Self::Output {
         match self {
-            hir::Type::List(_) => todo!(),
-            hir::Type::Option(_) => todo!(),
-            hir::Type::Result { ok, err } => todo!(),
+            hir::Type::List(item) => {
+                let item = item.convert(lookup);
+                let ty = lookup.insert(Type::List(item));
+
+                TypeRef::Type(ty)
+            }
+            hir::Type::Option(inner) => {
+                let inner = inner.convert(lookup);
+                let ty = lookup.insert(Type::Option(inner));
+
+                TypeRef::Type(ty)
+            }
+            hir::Type::Result { ok, err } => {
+                let ok = ok.convert(lookup);
+                let err = err.convert(lookup);
+                let ty = lookup.insert(Type::Result { ok, err });
+
+                TypeRef::Type(ty)
+            }
             hir::Type::Record(_) => todo!(),
             hir::Type::Resource(_) => todo!(),
             hir::Type::Enum(_) => todo!(),
             hir::Type::Variant(_) => todo!(),
             hir::Type::Tuple(_) => todo!(),
-            hir::Type::Builtin(ty) => Type::Primitive(ty.convert(lookup)),
+            hir::Type::Builtin(ty) => TypeRef::Primitive(ty.convert(lookup)),
         }
     }
 }
@@ -129,7 +147,7 @@ impl Convert<'_> for hir::Type {
 impl Convert<'_> for hir::PrimitiveType {
     type Output = PrimitiveType;
 
-    fn convert(self, lookup: &mut TypeLookup) -> Self::Output {
+    fn convert(self, _lookup: &mut TypeLookup) -> Self::Output {
         match self {
             hir::PrimitiveType::Bool => PrimitiveType::Bool,
             hir::PrimitiveType::S8 => PrimitiveType::S8,

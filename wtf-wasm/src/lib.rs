@@ -6,12 +6,29 @@ use wasm_encoder::{
 };
 
 // wasm encoder re-exports
-pub use wasm_encoder::{ComponentValType as Type, Instruction, PrimitiveValType as PrimitiveType};
+pub use wasm_encoder::{
+    ComponentValType as TypeRef, Instruction, PrimitiveValType as PrimitiveType,
+};
+
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub enum Type {
+    Simple(TypeRef),
+    List(TypeRef),
+    Option(TypeRef),
+    Result { ok: TypeRef, err: TypeRef },
+    Record { fields: Vec<TypeRef> },
+    Variant {},
+    Tuple(),
+    Flags(),
+    Enum(Vec<String>),
+    Own(),
+    Borrow(),
+}
 
 #[derive(Debug)]
 pub struct Function<'a> {
-    pub params: Vec<(String, Type)>,
-    pub result: Option<Type>,
+    pub params: Vec<(String, TypeRef)>,
+    pub result: Option<TypeRef>,
     pub name: String,
     pub instructions: Vec<Instruction<'a>>,
     pub export: bool,
@@ -136,7 +153,7 @@ impl<'a> ComponentBuilder<'a> {
             if let Some(result) = function.result {
                 encoder.result(result);
             } else {
-                let r: [(&str, Type); 0] = [];
+                let r: [(&str, TypeRef); 0] = [];
                 encoder.results(r);
             }
             self.inner
@@ -181,12 +198,12 @@ trait CanonicalLowering {
     fn lower(&self) -> Self::Out;
 }
 
-impl CanonicalLowering for Type {
+impl CanonicalLowering for TypeRef {
     type Out = ValType;
 
     fn lower(&self) -> Self::Out {
         match self {
-            Type::Primitive(p) => match p {
+            TypeRef::Primitive(p) => match p {
                 PrimitiveValType::Bool
                 | PrimitiveValType::S8
                 | PrimitiveValType::U8
@@ -201,12 +218,12 @@ impl CanonicalLowering for Type {
                 PrimitiveValType::F64 => ValType::F64,
                 PrimitiveValType::String => ValType::I32,
             },
-            Type::Type(t) => todo!("Handle type references"),
+            TypeRef::Type(t) => todo!("Handle type references"),
         }
     }
 }
 
-impl CanonicalLowering for (String, Type) {
+impl CanonicalLowering for (String, TypeRef) {
     type Out = ValType;
 
     fn lower(&self) -> Self::Out {
@@ -214,7 +231,7 @@ impl CanonicalLowering for (String, Type) {
     }
 }
 
-impl CanonicalLowering for Option<Type> {
+impl CanonicalLowering for Option<TypeRef> {
     type Out = Vec<ValType>;
 
     fn lower(&self) -> Self::Out {
