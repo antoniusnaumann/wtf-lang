@@ -1,5 +1,5 @@
 use wtf_hir as hir;
-use wtf_wasm::{ComponentBuilder, Function, Instance, Instruction, Type};
+use wtf_wasm::{ComponentBuilder, Function, Instance, Instruction, PrimitiveType, Type};
 
 #[derive(Debug, Default)]
 pub struct Encoder<'a> {
@@ -88,6 +88,38 @@ impl Convert<'_> for hir::Type {
     type Output = Type;
 
     fn convert(self) -> Self::Output {
-        todo!()
+        match self {
+            hir::Type::List(_) => todo!(),
+            hir::Type::Option(_) => todo!(),
+            hir::Type::Result { ok, err } => todo!(),
+            hir::Type::Record(_) => todo!(),
+            hir::Type::Resource(_) => todo!(),
+            hir::Type::Enum(_) => todo!(),
+            hir::Type::Variant(_) => todo!(),
+            hir::Type::Tuple(_) => todo!(),
+            hir::Type::Builtin(ty) => Type::Primitive(ty.convert()),
+        }
+    }
+}
+
+impl Convert<'_> for hir::PrimitiveType {
+    type Output = PrimitiveType;
+
+    fn convert(self) -> Self::Output {
+        match self {
+            hir::PrimitiveType::Bool => PrimitiveType::Bool,
+            hir::PrimitiveType::S8 => PrimitiveType::S8,
+            hir::PrimitiveType::U8 => PrimitiveType::U8,
+            hir::PrimitiveType::S16 => PrimitiveType::S16,
+            hir::PrimitiveType::U16 => PrimitiveType::U16,
+            hir::PrimitiveType::S32 => PrimitiveType::S32,
+            hir::PrimitiveType::U32 => PrimitiveType::U32,
+            hir::PrimitiveType::S64 => PrimitiveType::S64,
+            hir::PrimitiveType::U64 => PrimitiveType::U64,
+            hir::PrimitiveType::F32 => PrimitiveType::F32,
+            hir::PrimitiveType::F64 => PrimitiveType::F64,
+            hir::PrimitiveType::Char => PrimitiveType::Char,
+            hir::PrimitiveType::String => PrimitiveType::String,
+        }
     }
 }

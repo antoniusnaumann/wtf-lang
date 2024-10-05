@@ -21,11 +21,31 @@ pub enum Type {
     Enum(HashSet<String>),
     Variant(HashMap<String, Type>),
     Tuple(Vec<Type>),
+    Builtin(PrimitiveType),
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PrimitiveType {
+    Bool,
+    S8,
+    U8,
+    S16,
+    U16,
+    S32,
+    U32,
+    S64,
+    U64,
+    F32,
+    F64,
+    Char,
+    String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResourceType {
     pub methods: HashMap<String, FunctionSignature>,
 }
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionSignature {
     param_types: Vec<Type>,
