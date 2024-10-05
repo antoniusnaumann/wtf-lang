@@ -1,11 +1,13 @@
 use std::{
     collections::{HashMap, HashSet},
+    fmt::Debug,
     ops::Deref,
 };
 
 use wasm_encoder::{
-    CodeSection, ComponentExportKind, ConstExpr, DataSection, ExportKind, ExportSection,
-    FunctionSection, MemorySection, MemoryType, Module, PrimitiveValType, TypeSection, ValType,
+    CanonicalOption, CodeSection, ComponentExportKind, ConstExpr, DataSection, ExportKind,
+    ExportSection, FunctionSection, GlobalSection, GlobalType, MemorySection, MemoryType, Module,
+    PrimitiveValType, TypeSection, ValType,
 };
 
 // wasm encoder re-exports
@@ -50,14 +52,17 @@ pub struct ComponentBuilder<'a> {
     signatures: FunctionSection,
     exports: ExportSection,
     codes: CodeSection,
+    globals: GlobalSection,
 
     functions: Vec<(u32, Function<'a>)>,
-    module_count: u32,
+    function_count: u32,
+    global_count: u32,
     component_count: u32,
     component_lookup: HashMap<String, u32>,
     component_types: Vec<Type>,
     inner: wasm_encoder::ComponentBuilder,
 
+    realloc_index: u32,
     has_instance: bool,
 }
 
@@ -122,11 +127,11 @@ impl<'a> ComponentBuilder<'a> {
         self.types.function(params, results);
 
         // Encode the function section.
-        self.signatures.function(self.module_count);
+        self.signatures.function(self.function_count);
 
         // Encode the export section.
         self.exports
-            .export(name.as_ref(), ExportKind::Func, self.module_count);
+            .export(name.as_ref(), ExportKind::Func, self.function_count);
 
         let locals = vec![];
         let mut f = wasm_encoder::Function::new(locals);
@@ -135,23 +140,28 @@ impl<'a> ComponentBuilder<'a> {
         }
         self.codes.function(&f);
 
-        let result = self.module_count;
-        self.module_count += 1;
+        let result = self.function_count;
+        self.function_count += 1;
 
         result
     }
 
     pub fn finish(mut self) -> Vec<u8> {
+        self.realloc();
         let (memory, data) = self.mem();
+        self.exports.export("memory", ExportKind::Memory, 0);
         let mut module = Module::new();
         module.section(&self.types);
         module.section(&self.signatures);
         module.section(&memory);
+        module.section(&self.globals);
         module.section(&self.exports);
         module.section(&self.codes);
         module.section(&data);
         self.inner.core_module(&module);
         self.inner.core_instantiate(0, vec![]);
+        self.inner
+            .alias_core_export(0, "memory", ExportKind::Memory);
 
         let mut exports = vec![];
 
@@ -179,6 +189,13 @@ impl<'a> ComponentBuilder<'a> {
             }
         }
 
+        for (_, function) in &self.functions {
+            self.inner
+                .core_alias_export(0, &function.name, ExportKind::Func);
+        }
+
+        self.inner.core_alias_export(0, "realloc", ExportKind::Func);
+
         for (idx, function) in self.functions {
             let (type_idx, mut encoder) = self.inner.type_function();
             encoder.params(
@@ -194,9 +211,14 @@ impl<'a> ComponentBuilder<'a> {
                 let r: [(&str, TypeRef); 0] = [];
                 encoder.results(r);
             }
-            self.inner
-                .core_alias_export(0, &function.name, ExportKind::Func);
-            self.inner.lift_func(idx, type_idx, vec![]);
+            self.inner.lift_func(
+                idx,
+                type_idx,
+                vec![
+                    CanonicalOption::Memory(0),
+                    CanonicalOption::Realloc(self.realloc_index),
+                ],
+            );
             if function.export {
                 exports.push((function.name, idx))
             }
@@ -228,6 +250,60 @@ impl<'a> ComponentBuilder<'a> {
 
         (memory, data)
     }
+
+    // Creates the realloc function
+    fn realloc(&mut self) {
+        self.types.function(
+            vec![ValType::I32, ValType::I32, ValType::I32, ValType::I32],
+            vec![ValType::I32],
+        );
+
+        self.signatures.function(self.function_count);
+        self.exports
+            .export("realloc", ExportKind::Func, self.function_count);
+
+        // Global $heap_ptr (mut i32) = initial value 65536
+        self.globals.global(
+            GlobalType {
+                val_type: ValType::I32,
+                mutable: true,
+                shared: false,
+            },
+            &ConstExpr::i32_const(65536),
+        );
+        let heap_ptr = self.global_count;
+        self.global_count += 1;
+
+        // Declare local $ret
+        let mut realloc_func = wasm_encoder::Function::new(vec![(1, ValType::I32)]);
+
+        // Function body:
+        // param $ptr i32       ; local index 0
+        // param $old_size i32  ; local index 1
+        // param $align i32     ; local index 2
+        // param $new_size i32  ; local index 3
+        // local $ret i32       ; local index 4
+
+        // TODO: This is currently a simple bump allocator that never reallocates. Use some library realloc function instead
+
+        // Get the current heap pointer and store it in $ret
+        realloc_func.instruction(&Instruction::GlobalGet(heap_ptr)); // global.get $heap_ptr
+        realloc_func.instruction(&Instruction::LocalSet(4)); // local.set $ret
+
+        // Update the heap pointer: $heap_ptr += $new_size
+        realloc_func.instruction(&Instruction::GlobalGet(heap_ptr)); // global.get $heap_ptr
+        realloc_func.instruction(&Instruction::LocalGet(3)); // local.get $new_size
+        realloc_func.instruction(&Instruction::I32Add); // i32.add
+        realloc_func.instruction(&Instruction::GlobalSet(heap_ptr)); // global.set $heap_ptr
+
+        // Return the original heap pointer (stored in $ret)
+        realloc_func.instruction(&Instruction::LocalGet(4)); // local.get $ret
+        realloc_func.instruction(&Instruction::End);
+
+        self.codes.function(&realloc_func);
+        self.realloc_index = self.function_count;
+        self.function_count += 1;
+    }
 }
 
 trait CanonicalLowering {
@@ -237,6 +313,7 @@ trait CanonicalLowering {
 }
 
 impl CanonicalLowering for TypeRef {
+    // TODO: It might be neccessary to return multiple values here
     type Out = ValType;
 
     fn lower(&self) -> Self::Out {
@@ -256,7 +333,7 @@ impl CanonicalLowering for TypeRef {
                 PrimitiveValType::F64 => ValType::F64,
                 PrimitiveValType::String => ValType::I32,
             },
-            TypeRef::Type(t) => todo!("Handle type references"),
+            TypeRef::Type(t) => ValType::I32, // todo!("Handle ref types"),
         }
     }
 }

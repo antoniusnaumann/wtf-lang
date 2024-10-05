@@ -5,9 +5,10 @@ use std::{
     iter,
 };
 
+use wasmparser::ComponentValType;
 use wtf_ast::{Declaration, TypeAnnotation};
 use wtf_parser::parser::Parser;
-use wtf_wasm::{ComponentBuilder, Function, Instance, Instruction, Type, TypeRef};
+use wtf_wasm::{ComponentBuilder, Function, Instance, Instruction, PrimitiveType, Type, TypeRef};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut file = File::open("main.wtf")?;
@@ -31,10 +32,27 @@ fn main() -> Result<(), Box<dyn Error>> {
         functions.push(convert_declaration(declaration, false));
     }
 
+    let types = vec![
+        Type::List(TypeRef::Primitive(wtf_wasm::PrimitiveType::S16)),
+        Type::Option(TypeRef::Type(0)),
+    ];
+
+    functions.push(Function {
+        params: vec![
+            ("a".to_owned(), TypeRef::Primitive(PrimitiveType::S8)),
+            ("list".to_owned(), TypeRef::Type(0)),
+            ("optional".to_owned(), TypeRef::Type(1)),
+        ],
+        result: None,
+        name: "foo".to_owned(),
+        instructions: vec![Instruction::End],
+        export: true,
+    });
+
     let instance = Instance {
         name: "antoniusnaumann:example/main".to_owned(),
         functions,
-        types: vec![],
+        types,
     };
     builder.encode_instance(instance);
 
