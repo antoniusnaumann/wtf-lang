@@ -1,4 +1,7 @@
-use std::{collections::HashMap, ops::Deref};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::Deref,
+};
 
 use wasm_encoder::{
     CodeSection, ComponentExportKind, ConstExpr, DataSection, ExportKind, ExportSection,
@@ -10,17 +13,17 @@ pub use wasm_encoder::{
     ComponentValType as TypeRef, Instruction, PrimitiveValType as PrimitiveType,
 };
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Type {
     Simple(TypeRef),
     List(TypeRef),
     Option(TypeRef),
     Result { ok: TypeRef, err: TypeRef },
-    Record { fields: Vec<TypeRef> },
+    Record { fields: Vec<(String, TypeRef)> },
     Variant {},
     Tuple(),
     Flags(),
-    Enum(Vec<String>),
+    Enum(HashSet<String>),
     Own(),
     Borrow(),
 }
@@ -52,7 +55,10 @@ pub struct ComponentBuilder<'a> {
     module_count: u32,
     component_count: u32,
     component_lookup: HashMap<String, u32>,
+    component_types: Vec<Type>,
     inner: wasm_encoder::ComponentBuilder,
+
+    has_instance: bool,
 }
 
 // Probably embed https://docs.rs/wasm-encoder/latest/wasm_encoder/struct.ComponentBuilder.html and use the lower_func method from there
@@ -62,7 +68,14 @@ impl<'a> ComponentBuilder<'a> {
     }
 
     pub fn encode_instance(&mut self, instance: Instance<'a>) {
+        if self.has_instance {
+            panic!("Currently only one instance per component is supported.")
+        }
+        self.has_instance = true;
+
         let mut exports = Vec::new();
+
+        self.component_types = instance.types;
 
         for func in instance.functions {
             if let Some(export) = self.encode_fn(func) {
@@ -141,6 +154,31 @@ impl<'a> ComponentBuilder<'a> {
         self.inner.core_instantiate(0, vec![]);
 
         let mut exports = vec![];
+
+        for (_, ty) in self.component_types.into_iter().enumerate() {
+            let (_, encoder) = self.inner.type_defined();
+            match ty {
+                Type::Simple(ty) => match ty {
+                    TypeRef::Primitive(ty) => encoder.primitive(ty),
+                    TypeRef::Type(ty) => {
+                        panic!("Expected an concrete type here, found {:#?}!", ty)
+                    }
+                },
+                Type::List(element) => encoder.list(element),
+                Type::Option(inner) => encoder.option(inner),
+                Type::Result { ok, err } => encoder.result(Some(ok), Some(err)),
+                Type::Record { fields } => {
+                    todo!()
+                }
+                Type::Variant {} => todo!(),
+                Type::Tuple() => todo!(),
+                Type::Flags() => todo!(),
+                Type::Enum(cases) => encoder.enum_type(cases.iter().map(|s| s.as_str())),
+                Type::Own() => todo!(),
+                Type::Borrow() => todo!(),
+            }
+        }
+
         for (idx, function) in self.functions {
             let (type_idx, mut encoder) = self.inner.type_function();
             encoder.params(

@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use wtf_hir as hir;
 use wtf_wasm::{ComponentBuilder, Function, Instance, Instruction, PrimitiveType, Type, TypeRef};
 
@@ -136,7 +138,11 @@ impl Convert<'_> for hir::Type {
             }
             hir::Type::Record(_) => todo!(),
             hir::Type::Resource(_) => todo!(),
-            hir::Type::Enum(_) => todo!(),
+            hir::Type::Enum(cases) => {
+                let ty = lookup.insert(Type::Enum(cases));
+
+                TypeRef::Type(ty)
+            }
             hir::Type::Variant(_) => todo!(),
             hir::Type::Tuple(_) => todo!(),
             hir::Type::Builtin(ty) => TypeRef::Primitive(ty.convert(lookup)),
