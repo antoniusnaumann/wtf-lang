@@ -5,7 +5,7 @@ use std::{
     iter,
 };
 
-use wtf_ast::TypeAnnotation;
+use wtf_ast::{Declaration, TypeAnnotation};
 use wtf_parser::parser::Parser;
 use wtf_wasm::{ComponentBuilder, Function, Instance, Instruction, Type};
 
@@ -28,37 +28,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut functions = Vec::new();
     for declaration in module.declarations {
-        match declaration {
-            wtf_ast::Declaration::Function(f) => {
-                let params: Vec<_> = f
-                    .parameters
-                    .into_iter()
-                    .map(|p| (p.name, convert_type(p.type_annotation)))
-                    .collect();
-                let result = f.return_type.map(convert_type);
-                let instructions: Vec<Instruction> = f
-                    .body
-                    .statements
-                    .into_iter()
-                    .map(|st| todo!("Create instructions from statements"))
-                    .chain(iter::once(Instruction::End))
-                    .collect();
-                let fun = Function {
-                    params,
-                    result,
-                    name: f.name,
-                    instructions,
-                    // TODO: only export functions with export keyword
-                    export: true,
-                };
-                functions.push(fun);
-            }
-            wtf_ast::Declaration::Record(_) => todo!(),
-            wtf_ast::Declaration::Resource(_) => todo!(),
-            wtf_ast::Declaration::Enum(_) => todo!(),
-            wtf_ast::Declaration::Variant(_) => todo!(),
-            wtf_ast::Declaration::Export(_) => todo!(),
-        }
+        functions.push(convert_declaration(declaration, false));
     }
 
     let instance = Instance {
@@ -76,6 +46,41 @@ fn main() -> Result<(), Box<dyn Error>> {
     file.write_all(&wasm_bytes)?;
 
     Ok(())
+}
+
+// TODO: deal with lifetimes later here
+fn convert_declaration(declaration: Declaration, export: bool) -> Function<'static> {
+    match declaration {
+        wtf_ast::Declaration::Function(f) => {
+            let params: Vec<_> = f
+                .parameters
+                .into_iter()
+                .map(|p| (p.name, convert_type(p.type_annotation)))
+                .collect();
+            let result = f.return_type.map(convert_type);
+            let instructions: Vec<Instruction> = f
+                .body
+                .statements
+                .into_iter()
+                .map(|st| todo!("Create instructions from statements"))
+                .chain(iter::once(Instruction::End))
+                .collect();
+            let fun = Function {
+                params,
+                result,
+                name: f.name,
+                instructions,
+                // TODO: only export functions with export keyword
+                export,
+            };
+            fun
+        }
+        wtf_ast::Declaration::Record(_) => todo!(),
+        wtf_ast::Declaration::Resource(_) => todo!(),
+        wtf_ast::Declaration::Enum(_) => todo!(),
+        wtf_ast::Declaration::Variant(_) => todo!(),
+        wtf_ast::Declaration::Export(ex) => convert_declaration(*ex.item, true),
+    }
 }
 
 fn convert_type(ty: TypeAnnotation) -> Type {
