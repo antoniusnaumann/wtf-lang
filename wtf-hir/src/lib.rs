@@ -1,11 +1,12 @@
-mod compiler;
+// mod compiler;
 
-pub use compiler::compile;
+// pub use compiler::compile;
 
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Module {
+    // TODO: How should we mark exported types and functions here?
     pub types: HashMap<String, Type>,
     pub functions: HashMap<String, Function>,
 }
