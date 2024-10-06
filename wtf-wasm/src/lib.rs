@@ -1,4 +1,5 @@
 use std::{
+    cmp::max,
     collections::{HashMap, HashSet},
     fmt::Debug,
     ops::Deref,
@@ -187,7 +188,7 @@ impl<'a> ComponentBuilder<'a> {
 
         let mut exports = vec![];
 
-        for (_, (ty, lowered)) in self.component_types.into_iter().enumerate() {
+        for (_, (ty, _)) in self.component_types.into_iter().enumerate() {
             let (_, encoder) = self.inner.type_defined();
             match ty {
                 Type::Simple(ty) => match ty {
@@ -373,8 +374,31 @@ fn lower_type(ty: &Type, types: &[Type], mapping: &mut [Option<Vec<ValType>>]) -
             let ok = lower_type(&ok.into(), types, mapping);
             let err = lower_type(&err.into(), types, mapping);
 
-            // Discriminent (i32) + lowered ok + lowered err
-            [vec![ValType::I32], ok, err].concat()
+            let mut payload = Vec::new();
+
+            for index in 0..max(ok.len(), err.len() - 1) {
+                // According to: https://github.com/WebAssembly/component-model/blob/main/design/mvp/CanonicalABI.md#flattening
+                let overlap = match (ok.get(index), err.get(index)) {
+                    (Some(a), Some(b)) => {
+                        if a == b {
+                            *a
+                        } else if matches!(
+                            (a, b),
+                            (ValType::I32 | ValType::F32, ValType::I32 | ValType::F32)
+                        ) {
+                            ValType::I32
+                        } else {
+                            ValType::I64
+                        }
+                    }
+                    (None, Some(v)) | (Some(v), None) => *v,
+                    (None, None) => unreachable!(),
+                };
+                payload.push(overlap)
+            }
+
+            // Discriminent (i32) + overlap between lowered ok and lowered err
+            [vec![ValType::I32], payload].concat()
         }
         Type::Record { fields } => fields
             .into_iter()

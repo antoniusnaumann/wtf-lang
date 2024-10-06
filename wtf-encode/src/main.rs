@@ -33,9 +33,40 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     let types = vec![
-        Type::List(TypeRef::Primitive(wtf_wasm::PrimitiveType::S16)),
-        Type::Option(TypeRef::Type(0)),
+        Type::List(TypeRef::Primitive(wtf_wasm::PrimitiveType::F64)),
+        Type::Result {
+            ok: TypeRef::Type(0),
+            err: TypeRef::Primitive(wtf_wasm::PrimitiveType::F64),
+        },
+        Type::Result {
+            ok: TypeRef::Primitive(wtf_wasm::PrimitiveType::F64),
+            err: TypeRef::Primitive(wtf_wasm::PrimitiveType::S64),
+        },
     ];
+
+    functions.push(Function {
+        params: vec![("res".to_owned(), TypeRef::Type(2))],
+        result: None,
+        name: "quz".to_owned(),
+        instructions: vec![Instruction::End],
+        export: true,
+    });
+
+    functions.push(Function {
+        params: vec![("str".to_owned(), TypeRef::Primitive(PrimitiveType::String))],
+        result: None,
+        name: "wibble".to_owned(),
+        instructions: vec![Instruction::End],
+        export: true,
+    });
+
+    functions.push(Function {
+        params: vec![("optional".to_owned(), TypeRef::Type(1))],
+        result: None,
+        name: "foo".to_owned(),
+        instructions: vec![Instruction::End],
+        export: true,
+    });
 
     functions.push(Function {
         params: vec![
@@ -44,7 +75,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             ("optional".to_owned(), TypeRef::Type(1)),
         ],
         result: None,
-        name: "foo".to_owned(),
+        name: "quuz".to_owned(),
         instructions: vec![Instruction::End],
         export: true,
     });
@@ -67,7 +98,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-// TODO: deal with lifetimes later here
 fn convert_declaration(declaration: Declaration, export: bool) -> Function<'static> {
     match declaration {
         wtf_ast::Declaration::Function(f) => {
@@ -81,7 +111,7 @@ fn convert_declaration(declaration: Declaration, export: bool) -> Function<'stat
                 .body
                 .statements
                 .into_iter()
-                .map(|st| todo!("Create instructions from statements"))
+                .map(|_st| panic!("This demo cannot create instructions from statements"))
                 .chain(iter::once(Instruction::End))
                 .collect();
             let fun = Function {
