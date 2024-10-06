@@ -40,7 +40,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     functions.push(Function {
         params: vec![
             ("a".to_owned(), TypeRef::Primitive(PrimitiveType::S8)),
-            ("list".to_owned(), TypeRef::Type(0)),
+            ("b".to_owned(), TypeRef::Type(0)),
             ("optional".to_owned(), TypeRef::Type(1)),
         ],
         result: None,

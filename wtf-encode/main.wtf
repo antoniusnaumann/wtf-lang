@@ -2,4 +2,4 @@
 func do(something: s32) {}
 
 // This function is part of the component interface
-export func add(a: s32, b: s32) -> s32 {}
+export func add(a: s32, b: s32) {} // -> s32 {}

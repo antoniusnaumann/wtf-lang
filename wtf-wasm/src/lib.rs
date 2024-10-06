@@ -15,7 +15,7 @@ pub use wasm_encoder::{
     ComponentValType as TypeRef, Instruction, PrimitiveValType as PrimitiveType,
 };
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Type {
     Simple(TypeRef),
     List(TypeRef),
@@ -23,11 +23,23 @@ pub enum Type {
     Result { ok: TypeRef, err: TypeRef },
     Record { fields: Vec<(String, TypeRef)> },
     Variant {},
-    Tuple(),
-    Flags(),
+    Tuple(Vec<TypeRef>),
+    Flags(Vec<String>),
     Enum(HashSet<String>),
     Own(),
     Borrow(),
+}
+
+impl From<TypeRef> for Type {
+    fn from(value: TypeRef) -> Self {
+        Type::Simple(value)
+    }
+}
+
+impl From<&TypeRef> for Type {
+    fn from(value: &TypeRef) -> Self {
+        Type::Simple(*value)
+    }
 }
 
 #[derive(Debug)]
@@ -59,7 +71,7 @@ pub struct ComponentBuilder<'a> {
     global_count: u32,
     component_count: u32,
     component_lookup: HashMap<String, u32>,
-    component_types: Vec<Type>,
+    component_types: Vec<(Type, Vec<ValType>)>,
     inner: wasm_encoder::ComponentBuilder,
 
     realloc_index: u32,
@@ -80,7 +92,7 @@ impl<'a> ComponentBuilder<'a> {
 
         let mut exports = Vec::new();
 
-        self.component_types = instance.types;
+        self.component_types = lower_types(instance.types);
 
         for func in instance.functions {
             if let Some(export) = self.encode_fn(func) {
@@ -92,11 +104,21 @@ impl<'a> ComponentBuilder<'a> {
         // self.component_instances.export_items(exports);
     }
 
+    fn lower(&self, ty: &TypeRef) -> Vec<ValType> {
+        match ty {
+            TypeRef::Primitive(p) => p.lower(),
+            TypeRef::Type(i) => self.component_types[*i as usize].1.clone(),
+        }
+    }
+
     fn encode_fn(&mut self, function: Function<'a>) -> Option<(String, ComponentExportKind, u32)> {
-        use CanonicalLowering as Lower;
         let idx = self.encode_lowered_fn(
-            function.params.iter().map(Lower::lower).collect(),
-            function.result.lower(),
+            function
+                .params
+                .iter()
+                .flat_map(|(_, p)| self.lower(p))
+                .collect(),
+            function.result.map_or_else(|| vec![], |ty| self.lower(&ty)),
             &function.name,
             &function.instructions,
         );
@@ -165,7 +187,7 @@ impl<'a> ComponentBuilder<'a> {
 
         let mut exports = vec![];
 
-        for (_, ty) in self.component_types.into_iter().enumerate() {
+        for (_, (ty, lowered)) in self.component_types.into_iter().enumerate() {
             let (_, encoder) = self.inner.type_defined();
             match ty {
                 Type::Simple(ty) => match ty {
@@ -178,12 +200,12 @@ impl<'a> ComponentBuilder<'a> {
                 Type::Option(inner) => encoder.option(inner),
                 Type::Result { ok, err } => encoder.result(Some(ok), Some(err)),
                 Type::Record { fields } => {
-                    todo!()
+                    encoder.record(fields.iter().map(|(s, t)| (s.as_str(), t.clone())))
                 }
                 Type::Variant {} => todo!(),
-                Type::Tuple() => todo!(),
-                Type::Flags() => todo!(),
-                Type::Enum(cases) => encoder.enum_type(cases.iter().map(|s| s.as_str())),
+                Type::Tuple(fields) => encoder.tuple(fields),
+                Type::Flags(names) => encoder.flags(names.iter().map(String::as_str)),
+                Type::Enum(cases) => encoder.enum_type(cases.iter().map(String::as_str)),
                 Type::Own() => todo!(),
                 Type::Borrow() => todo!(),
             }
@@ -306,54 +328,98 @@ impl<'a> ComponentBuilder<'a> {
     }
 }
 
+fn lower_types(types: Vec<Type>) -> Vec<(Type, Vec<ValType>)> {
+    let mut result: Vec<Option<Vec<ValType>>> = types.iter().map(|_| None).collect();
+
+    for (index, ty) in types.iter().enumerate() {
+        if result[index].is_some() {
+            continue;
+        }
+
+        result[index] = Some(lower_type(ty, &types, &mut result));
+    }
+
+    let mapping = result.into_iter().map(|lowered| lowered.unwrap());
+
+    types.into_iter().zip(mapping).collect()
+}
+
+fn lower_type(ty: &Type, types: &[Type], mapping: &mut [Option<Vec<ValType>>]) -> Vec<ValType> {
+    match ty {
+        Type::Simple(t) => match t {
+            TypeRef::Primitive(p) => p.lower(),
+            TypeRef::Type(i) => {
+                let i = *i as usize;
+                let mapped = &mapping[i];
+                match &mapped {
+                    Some(types) => types.clone(),
+                    None => {
+                        let types = lower_type(&types[i], &types, mapping);
+                        mapping[i] = Some(types.clone());
+
+                        types
+                    }
+                }
+            }
+        },
+        Type::List(_) => vec![ValType::I32, ValType::I32],
+        Type::Option(inner) => {
+            let inner = lower_type(&inner.into(), types, mapping);
+
+            // Discriment (i32) + lowered payload
+            [vec![ValType::I32], inner].concat()
+        }
+        Type::Result { ok, err } => {
+            let ok = lower_type(&ok.into(), types, mapping);
+            let err = lower_type(&err.into(), types, mapping);
+
+            // Discriminent (i32) + lowered ok + lowered err
+            [vec![ValType::I32], ok, err].concat()
+        }
+        Type::Record { fields } => fields
+            .into_iter()
+            .flat_map(|(_, ty)| lower_type(&ty.into(), types, mapping))
+            .collect(),
+        Type::Variant {} => todo!(),
+        Type::Tuple(fields) => fields
+            .into_iter()
+            .flat_map(|ty| lower_type(&ty.into(), types, mapping))
+            .collect(),
+        Type::Flags(flags) => vec![if flags.len() > 32 {
+            ValType::I64
+        } else {
+            ValType::I32
+        }],
+        Type::Enum(_) => vec![ValType::I32],
+        Type::Own() => vec![ValType::I32],
+        Type::Borrow() => vec![ValType::I32],
+    }
+}
+
 trait CanonicalLowering {
     type Out;
 
     fn lower(&self) -> Self::Out;
 }
 
-impl CanonicalLowering for TypeRef {
-    // TODO: It might be neccessary to return multiple values here
-    type Out = ValType;
-
-    fn lower(&self) -> Self::Out {
-        match self {
-            TypeRef::Primitive(p) => match p {
-                PrimitiveValType::Bool
-                | PrimitiveValType::S8
-                | PrimitiveValType::U8
-                | PrimitiveValType::S16
-                | PrimitiveValType::U16
-                | PrimitiveValType::S32
-                | PrimitiveValType::U32 => ValType::I32,
-                PrimitiveValType::S64 | PrimitiveValType::U64 | PrimitiveValType::Char => {
-                    ValType::I64
-                }
-                PrimitiveValType::F32 => ValType::F32,
-                PrimitiveValType::F64 => ValType::F64,
-                PrimitiveValType::String => ValType::I32,
-            },
-            TypeRef::Type(t) => ValType::I32, // todo!("Handle ref types"),
-        }
-    }
-}
-
-impl CanonicalLowering for (String, TypeRef) {
-    type Out = ValType;
-
-    fn lower(&self) -> Self::Out {
-        self.1.lower()
-    }
-}
-
-impl CanonicalLowering for Option<TypeRef> {
+impl CanonicalLowering for PrimitiveValType {
     type Out = Vec<ValType>;
 
     fn lower(&self) -> Self::Out {
-        if let Some(inner) = self {
-            vec![inner.lower()]
-        } else {
-            Vec::new()
+        match self {
+            PrimitiveValType::Bool
+            | PrimitiveValType::S8
+            | PrimitiveValType::U8
+            | PrimitiveValType::S16
+            | PrimitiveValType::U16
+            | PrimitiveValType::S32
+            | PrimitiveValType::U32 => vec![ValType::I32],
+            PrimitiveValType::S64 | PrimitiveValType::U64 | PrimitiveValType::Char => {
+                vec![ValType::I64]
+            }
+            PrimitiveValType::F32 => vec![ValType::F32],
+            PrimitiveValType::F64 => vec![ValType::F64],
+            PrimitiveValType::String => vec![ValType::I32, ValType::I32],
         }
     }
 }
