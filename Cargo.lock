@@ -175,6 +175,15 @@ name = "wtf-ast"
 version = "0.0.0"
 
 [[package]]
+name = "wtf-compiler"
+version = "0.1.0"
+dependencies = [
+ "wtf-ast",
+ "wtf-hir",
+ "wtf-parser",
+]
+
+[[package]]
 name = "wtf-encode"
 version = "0.0.0"
 dependencies = [

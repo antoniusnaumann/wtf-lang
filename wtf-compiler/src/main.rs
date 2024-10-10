@@ -1,3 +1,5 @@
+use wtf_parser::parser::Parser;
+
 fn main() {
     println!("WTF!");
 
@@ -11,9 +13,8 @@ fn main() {
         }
         "#;
 
-    let lexer = Lexer::new(input);
-    let mut parser = Parser::new(lexer);
-    let ast = parser.parse_module()?;
-
-    let hir = ast.
+    let mut parser = Parser::new(input);
+    let ast = parser.parse_module().expect("No AST.");
+    let hir = wtf_hir::compile(ast);
+    println!("HIR: {hir}");
 }
