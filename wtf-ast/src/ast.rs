@@ -1,5 +1,7 @@
 #[derive(Debug, Clone, PartialEq)]
 pub struct Module {
+    pub package: Option<PackageDeclaration>,
+    pub uses: Vec<UseDeclaration>,
     pub declarations: Vec<Declaration>,
 }
 
@@ -11,8 +13,6 @@ pub enum Declaration {
     Enum(EnumDeclaration),
     Variant(VariantDeclaration),
     Export(ExportDeclaration),
-    Package(PackageDeclaration),
-    Use(UseDeclaration),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -46,7 +46,7 @@ pub struct ResourceDeclaration {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnumDeclaration {
     pub name: String,
-    pub variants: Vec<String>,
+    pub cases: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,9 +61,9 @@ pub struct VariantCase {
     pub associated_types: Vec<Field>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ExportDeclaration {
-    pub items: Vec<String>,
+    pub item: Box<Declaration>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

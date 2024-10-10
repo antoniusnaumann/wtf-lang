@@ -43,6 +43,8 @@ fn test_parse_record_literal_with_type() -> Result<()> {
                 })],
             },
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -91,6 +93,8 @@ fn test_parse_record_literal_without_type() -> Result<()> {
                 })],
             },
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -158,6 +162,8 @@ fn test_parse_nested_record_literal() -> Result<()> {
                 })],
             },
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -216,6 +222,8 @@ fn test_parse_record_literal_with_expressions() -> Result<()> {
                 })],
             },
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -276,6 +284,8 @@ fn test_parse_record_literal_with_type_and_expressions() -> Result<()> {
                 })],
             },
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -331,6 +341,8 @@ fn test_parse_record_literal_with_list_field() -> Result<()> {
                 })],
             },
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -367,6 +379,8 @@ fn test_parse_empty_record_literal() -> Result<()> {
                 })],
             },
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -420,6 +434,8 @@ fn test_parse_record_literal_with_spread() -> Result<()> {
                 })],
             },
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);

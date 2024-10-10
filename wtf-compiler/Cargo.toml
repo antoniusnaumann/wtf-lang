@@ -1,7 +1,9 @@
 [package]
 name = "wtf-compiler"
-version = "0.1.0"
-edition = "2021"
+authors = ["Marcel Garus", "Antonius Naumann"]
+edition.workspace = true
+version.workspace = true
+license.workspace = true
 
 [dependencies]
 wtf-ast = { path = "../wtf-ast" }

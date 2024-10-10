@@ -6,6 +6,7 @@ pub use compiler::compile;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Module {
+    // TODO: How should we mark exported types and functions here?
     pub types: HashMap<String, Type>,
     pub functions: HashMap<String, Function>,
 }
@@ -14,35 +15,39 @@ pub struct Module {
 pub enum Type {
     Never, // will never be constructed, used as the type of return/break/...
     None,
-    S8,
-    S16,
-    S32,
-    S64,
-    U8,
-    U16,
-    U32,
-    U64,
-    F32,
-    F64,
-    // bool is lowered to an enum with true and false
-    Char,
-    String,
     List(Box<Type>),
     Option(Box<Type>),
-    Result {
-        ok: Box<Type>,
-        err: Box<Type>,
-    },
+    Result { ok: Box<Type>, err: Box<Type> },
     Record(HashMap<String, Type>),
     Resource(ResourceType),
     Enum(HashSet<String>),
     Variant(HashMap<String, HashMap<String, Type>>),
     Tuple(Vec<Type>),
+    Builtin(PrimitiveType),
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PrimitiveType {
+    Bool,
+    S8,
+    U8,
+    S16,
+    U16,
+    S32,
+    U32,
+    S64,
+    U64,
+    F32,
+    F64,
+    Char,
+    String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResourceType {
     pub methods: HashMap<String, FunctionSignature>,
 }
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionSignature {
     param_types: Vec<Type>,
@@ -131,19 +136,19 @@ impl Expression {
     }
     fn int(int: i64) -> Self {
         Self {
-            type_: Type::S64,
+            type_: Type::Builtin(PrimitiveType::S64),
             kind: ExpressionKind::Int(int)
         }
     }
     fn float(float: f64) -> Self {
         Self {
-            type_: Type::F64,
+            type_: Type::Builtin(PrimitiveType::F64),
             kind: ExpressionKind::Float(float)
         }
     }
     fn string(string: String) -> Self {
         Self {
-            type_: Type::String,
+            type_: Type::Builtin(PrimitiveType::String),
             kind: ExpressionKind::String(string)
         }
     }
@@ -226,18 +231,21 @@ impl Display for Type {
         match self {
             Type::Never => write!(f, "Never")?,
             Type::None => write!(f, "None")?,
-            Type::S8 => write!(f, "S8")?,
-            Type::S16 => write!(f, "S16")?,
-            Type::S32 => write!(f, "S32")?,
-            Type::S64 => write!(f, "S64")?,
-            Type::U8 => write!(f, "U8")?,
-            Type::U16 => write!(f, "U16")?,
-            Type::U32 => write!(f, "U32")?,
-            Type::U64 => write!(f, "U64")?,
-            Type::F32 => write!(f, "F32")?,
-            Type::F64 => write!(f, "F64")?,
-            Type::Char => write!(f, "Char")?,
-            Type::String => write!(f, "String")?,
+            Type::Builtin(builtin) => match builtin {
+                PrimitiveType::Bool => write!(f, "Bool")?,
+                PrimitiveType::S8 => write!(f, "S8")?,
+                PrimitiveType::S16 => write!(f, "S16")?,
+                PrimitiveType::S32 => write!(f, "S32")?,
+                PrimitiveType::S64 => write!(f, "S64")?,
+                PrimitiveType::U8 => write!(f, "U8")?,
+                PrimitiveType::U16 => write!(f, "U16")?,
+                PrimitiveType::U32 => write!(f, "U32")?,
+                PrimitiveType::U64 => write!(f, "U64")?,
+                PrimitiveType::F32 => write!(f, "F32")?,
+                PrimitiveType::F64 => write!(f, "F64")?,
+                PrimitiveType::Char => write!(f, "Char")?,
+                PrimitiveType::String => write!(f, "String")?,
+            }
             Type::List(items) => write!(f, "[{}]", items)?,
             Type::Option(payload) => write!(f, "?({payload})")?,
             Type::Result { ok, err } => write!(f, "({ok})!({err})")?,

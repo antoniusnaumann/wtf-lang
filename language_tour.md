@@ -49,7 +49,7 @@ WTF is a statically-typed language that emphasizes simplicity and expressiveness
 
 ## Package Declaration
 
-Every WTF program starts with a package declaration that specifies the package name and , optionally, a version:
+Every WTF program starts with a package declaration that specifies the package name and, optionally, a version:
 
 ```wtf
 package test:all_features@1.0.0;
@@ -59,6 +59,8 @@ package test:all_features@1.0.0;
 - `test`: The package namespace.
 - `all_features`: The package name.
 - `1.0.0`: The package version.
+
+The package declaration needs to be the first non-empty line in a .wtf source file.
 
 ## Use Statements (`use`)
 
@@ -72,6 +74,8 @@ use johndoe:io/printer.{print, println}
 - `use`: Keyword for importing modules.
 - `johndoe:math/math`: The module path, in the form `namespace:package/interface`. An interface is simply the source file in the package, where . Directories do not influence the package structure, so a file `math/src/advanced/algebra.wtf` would be accessed as `johndoe:math/algebra`.
 - `{sqrt, pow}`: Specific items imported from the module.
+
+Use statements are expected after the package declaration and before type or function declarations
 
 ## Comments
 

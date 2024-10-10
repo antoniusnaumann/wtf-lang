@@ -2,7 +2,7 @@ use std::collections::{HashMap};
 
 use wtf_ast::{self as ast, TypeAnnotation};
 
-use crate::{get, visible::Visible, Expression, ExpressionKind, Function, FunctionSignature, Id, Module, ResourceType, Type};
+use crate::{get, visible::Visible, Expression, ExpressionKind, Function, FunctionSignature, Id, Module, PrimitiveType, ResourceType, Type};
 
 pub fn compile(ast: ast::Module) -> Module {
     let mut ast_types = HashMap::new();
@@ -25,8 +25,6 @@ pub fn compile(ast: ast::Module) -> Module {
                 ast_types.insert(var.name.to_string(), ast::Declaration::Variant(var));
             },
             ast::Declaration::Export(_) => todo!(),
-            ast::Declaration::Package(_) => todo!(),
-            ast::Declaration::Use(_) => todo!(),
         }
     }
 
@@ -39,16 +37,21 @@ pub fn compile(ast: ast::Module) -> Module {
         functions,
     }
 }
-
-fn compile_type_declaration(declaration: &ast::Declaration, ast_types: &HashMap<String, ast::Declaration>) -> Type {
+fn compile_type_declaration(
+    declaration: &ast::Declaration,
+    ast_types: &HashMap<String, ast::Declaration>,
+) -> Type {
     let type_ = match declaration {
         ast::Declaration::Record(record) => {
             let mut fields = HashMap::new();
             for field in &record.fields {
-                fields.insert(field.name.clone(), compile_type_annotation(&field.type_annotation, ast_types));
+                fields.insert(
+                    field.name.to_string(),
+                    compile_type_annotation(&field.type_annotation, ast_types),
+                );
             }
             Type::Record(fields)
-        },
+        }
         ast::Declaration::Resource(resource) => {
             let mut methods = HashMap::new();
             for method in &resource.methods {
@@ -64,7 +67,7 @@ fn compile_type_declaration(declaration: &ast::Declaration, ast_types: &HashMap<
             Type::Resource(ResourceType { methods })
         },
         ast::Declaration::Enum(enum_) =>
-            Type::Enum(enum_.variants.iter().map(|case| case.clone()).collect()),
+            Type::Enum(enum_.cases.iter().map(|case| case.clone()).collect()),
         ast::Declaration::Variant(variants) => {
             let mut result = HashMap::new();
             for variant in &variants.cases {
@@ -83,24 +86,25 @@ fn compile_type_declaration(declaration: &ast::Declaration, ast_types: &HashMap<
 fn compile_type_annotation(annotation: &ast::TypeAnnotation, ast_types: &HashMap<String, ast::Declaration>) -> Type {
     match annotation {
         ast::TypeAnnotation::Simple(name) => {
-            match name.as_str() {
-                "s8" => Type::S8,
-                "s16" => Type::S16,
-                "s32" => Type::S32,
-                "s64" => Type::S64,
-                "u8" => Type::U8,
-                "u16" => Type::U16,
-                "u32" => Type::U32,
-                "u64" => Type::U64,
-                "f32" => Type::F32,
-                "f64" => Type::F64,
-                "Char" => Type::Char,
-                "String" => Type::String,
+            Type::Builtin(match name.as_str() {
+                "bool" => PrimitiveType::Bool,
+                "s8" => PrimitiveType::S8,
+                "s16" => PrimitiveType::S16,
+                "s32" => PrimitiveType::S32,
+                "s64" => PrimitiveType::S64,
+                "u8" => PrimitiveType::U8,
+                "u16" => PrimitiveType::U16,
+                "u32" => PrimitiveType::U32,
+                "u64" => PrimitiveType::U64,
+                "f32" => PrimitiveType::F32,
+                "f64" => PrimitiveType::F64,
+                "Char" => PrimitiveType::Char,
+                "String" => PrimitiveType::String,
                 _ => {
                     let declaration = ast_types.get(name).unwrap_or_else(|| panic!("unknown type {name}"));
-                    compile_type_declaration(declaration, ast_types)
+                    return compile_type_declaration(declaration, ast_types);
                 }
-            }
+            })
         }
         ast::TypeAnnotation::List(item) => Type::List(Box::new(compile_type_annotation(item, ast_types))),
         ast::TypeAnnotation::Option(payload) => Type::Option(Box::new(compile_type_annotation(payload, ast_types))),

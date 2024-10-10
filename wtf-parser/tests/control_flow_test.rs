@@ -56,6 +56,8 @@ fn test_parse_if_statement() -> Result<()> {
                 })],
             },
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -86,6 +88,8 @@ fn test_parse_return_statement() -> Result<()> {
                 )))],
             },
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
@@ -119,6 +123,8 @@ fn test_parse_throw_statement() -> Result<()> {
                 ))],
             },
         })],
+        package: None,
+        uses: vec![],
     };
 
     assert_eq!(module, expected_ast);
