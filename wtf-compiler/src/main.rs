@@ -4,7 +4,7 @@ fn main() {
     println!("WTF!");
 
     let input = r#"
-        func check(x: s32) {
+        func check_value(x: s32) {
             if x > 10 {
                 println("Greater than 10")
             } else {

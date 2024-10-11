@@ -108,7 +108,7 @@ impl<'a> Convert<'a> for (String, hir::Function) {
         let func = Function {
             params,
             result,
-            name,
+            name: name.replace("_", "-"),
             instructions,
             // TODO: only export functions with export keyword
             export: true,
