@@ -88,9 +88,15 @@ impl<'a> Convert<'a> for (String, hir::Function) {
         let params: Vec<_> = func
             .parameters
             .into_iter()
-            .map(|(name, ty)| (name, ty.convert(lookup)))
+            .map(|(name, ty)| {
+                (
+                    name,
+                    ty.convert(lookup)
+                        .expect("Parameter type must be a valid type"),
+                )
+            })
             .collect();
-        let result = func.return_type.map(|result| result.convert(lookup));
+        let result = func.return_type.convert(lookup);
         // TODO: @Marcel, can you handle this?
         // let instructions: Vec<Instruction> = func
         //     .body
@@ -113,39 +119,47 @@ impl<'a> Convert<'a> for (String, hir::Function) {
 }
 
 impl Convert<'_> for hir::Type {
-    type Output = TypeRef;
+    type Output = Option<TypeRef>;
 
     fn convert(self, lookup: &mut TypeLookup) -> Self::Output {
         match self {
             hir::Type::List(item) => {
                 let item = item.convert(lookup);
-                let ty = lookup.insert(Type::List(item));
+                let ty = lookup.insert(Type::List(item.expect("Lists must have an inner type")));
 
-                TypeRef::Type(ty)
+                Some(TypeRef::Type(ty))
             }
             hir::Type::Option(inner) => {
                 let inner = inner.convert(lookup);
-                let ty = lookup.insert(Type::Option(inner));
+                let ty = lookup.insert(Type::Option(
+                    inner.expect("Options must have an inner type"),
+                ));
 
-                TypeRef::Type(ty)
+                Some(TypeRef::Type(ty))
             }
             hir::Type::Result { ok, err } => {
-                let ok = ok.convert(lookup);
-                let err = err.convert(lookup);
+                let ok = ok
+                    .convert(lookup)
+                    .expect("Result 'ok' must be a valid type");
+                let err = err
+                    .convert(lookup)
+                    .expect("Result errors must be a valid type");
                 let ty = lookup.insert(Type::Result { ok, err });
 
-                TypeRef::Type(ty)
+                Some(TypeRef::Type(ty))
             }
             hir::Type::Record(_) => todo!(),
             hir::Type::Resource(_) => todo!(),
             hir::Type::Enum(cases) => {
                 let ty = lookup.insert(Type::Enum(cases));
 
-                TypeRef::Type(ty)
+                Some(TypeRef::Type(ty))
             }
             hir::Type::Variant(_) => todo!(),
             hir::Type::Tuple(_) => todo!(),
-            hir::Type::Builtin(ty) => TypeRef::Primitive(ty.convert(lookup)),
+            hir::Type::Builtin(ty) => Some(TypeRef::Primitive(ty.convert(lookup))),
+            hir::Type::None => None,
+            hir::Type::Never => todo!("Disallow 'Never' for exported functions"),
         }
     }
 }

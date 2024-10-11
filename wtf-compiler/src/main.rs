@@ -4,7 +4,7 @@ fn main() {
     println!("WTF!");
 
     let input = r#"
-        func check_value(x: s32) {
+        func check(x: s32) {
             if x > 10 {
                 println("Greater than 10")
             } else {
@@ -17,4 +17,8 @@ fn main() {
     let ast = parser.parse_module().expect("No AST.");
     let hir = wtf_hir::compile(ast);
     println!("HIR: {hir}");
+
+    let wasm = wtf_encode::Encoder::new().encode(hir).finish();
+
+    println!("{:?}", wasmparser::validate(&wasm).err());
 }

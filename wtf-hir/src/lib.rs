@@ -1,8 +1,11 @@
 mod compiler;
 mod visible;
 
-use std::{collections::{HashMap, HashSet}, fmt::Display};
 pub use compiler::compile;
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Display,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Module {
@@ -81,6 +84,7 @@ pub enum ExpressionKind {
     Int(i64),
     Float(f64),
     String(String),
+    Bool(bool),
     None,
     Enum {
         variant: String,
@@ -125,68 +129,73 @@ pub enum ExpressionKind {
 impl Expression {
     fn param(type_: Type) -> Self {
         Self {
-            type_, kind: ExpressionKind::Param
+            type_,
+            kind: ExpressionKind::Param,
         }
     }
     fn block(children: Vec<Id>, result: Id, result_type: Type) -> Self {
         Self {
             type_: result_type,
-            kind: ExpressionKind::Block { children, result }
+            kind: ExpressionKind::Block { children, result },
         }
     }
     fn int(int: i64) -> Self {
         Self {
             type_: Type::Builtin(PrimitiveType::S64),
-            kind: ExpressionKind::Int(int)
+            kind: ExpressionKind::Int(int),
         }
     }
     fn float(float: f64) -> Self {
         Self {
             type_: Type::Builtin(PrimitiveType::F64),
-            kind: ExpressionKind::Float(float)
+            kind: ExpressionKind::Float(float),
         }
     }
     fn string(string: String) -> Self {
         Self {
             type_: Type::Builtin(PrimitiveType::String),
-            kind: ExpressionKind::String(string)
+            kind: ExpressionKind::String(string),
         }
     }
     fn bool(b: bool, none: Id) -> Self {
         Self {
-            type_: Type::Enum(HashSet::from_iter(["True".to_string(), "String".to_string()].into_iter())),
-            kind: ExpressionKind::Enum { variant: if b { "true".to_string() } else { "false".to_string() }, payload: none }
+            type_: Type::Builtin(PrimitiveType::Bool),
+            kind: ExpressionKind::Bool(b),
         }
     }
     fn none() -> Self {
         Self {
             type_: Type::None,
-            kind: ExpressionKind::None
+            kind: ExpressionKind::None,
         }
     }
     fn return_(what: Id) -> Self {
         Self {
             type_: Type::Never,
-            kind: ExpressionKind::Return(what)
+            kind: ExpressionKind::Return(what),
         }
     }
     fn break_(id: Id) -> Self {
         Self {
             type_: Type::Never,
-            kind: ExpressionKind::Break(id)
+            kind: ExpressionKind::Break(id),
         }
     }
     fn continue_() -> Self {
         Self {
             type_: Type::Never,
-            kind: ExpressionKind::Continue
+            kind: ExpressionKind::Continue,
         }
     }
     fn if_(condition: Id, then: Id, else_: Id) -> Self {
         // TODO: Join types.
         Self {
             type_: Type::None,
-            kind: ExpressionKind::If { condition, then, else_ }
+            kind: ExpressionKind::If {
+                condition,
+                then,
+                else_,
+            },
         }
     }
     fn loop_(body: Id) -> Self {
@@ -199,7 +208,10 @@ impl Expression {
     fn call(function: String, arguments: Vec<Id>) -> Self {
         Self {
             type_: Type::Never,
-            kind: ExpressionKind::FunctionCall { function, arguments }
+            kind: ExpressionKind::FunctionCall {
+                function,
+                arguments,
+            },
         }
     }
 }
@@ -245,7 +257,7 @@ impl Display for Type {
                 PrimitiveType::F64 => write!(f, "F64")?,
                 PrimitiveType::Char => write!(f, "Char")?,
                 PrimitiveType::String => write!(f, "String")?,
-            }
+            },
             Type::List(items) => write!(f, "[{}]", items)?,
             Type::Option(payload) => write!(f, "?({payload})")?,
             Type::Result { ok, err } => write!(f, "({ok})!({err})")?,
@@ -261,7 +273,7 @@ impl Display for Type {
                     write!(f, "{key}: {value}")?;
                 }
                 write!(f, "}}")?
-            },
+            }
             Type::Resource(_) => write!(f, "...")?,
             Type::Enum(variants) => {
                 let mut first = true;
@@ -273,7 +285,7 @@ impl Display for Type {
                     }
                     write!(f, "{variant}")?;
                 }
-            },
+            }
             Type::Variant(variants) => {
                 let mut first = true;
                 for (name, payloads) in variants {
@@ -288,7 +300,7 @@ impl Display for Type {
                     }
                     write!(f, ")")?;
                 }
-            },
+            }
             Type::Tuple(payloads) => {
                 write!(f, "(")?;
                 let mut first = true;
@@ -301,7 +313,7 @@ impl Display for Type {
                     write!(f, "{payload}")?;
                 }
                 write!(f, ")")?
-            },
+            }
         };
         Ok(())
     }
@@ -312,7 +324,12 @@ impl Display for Id {
     }
 }
 impl Id {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>, indentation: usize, exprs: &Vec<Expression>) -> std::fmt::Result {
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+        indentation: usize,
+        exprs: &Vec<Expression>,
+    ) -> std::fmt::Result {
         for _ in 0..indentation {
             write!(f, "  ")?;
         }
@@ -324,7 +341,12 @@ impl Id {
     }
 }
 impl Expression {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>, indentation: usize, exprs: &Vec<Expression>) -> std::fmt::Result {
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+        indentation: usize,
+        exprs: &Vec<Expression>,
+    ) -> std::fmt::Result {
         match &self.kind {
             ExpressionKind::Param => write!(f, "param")?,
             ExpressionKind::Block { children, result } => {
@@ -340,11 +362,12 @@ impl Expression {
                     write!(f, "  ")?;
                 }
                 write!(f, "}}")?;
-                return Ok(())
-            },
+                return Ok(());
+            }
             ExpressionKind::Int(int) => write!(f, "{}", int)?,
             ExpressionKind::Float(float) => write!(f, "{}", float)?,
             ExpressionKind::String(string) => write!(f, "{:?}", string)?,
+            ExpressionKind::Bool(b) => write!(f, "{}", b)?,
             ExpressionKind::None => write!(f, "none")?,
             ExpressionKind::Enum { variant, payload } => write!(f, "{}({})", variant, payload)?,
             ExpressionKind::Record { fields } => {
@@ -359,7 +382,7 @@ impl Expression {
                     write!(f, "{}: {}", name, value)?;
                 }
                 write!(f, "}}")?;
-            },
+            }
             ExpressionKind::ListLiteral(items) => {
                 write!(f, "[")?;
                 let mut first = true;
@@ -372,33 +395,42 @@ impl Expression {
                     write!(f, "{}", item)?;
                 }
                 write!(f, "]")?;
-            },
-            ExpressionKind::FunctionCall { function, arguments } => {
+            }
+            ExpressionKind::FunctionCall {
+                function,
+                arguments,
+            } => {
                 write!(f, "{function}")?;
                 for arg in arguments {
                     write!(f, " {}", arg)?;
                 }
-            },
+            }
             ExpressionKind::FieldAccess { receiver, field } => write!(f, "{receiver}.{field}")?,
-            ExpressionKind::IndexAccess { collection, index } => write!(f, "{collection}[{index}]")?,
+            ExpressionKind::IndexAccess { collection, index } => {
+                write!(f, "{collection}[{index}]")?
+            }
             ExpressionKind::Assignment { target, value } => write!(f, "{target} = {value}")?,
             ExpressionKind::Return(id) => write!(f, "return {id}")?,
             ExpressionKind::Break(id) => write!(f, "break {id}")?,
             ExpressionKind::Continue => write!(f, "continue")?,
             ExpressionKind::Throw(id) => write!(f, "throw {id}")?,
-            ExpressionKind::If { condition, then, else_ } => {
+            ExpressionKind::If {
+                condition,
+                then,
+                else_,
+            } => {
                 write!(f, "if {condition} ")?;
                 get(exprs, *then).fmt(f, indentation, exprs)?;
                 write!(f, " else ")?;
                 get(exprs, *else_).fmt(f, indentation, exprs)?;
-            },
+            }
             ExpressionKind::Match { condition, arms } => {
                 write!(f, "match {condition} {{")?;
                 for (variant, arm) in arms {
                     write!(f, "  {variant} => {arm}")?;
                 }
                 write!(f, "}}")?;
-            },
+            }
             ExpressionKind::Loop(body) => write!(f, "loop {body}")?,
         }
         Ok(())
