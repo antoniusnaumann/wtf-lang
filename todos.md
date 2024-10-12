@@ -1,0 +1,2 @@
+- [] How to represent exports in HIR?
+- [] Where to include builtin functions? (and wasm builtin vs. our builtin) use component stdlib for the latter?

@@ -259,7 +259,7 @@ impl Display for Type {
                 PrimitiveType::String => write!(f, "String")?,
             },
             Type::List(items) => write!(f, "[{}]", items)?,
-            Type::Option(payload) => write!(f, "?({payload})")?,
+            Type::Option(payload) => write!(f, "({payload})?")?,
             Type::Result { ok, err } => write!(f, "({ok})!({err})")?,
             Type::Record(hash_map) => {
                 write!(f, "{{")?;

@@ -1,7 +1,10 @@
 use std::fmt::Debug;
 
 use wtf_hir as hir;
-use wtf_wasm::{ComponentBuilder, Function, Instance, Instruction, PrimitiveType, Type, TypeRef};
+use wtf_wasm::{
+    ComponentBuilder, Function, Instance, Instruction, InstructionVec, PrimitiveType, Type,
+    TypeRef, WasmInstruction,
+};
 
 // PERF: use hash map here if search turns out to be slow
 #[derive(Debug, Default)]
@@ -104,7 +107,7 @@ impl<'a> Convert<'a> for (String, hir::Function) {
         //     .map(|st| todo!("Create instructions from statements"))
         //     .chain(iter::once(Instruction::End))
         //     .collect();
-        let instructions = vec![Instruction::End];
+        let instructions = vec![WasmInstruction::End.into()];
         let func = Function {
             params,
             result,

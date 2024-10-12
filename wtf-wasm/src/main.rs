@@ -1,6 +1,8 @@
 use std::{fs, io::Write};
 
-use wtf_wasm::{ComponentBuilder, Function, Instance, Instruction, PrimitiveType, Type, TypeRef};
+use wtf_wasm::{
+    ComponentBuilder, Function, Instance, InstructionVec, PrimitiveType, TypeRef, WasmInstruction,
+};
 
 // This main serves as a usage example
 // TODO: Move this to be a test instead
@@ -11,7 +13,7 @@ fn main() {
         params: vec![],
         result: Some(TypeRef::Primitive(PrimitiveType::S32)),
         name: "run".to_owned(),
-        instructions: vec![Instruction::I32Const(21), Instruction::End],
+        instructions: vec![WasmInstruction::I32Const(21), WasmInstruction::End].into_instructions(),
         export: true,
     }];
     comp.encode_instance(Instance {
@@ -31,11 +33,12 @@ fn main() {
             result: Some(TypeRef::Primitive(PrimitiveType::S32)),
             name: "add".to_owned(),
             instructions: vec![
-                Instruction::LocalGet(0),
-                Instruction::LocalGet(1),
-                Instruction::I32Add,
-                Instruction::End,
-            ],
+                WasmInstruction::LocalGet(0),
+                WasmInstruction::LocalGet(1),
+                WasmInstruction::I32Add,
+                WasmInstruction::End,
+            ]
+            .into_instructions(),
             export: true,
         }],
     });

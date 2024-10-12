@@ -249,7 +249,7 @@ pub enum Literal {
     None,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryOperator {
     Arithmetic(ArithmeticOperator),
     Equal,        // '=='
@@ -268,7 +268,7 @@ impl From<ArithmeticOperator> for BinaryOperator {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArithmeticOperator {
     Add,      // '+'
     Subtract, // '-'
