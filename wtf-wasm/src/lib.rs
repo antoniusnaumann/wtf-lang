@@ -70,6 +70,7 @@ pub struct ComponentBuilder<'a> {
     codes: CodeSection,
     globals: GlobalSection,
 
+    /// (Lowered ID, Function)
     functions: Vec<(u32, Function<'a>)>,
     function_count: u32,
     global_count: u32,
@@ -166,11 +167,13 @@ impl<'a> ComponentBuilder<'a> {
             .export(name.as_ref(), ExportKind::Func, self.function_count);
 
         let locals = vec![];
-        let mut f = wasm_encoder::Function::new(locals);
-        for stmt in instructions {
-            todo!("Lower instructions")
+        let mut func = wasm_encoder::Function::new(locals);
+        for instruction in instructions {
+            for lowered_instruction in self.lower_instruction(instruction) {
+                func.instruction(&lowered_instruction);
+            }
         }
-        self.codes.function(&f);
+        self.codes.function(&func);
 
         let result = self.function_count;
         self.function_count += 1;
@@ -339,27 +342,47 @@ impl<'a> ComponentBuilder<'a> {
 
     fn lower_instruction(&self, instruction: &'a Instruction) -> Vec<WasmInstruction> {
         match instruction {
+            // Locals
+            Instruction::LocalSet(_) => todo!(),
             Instruction::LocalGet(_) => todo!(),
+            Instruction::Const => todo!(),
             Instruction::Call(ident) => vec![self.lower_call(ident)],
-            Instruction::Wasm(_) => todo!(),
-            Instruction::End => todo!(),
+
+            // Control Flow
+            Instruction::End => vec![WasmInstruction::End],
+            Instruction::If => vec![WasmInstruction::If(todo!())],
+            Instruction::Else => vec![WasmInstruction::Else],
+            Instruction::Loop => vec![WasmInstruction::Loop(todo!())],
+            Instruction::Block => vec![WasmInstruction::Block(todo!())],
+            Instruction::Branch => vec![WasmInstruction::Br(todo!())],
+            Instruction::BranchIf => vec![WasmInstruction::BrIf(todo!())],
+            Instruction::Return => vec![WasmInstruction::Return],
+
+            Instruction::Wasm(wasm) => vec![wasm.clone()],
         }
     }
 
     fn lower_call(&self, ident: &str) -> WasmInstruction {
         match ident {
+            // # Arithmetic Operators
             "add__S32_S32" | "add__U32_U32" => WasmInstruction::I32Add,
             "add__S64_S64" | "add__U64_U64" => WasmInstruction::I64Add,
             "add__F32_F32" => WasmInstruction::F32Add,
             "add__F64_F64" => WasmInstruction::F64Add,
+
             "sub__S32_S32" | "sub__U32_U32" => WasmInstruction::I32Sub,
             "sub__S64_S64" | "sub__U64_U64" => WasmInstruction::I64Sub,
             "sub__F32_F32" => WasmInstruction::F32Sub,
             "sub__F64_F64" => WasmInstruction::F64Sub,
+
+            "negate__F32" => WasmInstruction::F32Neg,
+            "negate__F64" => WasmInstruction::F64Neg,
+
             "mul__S32_S32" | "mul__U32_U32" => WasmInstruction::I32Mul,
             "mul__S64_S64" | "mul__U64_U64" => WasmInstruction::I64Mul,
             "mul__F32_F32" => WasmInstruction::F32Mul,
             "mul__F64_F64" => WasmInstruction::F64Mul,
+
             "div__U32_U32" => WasmInstruction::I32DivU,
             "div__U64_U64" => WasmInstruction::I64DivU,
             "div__S32_S32" => WasmInstruction::I32DivS,
@@ -367,7 +390,55 @@ impl<'a> ComponentBuilder<'a> {
             "div__F32_F32" => WasmInstruction::F32Div,
             "div__F64_F64" => WasmInstruction::F64Div,
 
-            ident => todo!(),
+            // # Comparison Operators
+            "eq__U32_U32" | "eq__S32_S32" => WasmInstruction::I32Eq,
+            "eq__U64_U64" | "eq__S64_S64" => WasmInstruction::I64Eq,
+            "eq__F32" => WasmInstruction::F32Eq,
+            "eq__F64" => WasmInstruction::F64Eq,
+
+            "ne__U32_U32" | "ne__S32_S32" => WasmInstruction::I32Ne,
+            "ne__U64_U64" | "ne__S64_S64" => WasmInstruction::I64Ne,
+            "ne__F32" => WasmInstruction::F32Ne,
+            "ne__F64" => WasmInstruction::F64Ne,
+
+            "greater_than__U32_U32" => WasmInstruction::I32GtU,
+            "greater_than__U64_U64" => WasmInstruction::I64GtU,
+            "greater_than__S32_S32" => WasmInstruction::I32GtS,
+            "greater_than__S64_S64" => WasmInstruction::I64GtS,
+            "greater_than__F32_F32" => WasmInstruction::F32Gt,
+            "greater_than__F64_F64" => WasmInstruction::F64Gt,
+
+            "less_than__U32_U32" => WasmInstruction::I32LtU,
+            "less_than__U64_U64" => WasmInstruction::I64LtU,
+            "less_than__S32_S32" => WasmInstruction::I32LtS,
+            "less_than__S64_S64" => WasmInstruction::I64LtS,
+            "less_than__F32_F32" => WasmInstruction::F32Lt,
+            "less_than__F64_F64" => WasmInstruction::F64Lt,
+
+            "greater_eq__U32_U32" => WasmInstruction::I32GeU,
+            "greater_eq__U64_U64" => WasmInstruction::I64GeU,
+            "greater_eq__S32_S32" => WasmInstruction::I32GeS,
+            "greater_eq__S64_S64" => WasmInstruction::I64GeS,
+            "greater_eq__F32_F32" => WasmInstruction::F32Ge,
+            "greater_eq__F64_F64" => WasmInstruction::F64Ge,
+
+            "less_eq__U32_U32" => WasmInstruction::I32LeU,
+            "less_eq__U64_U64" => WasmInstruction::I64LeU,
+            "less_eq__S32_S32" => WasmInstruction::I32LeS,
+            "less_eq__S64_S64" => WasmInstruction::I64LeS,
+            "less_eq__F32_F32" => WasmInstruction::F32Le,
+            "less_eq__F64_F64" => WasmInstruction::F64Le,
+
+            ident => {
+                let index = self
+                    .functions
+                    .iter()
+                    .find(|(_, f)| f.name == ident)
+                    .map(|(idx, _)| idx)
+                    .expect("Function should exist");
+
+                WasmInstruction::Call(*index)
+            }
         }
     }
 }

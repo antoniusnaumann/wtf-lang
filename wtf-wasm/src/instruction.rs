@@ -5,10 +5,25 @@ use crate::Type;
 /// High level instruction that can handle high-level types
 #[derive(Debug, Clone)]
 pub enum Instruction<'a> {
+    // Locals
     LocalGet(String),
+    LocalSet(String),
     Call(String),
-    Wasm(WasmInstruction<'a>),
+
+    // TODO: Add consts
+    Const,
+
+    // Control Flow
+    If,
+    Else,
+    Loop,
+    Block,
+    Branch,
+    BranchIf,
+    Return,
     End,
+
+    Wasm(WasmInstruction<'a>),
 }
 
 impl<'a> From<WasmInstruction<'a>> for Instruction<'a> {
