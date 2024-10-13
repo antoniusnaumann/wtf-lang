@@ -66,14 +66,14 @@ impl Print for String {
     }
 }
 
-impl Print for Vec<String> {
+impl Print for [String] {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
         let strings = self.join(" ");
         write!(f, "\n{c:indent$}({})", strings)
     }
 }
 
-impl Print for Vec<UseDeclaration> {
+impl Print for [UseDeclaration] {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
         for elem in self {
             node!(
@@ -91,7 +91,7 @@ impl Print for Vec<UseDeclaration> {
     }
 }
 
-impl Print for Vec<Declaration> {
+impl Print for [Declaration] {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
         for elem in self {
             node!(f, indent, c, "decl", elem)?;
@@ -159,7 +159,7 @@ impl Print for ExportDeclaration {
     }
 }
 
-impl Print for Vec<Parameter> {
+impl Print for [Parameter] {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
         for elem in self {
             elem.print(f, indent, c)?;
@@ -195,6 +195,152 @@ impl Print for TypeAnnotation {
 
 impl Print for Block {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
-        write!(f, "\n{c:indent$}TODO: Block")
+        node!(f, indent, c, "block", self.statements)
+    }
+}
+
+impl Print for [Statement] {
+    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
+        for elem in self {
+            elem.print(f, indent, c)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl Print for Statement {
+    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
+        match self {
+            Statement::VariableDeclaration(v) => v.print(f, indent, c),
+            Statement::Assignment { target, value } => todo!(),
+            Statement::ExpressionStatement(v) => v.print(f, indent, c),
+            Statement::ReturnStatement(_) => todo!(),
+            Statement::BreakStatement(_) => todo!(),
+            Statement::ContinueStatement => todo!(),
+            Statement::ThrowStatement(_) => todo!(),
+            Statement::IfStatement(v) => v.print(f, indent, c),
+            Statement::MatchStatement(_) => todo!(),
+            Statement::WhileStatement(_) => todo!(),
+            Statement::ForStatement(_) => todo!(),
+        }
+    }
+}
+
+impl Print for VariableDeclaration {
+    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
+        node!(
+            f,
+            indent,
+            c,
+            if self.mutable { "var" } else { "let" },
+            self.name,
+            self.type_annotation,
+            self.value
+        )
+    }
+}
+
+impl Print for IfStatement {
+    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
+        node!(
+            f,
+            indent,
+            c,
+            "if",
+            self.condition,
+            self.then_branch,
+            self.else_branch
+        )
+    }
+}
+
+impl Print for Expression {
+    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
+        match self {
+            Expression::Literal(v) => v.print(f, indent, c),
+            Expression::Identifier(v) => write!(f, "\n{c:indent$}(ident {v})"),
+            Expression::BinaryExpression {
+                left,
+                operator,
+                right,
+            } => {
+                node!(f, indent, c, "binary", left, operator, right)
+            }
+            Expression::UnaryExpression { operator, operand } => todo!(),
+            Expression::YeetExpression { expression } => todo!(),
+            Expression::FunctionCall {
+                function,
+                arguments,
+            } => {
+                node!(f, indent, c, "call", function, Args(arguments))
+            }
+            Expression::MethodCall {
+                receiver,
+                method,
+                arguments,
+                safe,
+            } => todo!(),
+            Expression::FieldAccess {
+                object,
+                field,
+                safe,
+            } => todo!(),
+            Expression::IndexAccess { collection, index } => todo!(),
+            Expression::Record { name, members } => todo!(),
+            Expression::ListLiteral(_) => todo!(),
+        }
+    }
+}
+
+struct Args<'a>(&'a [Expression]);
+impl Print for Args<'_> {
+    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
+        node!(f, indent, c, "args", self.0)
+    }
+}
+
+impl Print for [Expression] {
+    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
+        for elem in self {
+            elem.print(f, indent, c)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl Print for Literal {
+    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
+        match self {
+            Literal::Integer(v) => write!(f, "\n{c:indent$}(int {v})"),
+            Literal::Float(v) => write!(f, "\n{c:indent$}(float {v})"),
+            Literal::String(v) => write!(f, "\n{c:indent$}(string \"{v}\")"),
+            Literal::Boolean(v) => write!(f, "\n{c:indent$}(bool {v})"),
+            Literal::None => write!(f, "\n{c:indent$}(none)"),
+        }
+    }
+}
+
+impl Print for BinaryOperator {
+    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
+        let op = match self {
+            BinaryOperator::Arithmetic(inner) => match inner {
+                ArithmeticOperator::Add => "+",
+                ArithmeticOperator::Subtract => "-",
+                ArithmeticOperator::Multiply => "*",
+                ArithmeticOperator::Divide => "/",
+            },
+            BinaryOperator::Equal => "==",
+            BinaryOperator::NotEqual => "!=",
+            BinaryOperator::GreaterThan => ">",
+            BinaryOperator::LessThan => "<",
+            BinaryOperator::GreaterEqual => ">=",
+            BinaryOperator::LessEqual => "<=",
+            BinaryOperator::Contains => "in",
+            BinaryOperator::NullCoalesce => "?",
+        };
+
+        write!(f, "\n{c:indent$}(op {op})")
     }
 }
