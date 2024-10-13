@@ -1,9 +1,9 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, iter};
 
 use wtf_hir as hir;
 use wtf_wasm::{
-    ComponentBuilder, Function, Instance, Instruction, InstructionVec, PrimitiveType, Type,
-    TypeRef, WasmInstruction,
+    ComponentBuilder, Function, Instance, Instruction, PrimitiveType, Type, TypeRef,
+    WasmInstruction,
 };
 
 // PERF: use hash map here if search turns out to be slow
@@ -100,14 +100,12 @@ impl<'a> Convert<'a> for (String, hir::Function) {
             })
             .collect();
         let result = func.return_type.convert(lookup);
-        // TODO: @Marcel, can you handle this?
-        // let instructions: Vec<Instruction> = func
-        //     .body
-        //     .into_iter()
-        //     .map(|st| todo!("Create instructions from statements"))
-        //     .chain(iter::once(Instruction::End))
-        //     .collect();
-        let instructions = vec![WasmInstruction::End.into()];
+        let instructions: Vec<Instruction> = func
+            .expressions
+            .into_iter()
+            .map(|exp| exp.convert(lookup))
+            .chain(iter::once(Instruction::End))
+            .collect();
         let func = Function {
             params,
             result,
@@ -185,6 +183,43 @@ impl Convert<'_> for hir::PrimitiveType {
             hir::PrimitiveType::F64 => PrimitiveType::F64,
             hir::PrimitiveType::Char => PrimitiveType::Char,
             hir::PrimitiveType::String => PrimitiveType::String,
+        }
+    }
+}
+
+impl<'a> Convert<'a> for hir::Expression {
+    type Output = Instruction<'a>;
+
+    fn convert(self, lookup: &mut TypeLookup) -> Self::Output {
+        match self.kind {
+            hir::ExpressionKind::Param => todo!(),
+            hir::ExpressionKind::Block { children, result } => todo!(),
+            hir::ExpressionKind::Int(_) => todo!(),
+            hir::ExpressionKind::Float(_) => todo!(),
+            hir::ExpressionKind::String(_) => todo!(),
+            hir::ExpressionKind::Bool(_) => todo!(),
+            hir::ExpressionKind::None => todo!(),
+            hir::ExpressionKind::Enum { variant, payload } => todo!(),
+            hir::ExpressionKind::Record { fields } => todo!(),
+            hir::ExpressionKind::ListLiteral(_) => todo!(),
+            hir::ExpressionKind::FunctionCall {
+                function,
+                arguments,
+            } => todo!(),
+            hir::ExpressionKind::FieldAccess { receiver, field } => todo!(),
+            hir::ExpressionKind::IndexAccess { collection, index } => todo!(),
+            hir::ExpressionKind::Assignment { target, value } => todo!(),
+            hir::ExpressionKind::Return(_) => todo!(),
+            hir::ExpressionKind::Break(_) => todo!(),
+            hir::ExpressionKind::Continue => todo!(),
+            hir::ExpressionKind::Throw(_) => todo!(),
+            hir::ExpressionKind::If {
+                condition,
+                then,
+                else_,
+            } => todo!(),
+            hir::ExpressionKind::Match { condition, arms } => todo!(),
+            hir::ExpressionKind::Loop(_) => todo!(),
         }
     }
 }

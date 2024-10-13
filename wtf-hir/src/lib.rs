@@ -70,8 +70,8 @@ pub struct Id(usize);
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Expression {
-    type_: Type,
-    kind: ExpressionKind,
+    pub type_: Type,
+    pub kind: ExpressionKind,
 }
 
 #[derive(Debug, Clone, PartialEq)]
