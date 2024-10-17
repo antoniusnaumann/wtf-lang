@@ -58,155 +58,140 @@ pub struct FunctionSignature {
 pub struct Function {
     pub parameters: Vec<(String, Type)>,
     pub return_type: Type,
-    pub expressions: Vec<Expression>,
-    pub body: Id,
+    pub locals: Vec<Type>, // include parameters
+    pub body: Block,
 }
+
+#[derive(Debug, Clone, PartialEq, Copy)]
+pub struct LocalId(usize);
 
 #[derive(Debug, Clone, PartialEq, Copy)]
 pub struct Id(usize);
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Expression {
-    type_: Type,
-    kind: ExpressionKind,
-}
+pub struct Block(Vec<Instruction>);
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ExpressionKind {
-    Param,
-    Block {
-        children: Vec<Id>,
-        result: Id,
-    },
+pub enum Instruction {
+    Pop,
+    Param(String),
+    Load(LocalId),
+    Store(LocalId),
     Int(i64),
     Float(f64),
     String(String),
     None,
     Enum {
         variant: String,
-        payload: Id,
+        num_payloads: usize,
     },
-    Record {
-        fields: HashMap<String, Id>,
-    },
-    ListLiteral(Vec<Id>),
-    FunctionCall {
+    Record(Vec<String>),
+    List(usize),
+    Call {
         function: String,
-        arguments: Vec<Id>,
+        num_arguments: usize,
     },
-    FieldAccess {
-        receiver: Id,
-        field: String,
-    },
-    IndexAccess {
-        collection: Id,
-        index: Id,
-    },
-    Assignment {
-        target: Id,
-        value: Id,
-    },
-    Return(Id),
-    Break(Id),
+    FieldAccess(String),
+    IndexAccess,
+    Return,
+    Break,
     Continue,
-    Throw(Id),
+    Throw,
     If {
-        condition: Id,
-        then: Id,
-        else_: Id,
+        then: Block,
+        else_: Block,
     },
     Match {
-        condition: Id,
-        arms: HashMap<String, Id>,
+        arms: HashMap<String, Block>,
     },
-    Loop(Id),
+    Loop(Block),
 }
 
-impl Expression {
-    fn param(type_: Type) -> Self {
-        Self {
-            type_, kind: ExpressionKind::Param
-        }
-    }
-    fn block(children: Vec<Id>, result: Id, result_type: Type) -> Self {
-        Self {
-            type_: result_type,
-            kind: ExpressionKind::Block { children, result }
-        }
-    }
-    fn int(int: i64) -> Self {
-        Self {
-            type_: Type::Builtin(PrimitiveType::S64),
-            kind: ExpressionKind::Int(int)
-        }
-    }
-    fn float(float: f64) -> Self {
-        Self {
-            type_: Type::Builtin(PrimitiveType::F64),
-            kind: ExpressionKind::Float(float)
-        }
-    }
-    fn string(string: String) -> Self {
-        Self {
-            type_: Type::Builtin(PrimitiveType::String),
-            kind: ExpressionKind::String(string)
-        }
-    }
-    fn bool(b: bool, none: Id) -> Self {
-        Self {
-            type_: Type::Enum(HashSet::from_iter(["True".to_string(), "String".to_string()].into_iter())),
-            kind: ExpressionKind::Enum { variant: if b { "true".to_string() } else { "false".to_string() }, payload: none }
-        }
-    }
-    fn none() -> Self {
-        Self {
-            type_: Type::None,
-            kind: ExpressionKind::None
-        }
-    }
-    fn return_(what: Id) -> Self {
-        Self {
-            type_: Type::Never,
-            kind: ExpressionKind::Return(what)
-        }
-    }
-    fn break_(id: Id) -> Self {
-        Self {
-            type_: Type::Never,
-            kind: ExpressionKind::Break(id)
-        }
-    }
-    fn continue_() -> Self {
-        Self {
-            type_: Type::Never,
-            kind: ExpressionKind::Continue
-        }
-    }
-    fn if_(condition: Id, then: Id, else_: Id) -> Self {
-        // TODO: Join types.
-        Self {
-            type_: Type::None,
-            kind: ExpressionKind::If { condition, then, else_ }
-        }
-    }
-    fn loop_(body: Id) -> Self {
-        // TODO: join types of breaks
-        Self {
-            type_: Type::Never,
-            kind: ExpressionKind::Loop(body),
-        }
-    }
-    fn call(function: String, arguments: Vec<Id>) -> Self {
-        Self {
-            type_: Type::Never,
-            kind: ExpressionKind::FunctionCall { function, arguments }
-        }
-    }
-}
+// impl Expression {
+//     fn param(type_: Type) -> Self {
+//         Self {
+//             type_, kind: Instruction::Param
+//         }
+//     }
+//     fn block(children: Vec<Id>, result: Id, result_type: Type) -> Self {
+//         Self {
+//             type_: result_type,
+//             kind: Instruction::Block { children, result }
+//         }
+//     }
+//     fn int(int: i64) -> Self {
+//         Self {
+//             type_: Type::Builtin(PrimitiveType::S64),
+//             kind: Instruction::Int(int)
+//         }
+//     }
+//     fn float(float: f64) -> Self {
+//         Self {
+//             type_: Type::Builtin(PrimitiveType::F64),
+//             kind: Instruction::Float(float)
+//         }
+//     }
+//     fn string(string: String) -> Self {
+//         Self {
+//             type_: Type::Builtin(PrimitiveType::String),
+//             kind: Instruction::String(string)
+//         }
+//     }
+//     fn bool(b: bool, none: Id) -> Self {
+//         Self {
+//             type_: Type::Enum(HashSet::from_iter(["True".to_string(), "String".to_string()].into_iter())),
+//             kind: Instruction::Enum { variant: if b { "true".to_string() } else { "false".to_string() }, payload: none }
+//         }
+//     }
+//     fn none() -> Self {
+//         Self {
+//             type_: Type::None,
+//             kind: Instruction::None
+//         }
+//     }
+//     fn return_(what: Id) -> Self {
+//         Self {
+//             type_: Type::Never,
+//             kind: Instruction::Return(what)
+//         }
+//     }
+//     fn break_(id: Id) -> Self {
+//         Self {
+//             type_: Type::Never,
+//             kind: Instruction::Break(id)
+//         }
+//     }
+//     fn continue_() -> Self {
+//         Self {
+//             type_: Type::Never,
+//             kind: Instruction::Continue
+//         }
+//     }
+//     fn if_(condition: Id, then: Id, else_: Id) -> Self {
+//         // TODO: Join types.
+//         Self {
+//             type_: Type::None,
+//             kind: Instruction::If { condition, then, else_ }
+//         }
+//     }
+//     fn loop_(body: Id) -> Self {
+//         // TODO: join types of breaks
+//         Self {
+//             type_: Type::Never,
+//             kind: Instruction::Loop(body),
+//         }
+//     }
+//     fn call(function: String, arguments: Vec<Id>) -> Self {
+//         Self {
+//             type_: Type::Never,
+//             kind: Instruction::FunctionCall { function, arguments }
+//         }
+//     }
+// }
 
-pub fn get(exprs: &Vec<Expression>, id: Id) -> Expression {
-    exprs[id.0].clone()
-}
+// pub fn get(exprs: &Vec<Expression>, id: Id) -> Expression {
+//     exprs[id.0].clone()
+// }
 
 impl Display for Module {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -221,7 +206,7 @@ impl Display for Module {
                 write!(f, " {}: ({})", name, type_)?;
             }
             write!(f, " -> {} ", function.return_type)?;
-            get(&function.expressions, function.body).fmt(f, 0, &function.expressions)?;
+            function.body.fmt(f, 0)?;
         }
         Ok(())
     }
@@ -311,95 +296,87 @@ impl Display for Id {
         write!(f, "@{}", self.0)
     }
 }
-impl Id {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>, indentation: usize, exprs: &Vec<Expression>) -> std::fmt::Result {
-        for _ in 0..indentation {
-            write!(f, "  ")?;
+impl Block {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>, indentation: usize) -> std::fmt::Result {
+        writeln!(f, "{{")?;
+        for instruction in &self.0 {
+            for _ in 0..indentation {
+                write!(f, "  ")?;
+            }
+            instruction.fmt(f, indentation);
         }
-        let expr = get(exprs, *self);
-        write!(f, "{self}: {} = ", expr.type_)?;
-        expr.fmt(f, indentation, exprs)?;
-        writeln!(f, "")?;
+        writeln!(f, "}}")?;
         Ok(())
     }
 }
-impl Expression {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>, indentation: usize, exprs: &Vec<Expression>) -> std::fmt::Result {
-        match &self.kind {
-            ExpressionKind::Param => write!(f, "param")?,
-            ExpressionKind::Block { children, result } => {
-                writeln!(f, "{{")?;
-                for child in children {
-                    child.fmt(f, indentation + 1, exprs)?;
-                }
-                for _ in 0..=indentation {
-                    write!(f, "  ")?;
-                }
-                writeln!(f, "{result}")?;
-                for _ in 0..indentation {
-                    write!(f, "  ")?;
-                }
-                write!(f, "}}")?;
-                return Ok(())
-            },
-            ExpressionKind::Int(int) => write!(f, "{}", int)?,
-            ExpressionKind::Float(float) => write!(f, "{}", float)?,
-            ExpressionKind::String(string) => write!(f, "{:?}", string)?,
-            ExpressionKind::None => write!(f, "none")?,
-            ExpressionKind::Enum { variant, payload } => write!(f, "{}({})", variant, payload)?,
-            ExpressionKind::Record { fields } => {
-                write!(f, "{{")?;
-                let mut first = true;
-                for (name, value) in fields {
-                    if first {
-                        first = false;
-                    } else {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{}: {}", name, value)?;
-                }
-                write!(f, "}}")?;
-            },
-            ExpressionKind::ListLiteral(items) => {
-                write!(f, "[")?;
-                let mut first = true;
-                for item in items {
-                    if first {
-                        first = false;
-                    } else {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{}", item)?;
-                }
-                write!(f, "]")?;
-            },
-            ExpressionKind::FunctionCall { function, arguments } => {
-                write!(f, "{function}")?;
-                for arg in arguments {
-                    write!(f, " {}", arg)?;
+impl Display for LocalId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "@{}", self.0)
+    }
+}
+impl Instruction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>, indentation: usize) -> std::fmt::Result {
+        match &self {
+            Instruction::Pop => write!(f, "pop")?,
+            Instruction::Param(name) => write!(f, "param {name}")?,
+            // Instruction::Block { children, result } => {
+            //     writeln!(f, "{{")?;
+            //     for child in children {
+            //         child.fmt(f, indentation + 1, exprs)?;
+            //     }
+            //     for _ in 0..=indentation {
+            //         write!(f, "  ")?;
+            //     }
+            //     writeln!(f, "{result}")?;
+            //     for _ in 0..indentation {
+            //         write!(f, "  ")?;
+            //     }
+            //     write!(f, "}}")?;
+            //     return Ok(())
+            // },
+            Instruction::Int(int) => write!(f, "int {}", int)?,
+            Instruction::Float(float) => write!(f, "float {}", float)?,
+            Instruction::String(string) => write!(f, "string {:?}", string)?,
+            Instruction::None => write!(f, "none")?,
+            Instruction::Enum { variant, num_payloads } => write!(f, "enum variant {} with {} payloads", variant, num_payloads)?,
+            Instruction::Record(fields) => {
+                write!(f, "record")?;
+                for field in fields {
+                    write!(f, " {}", field)?;
                 }
             },
-            ExpressionKind::FieldAccess { receiver, field } => write!(f, "{receiver}.{field}")?,
-            ExpressionKind::IndexAccess { collection, index } => write!(f, "{collection}[{index}]")?,
-            ExpressionKind::Assignment { target, value } => write!(f, "{target} = {value}")?,
-            ExpressionKind::Return(id) => write!(f, "return {id}")?,
-            ExpressionKind::Break(id) => write!(f, "break {id}")?,
-            ExpressionKind::Continue => write!(f, "continue")?,
-            ExpressionKind::Throw(id) => write!(f, "throw {id}")?,
-            ExpressionKind::If { condition, then, else_ } => {
-                write!(f, "if {condition} ")?;
-                get(exprs, *then).fmt(f, indentation, exprs)?;
+            Instruction::List(num_items) => {
+                write!(f, "list with {} items", num_items)?;
+            },
+            Instruction::Call { function, num_arguments } => {
+                write!(f, "call {function} with {num_arguments} arguments")?;
+            },
+            Instruction::FieldAccess(field) => write!(f, "field access {field}")?,
+            Instruction::IndexAccess => write!(f, "index access")?,
+            Instruction::Load(local) => write!(f, "load from {local}")?,
+            Instruction::Store(local) => write!(f, "store to {local}")?,
+            Instruction::Return => write!(f, "return")?,
+            Instruction::Break => write!(f, "break")?,
+            Instruction::Continue => write!(f, "continue")?,
+            Instruction::Throw => write!(f, "throw")?,
+            Instruction::If { then, else_ } => {
+                write!(f, "if ")?;
+                then.fmt(f, indentation)?;
                 write!(f, " else ")?;
-                get(exprs, *else_).fmt(f, indentation, exprs)?;
+                else_.fmt(f, indentation)?;
             },
-            ExpressionKind::Match { condition, arms } => {
-                write!(f, "match {condition} {{")?;
+            Instruction::Match { arms } => {
+                write!(f, "match {{")?;
                 for (variant, arm) in arms {
-                    write!(f, "  {variant} => {arm}")?;
+                    write!(f, "  {variant} => ")?;
+                    arm.fmt(f, indentation + 2)?;
                 }
                 write!(f, "}}")?;
             },
-            ExpressionKind::Loop(body) => write!(f, "loop {body}")?,
+            Instruction::Loop(body) => {
+                write!(f, "loop ")?;
+                body.fmt(f, indentation + 1);
+            }
         }
         Ok(())
     }
