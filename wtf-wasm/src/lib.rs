@@ -49,10 +49,18 @@ impl From<&TypeRef> for Type {
 #[derive(Debug, Clone)]
 pub struct Function<'a> {
     pub params: Vec<(String, TypeRef)>,
+    pub locals: Vec<Local>,
     pub result: Option<TypeRef>,
     pub name: String,
     pub instructions: Vec<Instruction<'a>>,
     pub export: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct Local {
+    pub index: u32,
+    pub ty: Type,
+    pub lower: Vec<ValType>,
 }
 
 #[derive(Debug)]
@@ -117,12 +125,7 @@ impl<'a> ComponentBuilder<'a> {
     }
 
     fn encode_fn(&mut self, function: Function<'a>) -> Option<(String, ComponentExportKind, u32)> {
-        let idx = self.encode_lowered_fn(
-            &function.params,
-            function.result.map_or_else(|| vec![], |ty| self.lower(&ty)),
-            &function.name,
-            &function.instructions,
-        );
+        let idx = self.encode_lowered_fn(&function);
 
         let result = if function.export {
             Some((
@@ -140,14 +143,11 @@ impl<'a> ComponentBuilder<'a> {
         result
     }
 
-    fn encode_lowered_fn(
-        &mut self,
-        higher_params: &[(String, TypeRef)],
-        results: Vec<ValType>,
-        name: impl AsRef<str>,
-        instructions: &[Instruction],
-    ) -> u32 {
-        let params: Vec<Vec<ValType>> = higher_params.iter().map(|(_, p)| self.lower(p)).collect();
+    fn encode_lowered_fn(&mut self, function: &Function<'a>) -> u32 {
+        let results = function.result.map_or_else(|| vec![], |ty| self.lower(&ty));
+
+        let params: Vec<Vec<ValType>> =
+            function.params.iter().map(|(_, p)| self.lower(p)).collect();
         let mut offsets = Vec::with_capacity(params.len() + 1);
         offsets.push(0);
         for param in &params {
@@ -163,13 +163,17 @@ impl<'a> ComponentBuilder<'a> {
         self.signatures.function(self.function_count);
 
         // Encode the export section.
-        self.exports
-            .export(name.as_ref(), ExportKind::Func, self.function_count);
+        self.exports.export(
+            &function.name.as_ref(),
+            ExportKind::Func,
+            self.function_count,
+        );
 
-        let locals = vec![];
-        let mut func = wasm_encoder::Function::new(locals);
-        for instruction in instructions {
-            for lowered_instruction in self.lower_instruction(instruction) {
+        let mut func = wasm_encoder::Function::new(
+            lower_locals(function.locals.iter().skip(function.params.len())).collect::<Vec<_>>(),
+        );
+        for instruction in &function.instructions {
+            for lowered_instruction in self.lower_instruction(instruction, &function.locals) {
                 func.instruction(&lowered_instruction);
             }
         }
@@ -340,11 +344,21 @@ impl<'a> ComponentBuilder<'a> {
         self.function_count += 1;
     }
 
-    fn lower_instruction(&self, instruction: &'a Instruction) -> Vec<WasmInstruction> {
+    fn lower_instruction(
+        &self,
+        instruction: &'a Instruction,
+        locals: &[Local],
+    ) -> Vec<WasmInstruction> {
         match instruction {
             // Locals
-            Instruction::LocalSet(_) => todo!(),
-            Instruction::LocalGet(_) => todo!(),
+            Instruction::LocalSet(idx) => lower_local(&locals[*idx as usize])
+                .iter()
+                .map(|(i, _ty)| WasmInstruction::LocalSet(*i))
+                .collect(),
+            Instruction::LocalGet(idx) => lower_local(&locals[*idx as usize])
+                .iter()
+                .map(|(i, _ty)| WasmInstruction::LocalGet(*i))
+                .collect(),
             Instruction::Const => todo!(),
             Instruction::Call(ident) => vec![self.lower_call(ident)],
 
@@ -457,6 +471,21 @@ fn lower_types(types: Vec<Type>) -> Vec<(Type, Vec<ValType>)> {
     let mapping = result.into_iter().map(|lowered| lowered.unwrap());
 
     types.into_iter().zip(mapping).collect()
+}
+
+fn lower_locals<'a>(
+    locals: impl Iterator<Item = &'a Local>,
+) -> impl Iterator<Item = (u32, ValType)> {
+    locals.flat_map(lower_local)
+}
+
+fn lower_local(local: &Local) -> Vec<(u32, ValType)> {
+    local
+        .lower
+        .iter()
+        .enumerate()
+        .map(|(i, ty)| (local.index + i as u32, ty.clone()))
+        .collect::<Vec<_>>()
 }
 
 fn lower_type(ty: &Type, types: &[Type], mapping: &mut [Option<Vec<ValType>>]) -> Vec<ValType> {

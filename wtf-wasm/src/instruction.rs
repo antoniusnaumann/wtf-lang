@@ -6,8 +6,8 @@ use crate::Type;
 #[derive(Debug, Clone)]
 pub enum Instruction<'a> {
     // Locals
-    LocalGet(String),
-    LocalSet(String),
+    LocalGet(u32),
+    LocalSet(u32),
     Call(String),
 
     // TODO: Add consts

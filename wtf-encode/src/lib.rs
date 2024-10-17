@@ -113,6 +113,7 @@ impl<'a> Convert<'a> for (String, hir::Function) {
             instructions,
             // TODO: only export functions with export keyword
             export: true,
+            locals: vec![],
         };
 
         func
