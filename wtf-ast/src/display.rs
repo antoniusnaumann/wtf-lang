@@ -131,7 +131,23 @@ impl Print for FunctionDeclaration {
 
 impl Print for RecordDeclaration {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
-        todo!()
+        node!(f, indent, c, "record", self.name, self.fields)
+    }
+}
+
+impl Print for [Field] {
+    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
+        for field in self {
+            field.print(f, indent, c)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl Print for Field {
+    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
+        node!(f, indent, c, "field", self.name, self.type_annotation)
     }
 }
 
@@ -213,12 +229,12 @@ impl Print for Statement {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
         match self {
             Statement::VariableDeclaration(v) => v.print(f, indent, c),
-            Statement::Assignment { target, value } => todo!(),
+            Statement::Assignment { target, value } => node!(f, indent, c, "assign", target, value),
             Statement::ExpressionStatement(v) => v.print(f, indent, c),
-            Statement::ReturnStatement(_) => todo!(),
-            Statement::BreakStatement(_) => todo!(),
-            Statement::ContinueStatement => todo!(),
-            Statement::ThrowStatement(_) => todo!(),
+            Statement::ReturnStatement(v) => node!(f, indent, c, "return", v),
+            Statement::BreakStatement(v) => node!(f, indent, c, "break", v),
+            Statement::ContinueStatement => write!(f, "\n{c:indent$}(continue)"),
+            Statement::ThrowStatement(v) => node!(f, indent, c, "throw", v),
             Statement::IfStatement(v) => v.print(f, indent, c),
             Statement::MatchStatement(_) => todo!(),
             Statement::WhileStatement(_) => todo!(),
@@ -267,7 +283,9 @@ impl Print for Expression {
             } => {
                 node!(f, indent, c, "binary", left, operator, right)
             }
-            Expression::UnaryExpression { operator, operand } => todo!(),
+            Expression::UnaryExpression { operator, operand } => {
+                node!(f, indent, c, "unary", operator, operand)
+            }
             Expression::YeetExpression { expression } => todo!(),
             Expression::FunctionCall {
                 function,
@@ -339,6 +357,17 @@ impl Print for BinaryOperator {
             BinaryOperator::LessEqual => "<=",
             BinaryOperator::Contains => "in",
             BinaryOperator::NullCoalesce => "?",
+        };
+
+        write!(f, "\n{c:indent$}(op {op})")
+    }
+}
+
+impl Print for UnaryOperator {
+    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
+        let op = match self {
+            UnaryOperator::Negate => "-",
+            UnaryOperator::Not => "!",
         };
 
         write!(f, "\n{c:indent$}(op {op})")
