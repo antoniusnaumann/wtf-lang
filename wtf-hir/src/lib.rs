@@ -342,19 +342,25 @@ impl Instruction {
             Instruction::Float(float) => write!(f, "float {}", float)?,
             Instruction::String(string) => write!(f, "string {:?}", string)?,
             Instruction::None => write!(f, "none")?,
-            Instruction::Enum { variant, num_payloads } => write!(f, "enum variant {} with {} payloads", variant, num_payloads)?,
+            Instruction::Enum {
+                variant,
+                num_payloads,
+            } => write!(f, "enum variant {} with {} payloads", variant, num_payloads)?,
             Instruction::Record(fields) => {
                 write!(f, "record")?;
                 for field in fields {
                     write!(f, " {}", field)?;
                 }
-            },
+            }
             Instruction::List(num_items) => {
                 write!(f, "list with {} items", num_items)?;
-            },
-            Instruction::Call { function, num_arguments } => {
+            }
+            Instruction::Call {
+                function,
+                num_arguments,
+            } => {
                 write!(f, "call {function} with {num_arguments} arguments")?;
-            },
+            }
             Instruction::FieldAccess(field) => write!(f, "field access {field}")?,
             Instruction::IndexAccess => write!(f, "index access")?,
             Instruction::Load(local) => write!(f, "load from {local}")?,
@@ -368,7 +374,7 @@ impl Instruction {
                 then.fmt(f, indentation)?;
                 write!(f, " else ")?;
                 else_.fmt(f, indentation)?;
-            },
+            }
             Instruction::Match { arms } => {
                 write!(f, "match {{")?;
                 for (variant, arm) in arms {
@@ -376,7 +382,7 @@ impl Instruction {
                     arm.fmt(f, indentation + 2)?;
                 }
                 write!(f, "}}")?;
-            },
+            }
             Instruction::Loop(body) => {
                 write!(f, "loop ")?;
                 body.fmt(f, indentation + 1);

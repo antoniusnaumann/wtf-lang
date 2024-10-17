@@ -15,6 +15,7 @@ fn main() {
         name: "run".to_owned(),
         instructions: vec![WasmInstruction::I32Const(21), WasmInstruction::End].into_instructions(),
         export: true,
+        locals: vec![],
     }];
     comp.encode_instance(Instance {
         name: "wasi:cli/run@0.2.0".to_owned(),
@@ -40,6 +41,7 @@ fn main() {
             ]
             .into_instructions(),
             export: true,
+            locals: vec![],
         }],
     });
 
