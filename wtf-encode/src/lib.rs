@@ -1,7 +1,10 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, iter};
 
 use wtf_hir as hir;
-use wtf_wasm::{ComponentBuilder, Function, Instance, Instruction, PrimitiveType, Type, TypeRef};
+use wtf_wasm::{
+    ComponentBuilder, Function, Instance, Instruction, PrimitiveType, Type, TypeRef,
+    WasmInstruction,
+};
 
 // PERF: use hash map here if search turns out to be slow
 #[derive(Debug, Default)]
@@ -88,21 +91,25 @@ impl<'a> Convert<'a> for (String, hir::Function) {
         let params: Vec<_> = func
             .parameters
             .into_iter()
-            .map(|(name, ty)| (name, ty.convert(lookup)))
+            .map(|(name, ty)| {
+                (
+                    name,
+                    ty.convert(lookup)
+                        .expect("Parameter type must be a valid type"),
+                )
+            })
             .collect();
-        let result = func.return_type.map(|result| result.convert(lookup));
-        // TODO: @Marcel, can you handle this?
-        // let instructions: Vec<Instruction> = func
-        //     .body
-        //     .into_iter()
-        //     .map(|st| todo!("Create instructions from statements"))
-        //     .chain(iter::once(Instruction::End))
-        //     .collect();
-        let instructions = vec![Instruction::End];
+        let result = func.return_type.convert(lookup);
+        let instructions: Vec<Instruction> = func
+            .expressions
+            .into_iter()
+            .map(|exp| exp.convert(lookup))
+            .chain(iter::once(Instruction::End))
+            .collect();
         let func = Function {
             params,
             result,
-            name,
+            name: name.replace("_", "-"),
             instructions,
             // TODO: only export functions with export keyword
             export: true,
@@ -113,39 +120,47 @@ impl<'a> Convert<'a> for (String, hir::Function) {
 }
 
 impl Convert<'_> for hir::Type {
-    type Output = TypeRef;
+    type Output = Option<TypeRef>;
 
     fn convert(self, lookup: &mut TypeLookup) -> Self::Output {
         match self {
             hir::Type::List(item) => {
                 let item = item.convert(lookup);
-                let ty = lookup.insert(Type::List(item));
+                let ty = lookup.insert(Type::List(item.expect("Lists must have an inner type")));
 
-                TypeRef::Type(ty)
+                Some(TypeRef::Type(ty))
             }
             hir::Type::Option(inner) => {
                 let inner = inner.convert(lookup);
-                let ty = lookup.insert(Type::Option(inner));
+                let ty = lookup.insert(Type::Option(
+                    inner.expect("Options must have an inner type"),
+                ));
 
-                TypeRef::Type(ty)
+                Some(TypeRef::Type(ty))
             }
             hir::Type::Result { ok, err } => {
-                let ok = ok.convert(lookup);
-                let err = err.convert(lookup);
+                let ok = ok
+                    .convert(lookup)
+                    .expect("Result 'ok' must be a valid type");
+                let err = err
+                    .convert(lookup)
+                    .expect("Result errors must be a valid type");
                 let ty = lookup.insert(Type::Result { ok, err });
 
-                TypeRef::Type(ty)
+                Some(TypeRef::Type(ty))
             }
             hir::Type::Record(_) => todo!(),
             hir::Type::Resource(_) => todo!(),
             hir::Type::Enum(cases) => {
                 let ty = lookup.insert(Type::Enum(cases));
 
-                TypeRef::Type(ty)
+                Some(TypeRef::Type(ty))
             }
             hir::Type::Variant(_) => todo!(),
             hir::Type::Tuple(_) => todo!(),
-            hir::Type::Builtin(ty) => TypeRef::Primitive(ty.convert(lookup)),
+            hir::Type::Builtin(ty) => Some(TypeRef::Primitive(ty.convert(lookup))),
+            hir::Type::None => None,
+            hir::Type::Never => todo!("Disallow 'Never' for exported functions"),
         }
     }
 }
@@ -168,6 +183,43 @@ impl Convert<'_> for hir::PrimitiveType {
             hir::PrimitiveType::F64 => PrimitiveType::F64,
             hir::PrimitiveType::Char => PrimitiveType::Char,
             hir::PrimitiveType::String => PrimitiveType::String,
+        }
+    }
+}
+
+impl<'a> Convert<'a> for hir::Expression {
+    type Output = Instruction<'a>;
+
+    fn convert(self, lookup: &mut TypeLookup) -> Self::Output {
+        match self.kind {
+            hir::ExpressionKind::Param => todo!(),
+            hir::ExpressionKind::Block { children, result } => todo!(),
+            hir::ExpressionKind::Int(_) => todo!(),
+            hir::ExpressionKind::Float(_) => todo!(),
+            hir::ExpressionKind::String(_) => todo!(),
+            hir::ExpressionKind::Bool(_) => todo!(),
+            hir::ExpressionKind::None => todo!(),
+            hir::ExpressionKind::Enum { variant, payload } => todo!(),
+            hir::ExpressionKind::Record { fields } => todo!(),
+            hir::ExpressionKind::ListLiteral(_) => todo!(),
+            hir::ExpressionKind::FunctionCall {
+                function,
+                arguments,
+            } => todo!(),
+            hir::ExpressionKind::FieldAccess { receiver, field } => todo!(),
+            hir::ExpressionKind::IndexAccess { collection, index } => todo!(),
+            hir::ExpressionKind::Assignment { target, value } => todo!(),
+            hir::ExpressionKind::Return(_) => todo!(),
+            hir::ExpressionKind::Break(_) => todo!(),
+            hir::ExpressionKind::Continue => todo!(),
+            hir::ExpressionKind::Throw(_) => todo!(),
+            hir::ExpressionKind::If {
+                condition,
+                then,
+                else_,
+            } => todo!(),
+            hir::ExpressionKind::Match { condition, arms } => todo!(),
+            hir::ExpressionKind::Loop(_) => todo!(),
         }
     }
 }

@@ -171,6 +171,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasmparser"
+version = "0.219.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c771866898879073c53b565a6c7b49953795159836714ac56a5befb581227c5"
+dependencies = [
+ "ahash",
+ "bitflags",
+ "hashbrown 0.14.5",
+ "indexmap",
+ "semver",
+ "serde",
+]
+
+[[package]]
 name = "wtf-ast"
 version = "0.0.0"
 
@@ -178,7 +192,9 @@ version = "0.0.0"
 name = "wtf-compiler"
 version = "0.0.0"
 dependencies = [
+ "wasmparser 0.219.1",
  "wtf-ast",
+ "wtf-encode",
  "wtf-hir",
  "wtf-parser",
 ]
@@ -187,7 +203,7 @@ dependencies = [
 name = "wtf-encode"
 version = "0.0.0"
 dependencies = [
- "wasmparser",
+ "wasmparser 0.217.0",
  "wtf-ast",
  "wtf-hir",
  "wtf-parser",

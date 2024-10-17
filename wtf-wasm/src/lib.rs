@@ -11,9 +11,12 @@ use wasm_encoder::{
     PrimitiveValType, TypeSection, ValType,
 };
 
+mod instruction;
+pub use instruction::*;
+
 // wasm encoder re-exports
 pub use wasm_encoder::{
-    ComponentValType as TypeRef, Instruction, PrimitiveValType as PrimitiveType,
+    ComponentValType as TypeRef, Instruction as WasmInstruction, PrimitiveValType as PrimitiveType,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -43,7 +46,7 @@ impl From<&TypeRef> for Type {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Function<'a> {
     pub params: Vec<(String, TypeRef)>,
     pub result: Option<TypeRef>,
@@ -67,6 +70,7 @@ pub struct ComponentBuilder<'a> {
     codes: CodeSection,
     globals: GlobalSection,
 
+    /// (Lowered ID, Function)
     functions: Vec<(u32, Function<'a>)>,
     function_count: u32,
     global_count: u32,
@@ -114,11 +118,7 @@ impl<'a> ComponentBuilder<'a> {
 
     fn encode_fn(&mut self, function: Function<'a>) -> Option<(String, ComponentExportKind, u32)> {
         let idx = self.encode_lowered_fn(
-            function
-                .params
-                .iter()
-                .flat_map(|(_, p)| self.lower(p))
-                .collect(),
+            &function.params,
             function.result.map_or_else(|| vec![], |ty| self.lower(&ty)),
             &function.name,
             &function.instructions,
@@ -142,12 +142,22 @@ impl<'a> ComponentBuilder<'a> {
 
     fn encode_lowered_fn(
         &mut self,
-        params: Vec<ValType>,
+        higher_params: &[(String, TypeRef)],
         results: Vec<ValType>,
         name: impl AsRef<str>,
         instructions: &[Instruction],
     ) -> u32 {
-        self.types.function(params, results);
+        let params: Vec<Vec<ValType>> = higher_params.iter().map(|(_, p)| self.lower(p)).collect();
+        let mut offsets = Vec::with_capacity(params.len() + 1);
+        offsets.push(0);
+        for param in &params {
+            offsets.push(offsets.last().unwrap() + param.len());
+        }
+
+        self.types.function(
+            params.iter().flatten().cloned().collect::<Vec<_>>(),
+            results,
+        );
 
         // Encode the function section.
         self.signatures.function(self.function_count);
@@ -157,11 +167,13 @@ impl<'a> ComponentBuilder<'a> {
             .export(name.as_ref(), ExportKind::Func, self.function_count);
 
         let locals = vec![];
-        let mut f = wasm_encoder::Function::new(locals);
-        for stmt in instructions {
-            f.instruction(stmt);
+        let mut func = wasm_encoder::Function::new(locals);
+        for instruction in instructions {
+            for lowered_instruction in self.lower_instruction(instruction) {
+                func.instruction(&lowered_instruction);
+            }
         }
-        self.codes.function(&f);
+        self.codes.function(&func);
 
         let result = self.function_count;
         self.function_count += 1;
@@ -310,22 +322,124 @@ impl<'a> ComponentBuilder<'a> {
         // TODO: This is currently a simple bump allocator that never reallocates. Use some library realloc function instead
 
         // Get the current heap pointer and store it in $ret
-        realloc_func.instruction(&Instruction::GlobalGet(heap_ptr)); // global.get $heap_ptr
-        realloc_func.instruction(&Instruction::LocalSet(4)); // local.set $ret
+        realloc_func.instruction(&WasmInstruction::GlobalGet(heap_ptr)); // global.get $heap_ptr
+        realloc_func.instruction(&WasmInstruction::LocalSet(4)); // local.set $ret
 
         // Update the heap pointer: $heap_ptr += $new_size
-        realloc_func.instruction(&Instruction::GlobalGet(heap_ptr)); // global.get $heap_ptr
-        realloc_func.instruction(&Instruction::LocalGet(3)); // local.get $new_size
-        realloc_func.instruction(&Instruction::I32Add); // i32.add
-        realloc_func.instruction(&Instruction::GlobalSet(heap_ptr)); // global.set $heap_ptr
+        realloc_func.instruction(&WasmInstruction::GlobalGet(heap_ptr)); // global.get $heap_ptr
+        realloc_func.instruction(&WasmInstruction::LocalGet(3)); // local.get $new_size
+        realloc_func.instruction(&WasmInstruction::I32Add); // i32.add
+        realloc_func.instruction(&WasmInstruction::GlobalSet(heap_ptr)); // global.set $heap_ptr
 
         // Return the original heap pointer (stored in $ret)
-        realloc_func.instruction(&Instruction::LocalGet(4)); // local.get $ret
-        realloc_func.instruction(&Instruction::End);
+        realloc_func.instruction(&WasmInstruction::LocalGet(4)); // local.get $ret
+        realloc_func.instruction(&WasmInstruction::End);
 
         self.codes.function(&realloc_func);
         self.realloc_index = self.function_count;
         self.function_count += 1;
+    }
+
+    fn lower_instruction(&self, instruction: &'a Instruction) -> Vec<WasmInstruction> {
+        match instruction {
+            // Locals
+            Instruction::LocalSet(_) => todo!(),
+            Instruction::LocalGet(_) => todo!(),
+            Instruction::Const => todo!(),
+            Instruction::Call(ident) => vec![self.lower_call(ident)],
+
+            // Control Flow
+            Instruction::End => vec![WasmInstruction::End],
+            Instruction::If => vec![WasmInstruction::If(todo!())],
+            Instruction::Else => vec![WasmInstruction::Else],
+            Instruction::Loop => vec![WasmInstruction::Loop(todo!())],
+            Instruction::Block => vec![WasmInstruction::Block(todo!())],
+            Instruction::Branch => vec![WasmInstruction::Br(todo!())],
+            Instruction::BranchIf => vec![WasmInstruction::BrIf(todo!())],
+            Instruction::Return => vec![WasmInstruction::Return],
+
+            Instruction::Wasm(wasm) => vec![wasm.clone()],
+        }
+    }
+
+    fn lower_call(&self, ident: &str) -> WasmInstruction {
+        match ident {
+            // # Arithmetic Operators
+            "add__S32_S32" | "add__U32_U32" => WasmInstruction::I32Add,
+            "add__S64_S64" | "add__U64_U64" => WasmInstruction::I64Add,
+            "add__F32_F32" => WasmInstruction::F32Add,
+            "add__F64_F64" => WasmInstruction::F64Add,
+
+            "sub__S32_S32" | "sub__U32_U32" => WasmInstruction::I32Sub,
+            "sub__S64_S64" | "sub__U64_U64" => WasmInstruction::I64Sub,
+            "sub__F32_F32" => WasmInstruction::F32Sub,
+            "sub__F64_F64" => WasmInstruction::F64Sub,
+
+            "negate__F32" => WasmInstruction::F32Neg,
+            "negate__F64" => WasmInstruction::F64Neg,
+
+            "mul__S32_S32" | "mul__U32_U32" => WasmInstruction::I32Mul,
+            "mul__S64_S64" | "mul__U64_U64" => WasmInstruction::I64Mul,
+            "mul__F32_F32" => WasmInstruction::F32Mul,
+            "mul__F64_F64" => WasmInstruction::F64Mul,
+
+            "div__U32_U32" => WasmInstruction::I32DivU,
+            "div__U64_U64" => WasmInstruction::I64DivU,
+            "div__S32_S32" => WasmInstruction::I32DivS,
+            "div__S64_S64" => WasmInstruction::I64DivS,
+            "div__F32_F32" => WasmInstruction::F32Div,
+            "div__F64_F64" => WasmInstruction::F64Div,
+
+            // # Comparison Operators
+            "eq__U32_U32" | "eq__S32_S32" => WasmInstruction::I32Eq,
+            "eq__U64_U64" | "eq__S64_S64" => WasmInstruction::I64Eq,
+            "eq__F32" => WasmInstruction::F32Eq,
+            "eq__F64" => WasmInstruction::F64Eq,
+
+            "ne__U32_U32" | "ne__S32_S32" => WasmInstruction::I32Ne,
+            "ne__U64_U64" | "ne__S64_S64" => WasmInstruction::I64Ne,
+            "ne__F32" => WasmInstruction::F32Ne,
+            "ne__F64" => WasmInstruction::F64Ne,
+
+            "greater_than__U32_U32" => WasmInstruction::I32GtU,
+            "greater_than__U64_U64" => WasmInstruction::I64GtU,
+            "greater_than__S32_S32" => WasmInstruction::I32GtS,
+            "greater_than__S64_S64" => WasmInstruction::I64GtS,
+            "greater_than__F32_F32" => WasmInstruction::F32Gt,
+            "greater_than__F64_F64" => WasmInstruction::F64Gt,
+
+            "less_than__U32_U32" => WasmInstruction::I32LtU,
+            "less_than__U64_U64" => WasmInstruction::I64LtU,
+            "less_than__S32_S32" => WasmInstruction::I32LtS,
+            "less_than__S64_S64" => WasmInstruction::I64LtS,
+            "less_than__F32_F32" => WasmInstruction::F32Lt,
+            "less_than__F64_F64" => WasmInstruction::F64Lt,
+
+            "greater_eq__U32_U32" => WasmInstruction::I32GeU,
+            "greater_eq__U64_U64" => WasmInstruction::I64GeU,
+            "greater_eq__S32_S32" => WasmInstruction::I32GeS,
+            "greater_eq__S64_S64" => WasmInstruction::I64GeS,
+            "greater_eq__F32_F32" => WasmInstruction::F32Ge,
+            "greater_eq__F64_F64" => WasmInstruction::F64Ge,
+
+            "less_eq__U32_U32" => WasmInstruction::I32LeU,
+            "less_eq__U64_U64" => WasmInstruction::I64LeU,
+            "less_eq__S32_S32" => WasmInstruction::I32LeS,
+            "less_eq__S64_S64" => WasmInstruction::I64LeS,
+            "less_eq__F32_F32" => WasmInstruction::F32Le,
+            "less_eq__F64_F64" => WasmInstruction::F64Le,
+
+            ident => {
+                let index = self
+                    .functions
+                    .iter()
+                    .find(|(_, f)| f.name == ident)
+                    .map(|(idx, _)| idx)
+                    .expect("Function should exist");
+
+                WasmInstruction::Call(*index)
+            }
+        }
     }
 }
 

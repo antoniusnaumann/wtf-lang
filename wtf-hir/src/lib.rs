@@ -1,8 +1,11 @@
 mod compiler;
 mod visible;
 
-use std::{collections::{HashMap, HashSet}, fmt::Display};
 pub use compiler::compile;
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Display,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Module {
@@ -80,6 +83,7 @@ pub enum Instruction {
     Int(i64),
     Float(f64),
     String(String),
+    Bool(bool),
     None,
     Enum {
         variant: String,
@@ -230,9 +234,9 @@ impl Display for Type {
                 PrimitiveType::F64 => write!(f, "F64")?,
                 PrimitiveType::Char => write!(f, "Char")?,
                 PrimitiveType::String => write!(f, "String")?,
-            }
+            },
             Type::List(items) => write!(f, "[{}]", items)?,
-            Type::Option(payload) => write!(f, "?({payload})")?,
+            Type::Option(payload) => write!(f, "({payload})?")?,
             Type::Result { ok, err } => write!(f, "({ok})!({err})")?,
             Type::Record(hash_map) => {
                 write!(f, "{{")?;
@@ -246,7 +250,7 @@ impl Display for Type {
                     write!(f, "{key}: {value}")?;
                 }
                 write!(f, "}}")?
-            },
+            }
             Type::Resource(_) => write!(f, "...")?,
             Type::Enum(variants) => {
                 let mut first = true;
@@ -258,7 +262,7 @@ impl Display for Type {
                     }
                     write!(f, "{variant}")?;
                 }
-            },
+            }
             Type::Variant(variants) => {
                 let mut first = true;
                 for (name, payloads) in variants {
@@ -273,7 +277,7 @@ impl Display for Type {
                     }
                     write!(f, ")")?;
                 }
-            },
+            }
             Type::Tuple(payloads) => {
                 write!(f, "(")?;
                 let mut first = true;
@@ -286,7 +290,7 @@ impl Display for Type {
                     write!(f, "{payload}")?;
                 }
                 write!(f, ")")?
-            },
+            }
         };
         Ok(())
     }
