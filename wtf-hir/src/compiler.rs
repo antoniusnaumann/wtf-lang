@@ -1,6 +1,9 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::Deref,
+};
 
-use wtf_ast::{self as ast, Expression, TypeAnnotation};
+use wtf_ast::{self as ast, BinaryOperator, Expression, TypeAnnotation};
 
 use crate::{
     visible::Visible, Block, Function, FunctionSignature, Id, Instruction, LocalId, Module,
@@ -9,11 +12,11 @@ use crate::{
 
 pub fn compile(ast: ast::Module) -> Module {
     let mut ast_types = HashMap::new();
-    let mut ast_funs = vec![];
+    let mut ast_funs = HashMap::new();
     for declaration in ast.declarations {
         match declaration {
             ast::Declaration::Function(fun) => {
-                ast_funs.push(fun);
+                ast_funs.insert(fun.name.to_string(), fun);
             }
             ast::Declaration::Record(rec) => {
                 ast_types.insert(rec.name.to_string(), ast::Declaration::Record(rec));
@@ -32,7 +35,7 @@ pub fn compile(ast: ast::Module) -> Module {
     }
 
     let mut functions = HashMap::new();
-    for fun in &ast_funs {
+    for fun in ast_funs.values() {
         functions.insert(fun.name.to_string(), compile_fun(fun, &ast_types));
     }
     Module {
@@ -246,7 +249,7 @@ impl FunctionCompiler {
                     args.push(self.stack.pop().unwrap());
                 }
                 // Find function return type.
-                self.stack.push(Type::Never);
+                self.stack.push(Type::Builtin(PrimitiveType::Bool));
             }
             Instruction::FieldAccess(field) => {
                 if let Type::Record(record) = self.stack.pop().unwrap() {
@@ -396,23 +399,7 @@ impl FunctionCompiler {
             } => {
                 self.compile_expression(left, block);
                 self.compile_expression(right, block);
-                match operator {
-                    ast::BinaryOperator::Arithmetic(_) => todo!(),
-                    ast::BinaryOperator::Equal => todo!(),
-                    ast::BinaryOperator::NotEqual => todo!(),
-                    ast::BinaryOperator::GreaterThan => self.push(
-                        Instruction::Call {
-                            function: "greater_than".to_string(),
-                            num_arguments: 2,
-                        },
-                        block,
-                    ),
-                    ast::BinaryOperator::LessThan => todo!(),
-                    ast::BinaryOperator::GreaterEqual => todo!(),
-                    ast::BinaryOperator::LessEqual => todo!(),
-                    ast::BinaryOperator::Contains => todo!(),
-                    ast::BinaryOperator::NullCoalesce => todo!(),
-                }
+                self.push_op(left, right, *operator, block);
             }
             ast::Expression::UnaryExpression { .. } => todo!(),
             ast::Expression::YeetExpression { .. } => todo!(),
@@ -420,23 +407,7 @@ impl FunctionCompiler {
                 function,
                 arguments,
             } => {
-                let mut arg_types = vec![];
-                for arg in arguments {
-                    self.compile_expression(arg, block);
-                    arg_types.push(self.stack.last().unwrap().clone());
-                }
-                // TODO: function overloading
-                let function = match function.as_ref() {
-                    ast::Expression::Identifier(name) => name.to_string(),
-                    _ => panic!("You can only call names."),
-                };
-                self.push(
-                    Instruction::Call {
-                        function,
-                        num_arguments: arguments.len(),
-                    },
-                    block,
-                );
+                self.push_fn(function, arguments, block);
             }
             ast::Expression::MethodCall { .. } => todo!(),
             ast::Expression::FieldAccess {
@@ -468,5 +439,56 @@ impl FunctionCompiler {
                 self.push(Instruction::List(num_items), block);
             }
         }
+    }
+
+    fn push_fn(&mut self, function: &Expression, arguments: &[Expression], block: &mut Block) {
+        let mut arg_types = vec![];
+        for arg in arguments {
+            self.compile_expression(arg, block);
+            arg_types.push(self.stack.last().unwrap().clone());
+        }
+        // TODO: function overloading
+        let function = match function {
+            ast::Expression::Identifier(name) => name.to_string(),
+            _ => panic!("You can only call names."),
+        };
+        self.push(
+            Instruction::Call {
+                function,
+                num_arguments: arguments.len(),
+            },
+            block,
+        );
+    }
+
+    fn push_op(
+        &mut self,
+        left: &Expression,
+        right: &Expression,
+        op: BinaryOperator,
+        block: &mut Block,
+    ) {
+        let name = match op {
+            BinaryOperator::Arithmetic(op) => match op {
+                ast::ArithmeticOperator::Add => "add",
+                ast::ArithmeticOperator::Subtract => "sub",
+                ast::ArithmeticOperator::Multiply => "mul",
+                ast::ArithmeticOperator::Divide => "div",
+            },
+            BinaryOperator::Equal => "eq",
+            BinaryOperator::NotEqual => "ne",
+            BinaryOperator::GreaterThan => "greater_eq",
+            BinaryOperator::LessThan => "less_than",
+            BinaryOperator::GreaterEqual => "greater_eq",
+            BinaryOperator::LessEqual => "less_eq",
+            BinaryOperator::Contains => todo!(),
+            BinaryOperator::NullCoalesce => todo!(),
+        };
+        // TODO: Append argument types from inferred expression types
+        let typed_name = format!("{name}__U32_U32");
+        let ident = Expression::Identifier(typed_name.into());
+
+        // TODO: Avoid cloning
+        self.push_fn(&ident, &[left.clone(), right.clone()], block)
     }
 }

@@ -209,7 +209,7 @@ impl Display for Module {
                 write!(f, " {}: ({})", name, type_)?;
             }
             write!(f, " -> {} ", function.return_type)?;
-            function.body.fmt(f, 0)?;
+            function.body.fmt(f, 2)?;
         }
         Ok(())
     }
@@ -301,14 +301,19 @@ impl Display for Id {
 }
 impl Block {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>, indentation: usize) -> std::fmt::Result {
+        let ws = "  ";
         writeln!(f, "{{")?;
         for instruction in &self.0 {
             for _ in 0..indentation {
-                write!(f, "  ")?;
+                write!(f, "{ws}")?;
             }
-            instruction.fmt(f, indentation);
+            instruction.fmt(f, indentation + 2)?;
+            writeln!(f, "")?;
         }
-        writeln!(f, "}}")?;
+        for _ in 0..indentation - 2 {
+            write!(f, "{ws}")?;
+        }
+        write!(f, "}}")?;
         Ok(())
     }
 }
@@ -384,7 +389,7 @@ impl Instruction {
             }
             Instruction::Loop(body) => {
                 write!(f, "loop ")?;
-                body.fmt(f, indentation + 1);
+                body.fmt(f, indentation + 1)?;
             }
         }
         Ok(())
