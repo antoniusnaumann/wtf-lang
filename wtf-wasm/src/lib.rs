@@ -49,7 +49,7 @@ impl From<&TypeRef> for Type {
 #[derive(Debug, Clone)]
 pub struct Function<'a> {
     pub params: Vec<(String, TypeRef)>,
-    pub locals: Vec<Local>,
+    pub locals: Vec<TypeRef>,
     pub result: Option<TypeRef>,
     pub name: String,
     pub instructions: Vec<Instruction<'a>>,
@@ -58,8 +58,9 @@ pub struct Function<'a> {
 
 #[derive(Debug, Clone)]
 pub struct Local {
+    /// Offset of the lowered locals in of this type
     pub index: u32,
-    pub ty: Type,
+    pub ty: TypeRef,
     pub lower: Vec<ValType>,
 }
 
@@ -169,11 +170,12 @@ impl<'a> ComponentBuilder<'a> {
             self.function_count,
         );
 
+        let locals: Vec<Local> = self.enumerate_locals(&function.locals);
         let mut func = wasm_encoder::Function::new(
-            lower_locals(function.locals.iter().skip(function.params.len())).collect::<Vec<_>>(),
+            lower_locals(locals.iter().skip(function.params.len())).collect::<Vec<_>>(),
         );
         for instruction in &function.instructions {
-            for lowered_instruction in self.lower_instruction(instruction, &function.locals) {
+            for lowered_instruction in self.lower_instruction(instruction, &locals) {
                 func.instruction(&lowered_instruction);
             }
         }
@@ -455,6 +457,25 @@ impl<'a> ComponentBuilder<'a> {
             }
         }
     }
+
+    fn enumerate_locals(&self, locals: &[TypeRef]) -> Vec<Local> {
+        let mut offset = 0;
+        let mut result = Vec::new();
+
+        for ty in locals {
+            let lower = self.lower(ty);
+            let size = lower.len() as u32;
+
+            result.push(Local {
+                index: offset,
+                ty: ty.clone(),
+                lower,
+            });
+            offset += size;
+        }
+
+        result
+    }
 }
 
 fn lower_types(types: Vec<Type>) -> Vec<(Type, Vec<ValType>)> {
@@ -465,7 +486,7 @@ fn lower_types(types: Vec<Type>) -> Vec<(Type, Vec<ValType>)> {
             continue;
         }
 
-        result[index] = Some(lower_type(ty, &types, &mut result));
+        result[index] = Some(lower_type_update(ty, &types, &mut result));
     }
 
     let mapping = result.into_iter().map(|lowered| lowered.unwrap());
@@ -488,7 +509,11 @@ fn lower_local(local: &Local) -> Vec<(u32, ValType)> {
         .collect::<Vec<_>>()
 }
 
-fn lower_type(ty: &Type, types: &[Type], mapping: &mut [Option<Vec<ValType>>]) -> Vec<ValType> {
+fn lower_type_update(
+    ty: &Type,
+    types: &[Type],
+    mapping: &mut [Option<Vec<ValType>>],
+) -> Vec<ValType> {
     match ty {
         Type::Simple(t) => match t {
             TypeRef::Primitive(p) => p.lower(),
@@ -498,7 +523,7 @@ fn lower_type(ty: &Type, types: &[Type], mapping: &mut [Option<Vec<ValType>>]) -
                 match &mapped {
                     Some(types) => types.clone(),
                     None => {
-                        let types = lower_type(&types[i], &types, mapping);
+                        let types = lower_type_update(&types[i], &types, mapping);
                         mapping[i] = Some(types.clone());
 
                         types
@@ -508,14 +533,14 @@ fn lower_type(ty: &Type, types: &[Type], mapping: &mut [Option<Vec<ValType>>]) -
         },
         Type::List(_) => vec![ValType::I32, ValType::I32],
         Type::Option(inner) => {
-            let inner = lower_type(&inner.into(), types, mapping);
+            let inner = lower_type_update(&inner.into(), types, mapping);
 
             // Discriment (i32) + lowered payload
             [vec![ValType::I32], inner].concat()
         }
         Type::Result { ok, err } => {
-            let ok = lower_type(&ok.into(), types, mapping);
-            let err = lower_type(&err.into(), types, mapping);
+            let ok = lower_type_update(&ok.into(), types, mapping);
+            let err = lower_type_update(&err.into(), types, mapping);
 
             let mut payload = Vec::new();
 
@@ -545,12 +570,12 @@ fn lower_type(ty: &Type, types: &[Type], mapping: &mut [Option<Vec<ValType>>]) -
         }
         Type::Record { fields } => fields
             .into_iter()
-            .flat_map(|(_, ty)| lower_type(&ty.into(), types, mapping))
+            .flat_map(|(_, ty)| lower_type_update(&ty.into(), types, mapping))
             .collect(),
         Type::Variant {} => todo!(),
         Type::Tuple(fields) => fields
             .into_iter()
-            .flat_map(|ty| lower_type(&ty.into(), types, mapping))
+            .flat_map(|ty| lower_type_update(&ty.into(), types, mapping))
             .collect(),
         Type::Flags(flags) => vec![if flags.len() > 32 {
             ValType::I64

@@ -1,8 +1,9 @@
+use core::unicode::conversions::to_lower;
 use std::{fmt::Debug, iter};
 
 use wtf_hir as hir;
 use wtf_wasm::{
-    ComponentBuilder, Function, Instance, Instruction, PrimitiveType, Type, TypeRef,
+    ComponentBuilder, Function, Instance, Instruction, Local, PrimitiveType, Type, TypeRef,
     WasmInstruction,
 };
 
@@ -106,6 +107,11 @@ impl<'a> Convert<'a> for (String, hir::Function) {
             .map(|exp| exp.convert(lookup))
             .chain(iter::once(Instruction::End))
             .collect();
+        let locals = func
+            .locals
+            .into_iter()
+            .map(|ty| ty.convert(lookup))
+            .collect();
         let func = Function {
             params,
             result,
@@ -113,7 +119,7 @@ impl<'a> Convert<'a> for (String, hir::Function) {
             instructions,
             // TODO: only export functions with export keyword
             export: true,
-            locals: vec![],
+            locals,
         };
 
         func
