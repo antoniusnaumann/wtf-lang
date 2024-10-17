@@ -18,7 +18,6 @@ pub struct Module {
 pub enum Type {
     Never, // will never be constructed, used as the type of return/break/...
     None,
-    Bool,
     List(Box<Type>),
     Option(Box<Type>),
     Result { ok: Box<Type>, err: Box<Type> },
@@ -67,13 +66,13 @@ pub struct Function {
 }
 
 #[derive(Debug, Clone, PartialEq, Copy)]
-pub struct LocalId(usize);
+pub struct LocalId(pub usize);
 
 #[derive(Debug, Clone, PartialEq, Copy)]
 pub struct Id(usize);
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Block(Vec<Instruction>);
+pub struct Block(pub Vec<Instruction>);
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Instruction {
@@ -235,7 +234,6 @@ impl Display for Type {
                 PrimitiveType::Char => write!(f, "Char")?,
                 PrimitiveType::String => write!(f, "String")?,
             },
-            Type::Bool => write!(f, "Bool")?,
             Type::List(items) => write!(f, "[{}]", items)?,
             Type::Option(payload) => write!(f, "({payload})?")?,
             Type::Result { ok, err } => write!(f, "({ok})!({err})")?,

@@ -1,4 +1,3 @@
-use core::unicode::conversions::to_lower;
 use std::{fmt::Debug, iter};
 
 use wtf_hir as hir;
@@ -102,7 +101,8 @@ impl<'a> Convert<'a> for (String, hir::Function) {
             .collect();
         let result = func.return_type.convert(lookup);
         let instructions: Vec<Instruction> = func
-            .expressions
+            .body
+            .0
             .into_iter()
             .map(|exp| exp.convert(lookup))
             .chain(iter::once(Instruction::End))
@@ -110,7 +110,10 @@ impl<'a> Convert<'a> for (String, hir::Function) {
         let locals = func
             .locals
             .into_iter()
-            .map(|ty| ty.convert(lookup))
+            .map(|ty| {
+                ty.convert(lookup)
+                    .expect("Type of local must be defined before use")
+            })
             .collect();
         let func = Function {
             params,
@@ -123,6 +126,42 @@ impl<'a> Convert<'a> for (String, hir::Function) {
         };
 
         func
+    }
+}
+
+impl<'a> Convert<'a> for hir::Instruction {
+    type Output = Instruction<'a>;
+
+    fn convert(self, lookup: &mut TypeLookup) -> Self::Output {
+        match self {
+            hir::Instruction::Pop => todo!(),
+            hir::Instruction::Load(i) => Instruction::LocalGet(i.0 as u32),
+            hir::Instruction::Store(i) => Instruction::LocalSet(i.0 as u32),
+            hir::Instruction::Int(_) => todo!(),
+            hir::Instruction::Float(_) => todo!(),
+            hir::Instruction::String(_) => todo!(),
+            hir::Instruction::Bool(_) => todo!(),
+            hir::Instruction::None => todo!(),
+            hir::Instruction::Enum {
+                variant,
+                num_payloads,
+            } => todo!(),
+            hir::Instruction::Record(_) => todo!(),
+            hir::Instruction::List(_) => todo!(),
+            hir::Instruction::Call {
+                function,
+                num_arguments,
+            } => todo!(),
+            hir::Instruction::FieldAccess(_) => todo!(),
+            hir::Instruction::IndexAccess => todo!(),
+            hir::Instruction::Return => todo!(),
+            hir::Instruction::Break => todo!(),
+            hir::Instruction::Continue => todo!(),
+            hir::Instruction::Throw => todo!(),
+            hir::Instruction::If { then, else_ } => todo!(),
+            hir::Instruction::Match { arms } => todo!(),
+            hir::Instruction::Loop(_) => todo!(),
+        }
     }
 }
 
@@ -190,43 +229,6 @@ impl Convert<'_> for hir::PrimitiveType {
             hir::PrimitiveType::F64 => PrimitiveType::F64,
             hir::PrimitiveType::Char => PrimitiveType::Char,
             hir::PrimitiveType::String => PrimitiveType::String,
-        }
-    }
-}
-
-impl<'a> Convert<'a> for hir::Expression {
-    type Output = Instruction<'a>;
-
-    fn convert(self, lookup: &mut TypeLookup) -> Self::Output {
-        match self.kind {
-            hir::ExpressionKind::Param => todo!(),
-            hir::ExpressionKind::Block { children, result } => todo!(),
-            hir::ExpressionKind::Int(_) => todo!(),
-            hir::ExpressionKind::Float(_) => todo!(),
-            hir::ExpressionKind::String(_) => todo!(),
-            hir::ExpressionKind::Bool(_) => todo!(),
-            hir::ExpressionKind::None => todo!(),
-            hir::ExpressionKind::Enum { variant, payload } => todo!(),
-            hir::ExpressionKind::Record { fields } => todo!(),
-            hir::ExpressionKind::ListLiteral(_) => todo!(),
-            hir::ExpressionKind::FunctionCall {
-                function,
-                arguments,
-            } => todo!(),
-            hir::ExpressionKind::FieldAccess { receiver, field } => todo!(),
-            hir::ExpressionKind::IndexAccess { collection, index } => todo!(),
-            hir::ExpressionKind::Assignment { target, value } => todo!(),
-            hir::ExpressionKind::Return(_) => todo!(),
-            hir::ExpressionKind::Break(_) => todo!(),
-            hir::ExpressionKind::Continue => todo!(),
-            hir::ExpressionKind::Throw(_) => todo!(),
-            hir::ExpressionKind::If {
-                condition,
-                then,
-                else_,
-            } => todo!(),
-            hir::ExpressionKind::Match { condition, arms } => todo!(),
-            hir::ExpressionKind::Loop(_) => todo!(),
         }
     }
 }
