@@ -18,6 +18,7 @@ pub struct Module {
 pub enum Type {
     Never, // will never be constructed, used as the type of return/break/...
     None,
+    Bool,
     List(Box<Type>),
     Option(Box<Type>),
     Result { ok: Box<Type>, err: Box<Type> },
@@ -77,7 +78,6 @@ pub struct Block(Vec<Instruction>);
 #[derive(Debug, Clone, PartialEq)]
 pub enum Instruction {
     Pop,
-    Param(String),
     Load(LocalId),
     Store(LocalId),
     Int(i64),
@@ -235,6 +235,7 @@ impl Display for Type {
                 PrimitiveType::Char => write!(f, "Char")?,
                 PrimitiveType::String => write!(f, "String")?,
             },
+            Type::Bool => write!(f, "Bool")?,
             Type::List(items) => write!(f, "[{}]", items)?,
             Type::Option(payload) => write!(f, "({payload})?")?,
             Type::Result { ok, err } => write!(f, "({ok})!({err})")?,
@@ -322,7 +323,6 @@ impl Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>, indentation: usize) -> std::fmt::Result {
         match &self {
             Instruction::Pop => write!(f, "pop")?,
-            Instruction::Param(name) => write!(f, "param {name}")?,
             // Instruction::Block { children, result } => {
             //     writeln!(f, "{{")?;
             //     for child in children {
@@ -341,6 +341,7 @@ impl Instruction {
             Instruction::Int(int) => write!(f, "int {}", int)?,
             Instruction::Float(float) => write!(f, "float {}", float)?,
             Instruction::String(string) => write!(f, "string {:?}", string)?,
+            Instruction::Bool(b) => write!(f, "bool {b}")?,
             Instruction::None => write!(f, "none")?,
             Instruction::Enum {
                 variant,
