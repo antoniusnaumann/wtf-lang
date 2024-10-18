@@ -158,10 +158,24 @@ impl<'a> Convert<'a> for hir::Instruction {
             hir::Instruction::Break => todo!(),
             hir::Instruction::Continue => todo!(),
             hir::Instruction::Throw => todo!(),
-            hir::Instruction::If { then, else_ } => todo!(),
+            hir::Instruction::If { then, else_ } => Instruction::If {
+                then: then.convert(lookup),
+                else_: else_.convert(lookup),
+            },
             hir::Instruction::Match { arms } => todo!(),
             hir::Instruction::Loop(_) => todo!(),
         }
+    }
+}
+
+impl<'a> Convert<'a> for hir::Block {
+    type Output = Vec<Instruction<'a>>;
+
+    fn convert(self, lookup: &mut TypeLookup) -> Self::Output {
+        self.0
+            .into_iter()
+            .map(|inst| inst.convert(lookup))
+            .collect()
     }
 }
 

@@ -2,13 +2,14 @@ use std::{
     cmp::max,
     collections::{HashMap, HashSet},
     fmt::Debug,
+    iter,
     ops::Deref,
 };
 
 use wasm_encoder::{
-    CanonicalOption, CodeSection, ComponentExportKind, ConstExpr, DataSection, ExportKind,
-    ExportSection, FunctionSection, GlobalSection, GlobalType, MemorySection, MemoryType, Module,
-    PrimitiveValType, TypeSection, ValType,
+    BlockType, CanonicalOption, CodeSection, ComponentExportKind, ConstExpr, DataSection,
+    ExportKind, ExportSection, FunctionSection, GlobalSection, GlobalType, MemorySection,
+    MemoryType, Module, PrimitiveValType, TypeSection, ValType,
 };
 
 mod instruction;
@@ -367,7 +368,19 @@ impl<'a> ComponentBuilder<'a> {
 
             // Control Flow
             Instruction::End => vec![WasmInstruction::End],
-            Instruction::If => vec![WasmInstruction::If(todo!())],
+            Instruction::If { then, else_ } => iter::once(WasmInstruction::If(BlockType::Empty))
+                .chain(
+                    then.iter()
+                        .flat_map(|inst| self.lower_instruction(inst, locals)),
+                )
+                .chain(iter::once(WasmInstruction::Else))
+                .chain(
+                    else_
+                        .iter()
+                        .flat_map(|inst| self.lower_instruction(inst, locals)),
+                )
+                .chain(iter::once(WasmInstruction::End))
+                .collect(),
             Instruction::Else => vec![WasmInstruction::Else],
             Instruction::Loop => vec![WasmInstruction::Loop(todo!())],
             Instruction::Block => vec![WasmInstruction::Block(todo!())],

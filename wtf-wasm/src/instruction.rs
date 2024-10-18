@@ -15,7 +15,10 @@ pub enum Instruction<'a> {
     Int(i64),
 
     // Control Flow
-    If,
+    If {
+        then: Vec<Instruction<'a>>,
+        else_: Vec<Instruction<'a>>,
+    },
     Else,
     Loop,
     Block,
