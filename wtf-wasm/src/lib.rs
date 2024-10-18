@@ -362,6 +362,7 @@ impl<'a> ComponentBuilder<'a> {
                 .map(|(i, _ty)| WasmInstruction::LocalGet(*i))
                 .collect(),
             Instruction::Const => todo!(),
+            Instruction::Int(num) => vec![WasmInstruction::I64Const(*num)],
             Instruction::Call(ident) => vec![self.lower_call(ident)],
 
             // Control Flow

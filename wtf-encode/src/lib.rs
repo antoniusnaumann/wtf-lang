@@ -137,7 +137,7 @@ impl<'a> Convert<'a> for hir::Instruction {
             hir::Instruction::Pop => todo!(),
             hir::Instruction::Load(i) => Instruction::LocalGet(i.0 as u32),
             hir::Instruction::Store(i) => Instruction::LocalSet(i.0 as u32),
-            hir::Instruction::Int(_) => todo!(),
+            hir::Instruction::Int(num) => Instruction::Int(num),
             hir::Instruction::Float(_) => todo!(),
             hir::Instruction::String(_) => todo!(),
             hir::Instruction::Bool(_) => todo!(),
@@ -151,7 +151,7 @@ impl<'a> Convert<'a> for hir::Instruction {
             hir::Instruction::Call {
                 function,
                 num_arguments,
-            } => todo!(),
+            } => Instruction::Call(function),
             hir::Instruction::FieldAccess(_) => todo!(),
             hir::Instruction::IndexAccess => todo!(),
             hir::Instruction::Return => todo!(),

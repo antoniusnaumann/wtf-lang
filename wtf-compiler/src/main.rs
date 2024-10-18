@@ -7,8 +7,8 @@ fn main() {
         package wtf:example@0.0.1
     
         func check_value(x: s32) {
-            let x = 17
-            if x > 10 {
+            let y = 17
+            if y > 10 {
                 println("Greater than 10")
             } else {
                 println("10 or less")
