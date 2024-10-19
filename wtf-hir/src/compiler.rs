@@ -38,6 +38,7 @@ pub fn compile(ast: ast::Module) -> Module {
     for fun in ast_funs.values() {
         functions.insert(fun.name.to_string(), compile_fun(fun, &ast_types));
     }
+
     Module {
         types: HashMap::new(),
         functions,
@@ -397,8 +398,6 @@ impl FunctionCompiler {
                 operator,
                 right,
             } => {
-                self.compile_expression(left, block);
-                self.compile_expression(right, block);
                 self.push_op(left, right, *operator, block);
             }
             ast::Expression::UnaryExpression { .. } => todo!(),
