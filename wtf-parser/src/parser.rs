@@ -15,6 +15,9 @@ pub type Result<Ok> = std::result::Result<Ok, ParserError>;
 pub struct Parser {
     lexer: Lexer,
     current: SpannedToken,
+
+    // This disallows record literals in certain positions, e.g. if
+    allow_left_brace: bool,
 }
 
 impl Parser {
@@ -25,7 +28,11 @@ impl Parser {
 
     pub fn with_lexer(mut lexer: Lexer) -> Self {
         let current = lexer.next_token();
-        Parser { lexer, current }
+        Parser {
+            lexer,
+            current,
+            allow_left_brace: true,
+        }
     }
 
     fn advance_tokens(&mut self) {
@@ -395,7 +402,9 @@ impl Parser {
     fn parse_if_statement(&mut self) -> Result<IfStatement> {
         self.expect_token(Token::If)?;
 
+        self.allow_left_brace = false;
         let condition = self.parse_expression()?;
+        self.allow_left_brace = true;
 
         let then_branch = self.parse_block()?;
 
@@ -580,7 +589,7 @@ impl Parser {
                 let name = name.clone();
 
                 self.advance_tokens();
-                let expr = if self.current.token == Token::LeftBrace {
+                let expr = if self.current.token == Token::LeftBrace && self.allow_left_brace {
                     self.parse_record_lit(Some(name))?
                 } else {
                     Expression::Identifier(name)

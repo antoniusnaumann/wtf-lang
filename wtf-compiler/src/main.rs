@@ -6,12 +6,12 @@ fn main() {
     let input = r#"
         package wtf:example@0.0.1
     
-        func check_value(x: s32) {
-            let y = 17
-            if y > 10 {
-                println("Greater than 10")
+        func double_cap(x: s32, cap: s32) {
+            let y = x * 2
+            if y > cap {
+                // return cap
             } else {
-                println("10 or less")
+                // return y
             }
         }
         "#;
