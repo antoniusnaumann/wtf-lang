@@ -170,18 +170,13 @@ fn compile_fun(
         .map(|type_| compile_type_annotation(&type_, ast_types))
         .unwrap_or(Type::None);
 
-    let param_types: Vec<_> = parameters.iter().map(|(_, ty)| ty.clone()).collect();
-    let mut compiler = FunctionCompiler {
-        params: param_types.clone(),
-        visible: Visible::new(),
-        stack: param_types,
-        locals: vec![],
-    };
-    let body = compiler.compile_block(&declaration.body);
+    let mut fn_compiler = FunctionCompiler::with_params(&parameters);
+
+    let body = fn_compiler.compile_block(&declaration.body);
     Function {
         parameters,
         return_type,
-        locals: compiler.locals,
+        locals: fn_compiler.locals,
         body,
     }
 }
@@ -194,9 +189,24 @@ struct FunctionCompiler {
 }
 
 impl FunctionCompiler {
+    fn with_params(parameters: &[(String, Type)]) -> Self {
+        let param_types: Vec<_> = parameters.iter().map(|(_, ty)| ty.clone()).collect();
+        let mut visible = Visible::new();
+        for (i, (s, _)) in parameters.iter().enumerate() {
+            visible.bind(s.clone(), LocalId(i));
+        }
+
+        FunctionCompiler {
+            params: param_types.clone(),
+            visible,
+            stack: param_types.clone(),
+            locals: param_types,
+        }
+    }
+
     fn push(&mut self, instruction: Instruction, block: &mut Block) {
         self.apply(&instruction);
-        block.0.push(instruction);
+        block.instructions.push(instruction);
     }
 
     fn apply(&mut self, instruction: &Instruction) {
@@ -267,7 +277,7 @@ impl FunctionCompiler {
                 }
             }
             Instruction::Return => {
-                todo!("divert")
+                self.stack.push(Type::Never);
             }
             Instruction::Break => {
                 todo!("divert")
@@ -280,24 +290,34 @@ impl FunctionCompiler {
             }
             Instruction::If { then, else_ } => {
                 let condition = self.stack.pop().unwrap();
-                assert!(condition == Type::Builtin(PrimitiveType::Bool));
+                assert!(
+                    condition == Type::Builtin(PrimitiveType::Bool),
+                    "Condition: {:#?}",
+                    condition
+                );
             }
             Instruction::Match { arms } => {
                 let condition = self.stack.pop().unwrap();
             }
             Instruction::Loop(block) => todo!(),
+            Instruction::Unreachable => self.stack.push(Type::Never),
         }
     }
 
     fn compile_block(&mut self, block: &ast::Block) -> Block {
-        let mut result = Block(vec![]);
+        let restore = self.stack.clone();
+        let mut result = Block {
+            instructions: Vec::new(),
+            ty: Type::None,
+        };
         for statement in &block.statements {
             self.compile_statement(statement, &mut result);
         }
-        if result.0.is_empty() {
-            result.0.push(Instruction::None);
-            self.stack.push(Type::None);
+        if result.instructions.is_empty() {
+            result.instructions.push(Instruction::None);
         }
+        result.ty = self.stack.pop().unwrap_or(Type::None);
+        self.stack = restore;
         result
     }
 
@@ -349,20 +369,32 @@ impl FunctionCompiler {
                 let then = self.compile_block(&if_statement.then_branch);
                 let else_ = match &if_statement.else_branch {
                     Some(else_branch) => self.compile_block(&else_branch),
-                    None => Block(vec![]),
+                    None => Block::new(),
                 };
-                // TODO: check that the types of the branches match
-                self.push(Instruction::If { then, else_ }, block)
+                let after = match (&then.ty, &else_.ty) {
+                    (Type::Never, Type::Never) => vec![Instruction::Unreachable],
+                    (Type::Never, _) => vec![],
+                    (_, Type::Never) => vec![],
+                    (a, b) if a == b => vec![],
+                    _ => todo!("If and else arm types must match or diverge!"),
+                };
+                self.push(Instruction::If { then, else_ }, block);
+                for instruction in after {
+                    self.push(instruction, block);
+                }
             }
             ast::Statement::MatchStatement(_) => todo!(),
             ast::Statement::WhileStatement(while_statement) => {
-                let mut inner_body = Block(vec![]);
+                let mut inner_body = Block::new();
                 self.compile_expression(&while_statement.condition, block);
                 let totally_inner_body = self.compile_block(&while_statement.body);
                 self.push(
                     Instruction::If {
                         then: totally_inner_body,
-                        else_: Block(vec![Instruction::None, Instruction::Break]),
+                        else_: Block {
+                            instructions: vec![Instruction::None, Instruction::Break],
+                            ty: Type::Never,
+                        },
                     },
                     &mut inner_body,
                 );
@@ -484,7 +516,7 @@ impl FunctionCompiler {
             BinaryOperator::NullCoalesce => todo!(),
         };
         // TODO: Append argument types from inferred expression types
-        let typed_name = format!("{name}__U32_U32");
+        let typed_name = format!("{name}__S64_S64");
         let ident = Expression::Identifier(typed_name.into());
 
         // TODO: Avoid cloning

@@ -26,6 +26,7 @@ pub enum Instruction<'a> {
     BranchIf,
     Return,
     End,
+    Unreachable,
 
     Wasm(WasmInstruction<'a>),
 }

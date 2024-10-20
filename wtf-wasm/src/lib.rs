@@ -389,6 +389,7 @@ impl<'a> ComponentBuilder<'a> {
             Instruction::Return => vec![WasmInstruction::Return],
 
             Instruction::Wasm(wasm) => vec![wasm.clone()],
+            Instruction::Unreachable => vec![WasmInstruction::Unreachable],
         }
     }
 

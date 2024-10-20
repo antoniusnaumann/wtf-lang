@@ -1,3 +1,5 @@
+use std::fs;
+
 use wtf_parser::parser::Parser;
 
 fn main() {
@@ -6,12 +8,12 @@ fn main() {
     let input = r#"
         package wtf:example@0.0.1
     
-        func double_cap(x: s32, cap: s32) {
-            let y = x * 2
+        func double_cap(x: s64, cap: s64) -> s64 {
+            let y = x // * 2
             if y > cap {
-                // return cap
+               return cap
             } else {
-                // return y
+               return y
             }
         }
         "#;
@@ -30,6 +32,7 @@ fn main() {
     println!();
     println!("===== WAT =====");
     let wasm = wtf_encode::Encoder::new().encode(hir).finish();
-
     println!("{:?}", wasmparser::validate(&wasm).err());
+
+    fs::write("output.wasm", wasm).unwrap();
 }

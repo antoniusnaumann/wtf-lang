@@ -1,10 +1,7 @@
 use std::{fmt::Debug, iter};
 
 use wtf_hir as hir;
-use wtf_wasm::{
-    ComponentBuilder, Function, Instance, Instruction, Local, PrimitiveType, Type, TypeRef,
-    WasmInstruction,
-};
+use wtf_wasm::{ComponentBuilder, Function, Instance, Instruction, PrimitiveType, Type, TypeRef};
 
 // PERF: use hash map here if search turns out to be slow
 #[derive(Debug, Default)]
@@ -102,7 +99,7 @@ impl<'a> Convert<'a> for (String, hir::Function) {
         let result = func.return_type.convert(lookup);
         let instructions: Vec<Instruction> = func
             .body
-            .0
+            .instructions
             .into_iter()
             .map(|exp| exp.convert(lookup))
             .chain(iter::once(Instruction::End))
@@ -154,7 +151,7 @@ impl<'a> Convert<'a> for hir::Instruction {
             } => Instruction::Call(function),
             hir::Instruction::FieldAccess(_) => todo!(),
             hir::Instruction::IndexAccess => todo!(),
-            hir::Instruction::Return => todo!(),
+            hir::Instruction::Return => Instruction::Return,
             hir::Instruction::Break => todo!(),
             hir::Instruction::Continue => todo!(),
             hir::Instruction::Throw => todo!(),
@@ -164,6 +161,7 @@ impl<'a> Convert<'a> for hir::Instruction {
             },
             hir::Instruction::Match { arms } => todo!(),
             hir::Instruction::Loop(_) => todo!(),
+            hir::Instruction::Unreachable => Instruction::Unreachable,
         }
     }
 }
@@ -172,7 +170,7 @@ impl<'a> Convert<'a> for hir::Block {
     type Output = Vec<Instruction<'a>>;
 
     fn convert(self, lookup: &mut TypeLookup) -> Self::Output {
-        self.0
+        self.instructions
             .into_iter()
             .map(|inst| inst.convert(lookup))
             .collect()

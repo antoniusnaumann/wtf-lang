@@ -72,7 +72,25 @@ pub struct LocalId(pub usize);
 pub struct Id(usize);
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Block(pub Vec<Instruction>);
+pub struct Block {
+    pub instructions: Vec<Instruction>,
+    pub ty: Type,
+}
+
+impl Block {
+    fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Default for Block {
+    fn default() -> Self {
+        Block {
+            instructions: Vec::new(),
+            ty: Type::None,
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Instruction {
@@ -96,6 +114,7 @@ pub enum Instruction {
     },
     FieldAccess(String),
     IndexAccess,
+    Unreachable,
     Return,
     Break,
     Continue,
@@ -303,7 +322,7 @@ impl Block {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>, indentation: usize) -> std::fmt::Result {
         let ws = "  ";
         writeln!(f, "{{")?;
-        for instruction in &self.0 {
+        for instruction in &self.instructions {
             for _ in 0..indentation {
                 write!(f, "{ws}")?;
             }
@@ -391,6 +410,7 @@ impl Instruction {
                 write!(f, "loop ")?;
                 body.fmt(f, indentation + 1)?;
             }
+            Instruction::Unreachable => write!(f, "unreachable")?,
         }
         Ok(())
     }
