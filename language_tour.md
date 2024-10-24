@@ -347,7 +347,7 @@ while cnt.value < 5 {
 Iterate over a range or collection:
 
 ```wtf
-for i in 0..5 {
+for i in 0..<5 {
     println("For loop iteration: " + i.to_string())
     if i == 2 {
         break  // Break without value
@@ -356,7 +356,7 @@ for i in 0..5 {
 ```
 
 - `in`: Keyword to specify the range or collection.
-- `0..5`: Range from 0 to 4.
+- `0..<5`: Range from 0 to 4.
 
 ## Option and Result Types
 
@@ -492,7 +492,7 @@ print("Point: \(point:#v)")
 - Comparison Operators: `==`, `!=`, `>`, `<`, `>=`, `<=`
 - Logical Operators: `&&`, `||`, `!`
 - Assignment Operators: `=`, `+=`, `-=`, `*=`, `/=`
-- Range Operator: `..` (for loops)
+- Range Operator: `..<` or `..=` (for loops)
 - Safe Access Operator: `?.` (for optional chaining)
 
 ### Types

@@ -9,7 +9,7 @@ fn main() {
         package wtf:example@0.0.1
     
         func double_cap(x: s64, cap: s64) -> s64 {
-            let y = x // * 2
+            let y = x * 2
             if y > cap {
                return cap
             } else {
