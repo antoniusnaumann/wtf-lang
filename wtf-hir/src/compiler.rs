@@ -1,13 +1,10 @@
-use std::{
-    collections::{HashMap, HashSet},
-    ops::Deref,
-};
+use std::collections::HashMap;
 
 use wtf_ast::{self as ast, BinaryOperator, Expression, TypeAnnotation};
 
 use crate::{
-    visible::Visible, Block, Function, FunctionSignature, Id, Instruction, LocalId, Module,
-    PrimitiveType, ResourceType, Type,
+    builtin::WithBuiltins, visible::Visible, Block, Function, FunctionSignature, Instruction,
+    LocalId, Module, PrimitiveType, ResourceType, Type,
 };
 
 pub fn compile(ast: ast::Module) -> Module {
@@ -34,9 +31,17 @@ pub fn compile(ast: ast::Module) -> Module {
         }
     }
 
+    let mut signatures = dbg!(HashMap::with_builtins());
+    for fun in ast_funs.values() {
+        signatures.insert(fun.name.to_string(), compile_signature(fun, &ast_types));
+    }
+
     let mut functions = HashMap::new();
     for fun in ast_funs.values() {
-        functions.insert(fun.name.to_string(), compile_fun(fun, &ast_types));
+        functions.insert(
+            fun.name.to_string(),
+            compile_fun(fun, &ast_types, &signatures),
+        );
     }
 
     Module {
@@ -44,6 +49,7 @@ pub fn compile(ast: ast::Module) -> Module {
         functions,
     }
 }
+
 fn compile_type_declaration(
     declaration: &ast::Declaration,
     ast_types: &HashMap<String, ast::Declaration>,
@@ -105,6 +111,7 @@ fn compile_type_declaration(
     };
     type_
 }
+
 fn compile_type_annotation(
     annotation: &ast::TypeAnnotation,
     ast_types: &HashMap<String, ast::Declaration>,
@@ -153,6 +160,7 @@ fn compile_type_annotation(
 fn compile_fun(
     declaration: &ast::FunctionDeclaration,
     ast_types: &HashMap<String, ast::Declaration>,
+    signatures: &HashMap<String, FunctionSignature>,
 ) -> Function {
     let parameters: Vec<_> = declaration
         .parameters
@@ -170,7 +178,7 @@ fn compile_fun(
         .map(|type_| compile_type_annotation(&type_, ast_types))
         .unwrap_or(Type::None);
 
-    let mut fn_compiler = FunctionCompiler::with_params(&parameters);
+    let mut fn_compiler = FunctionCompiler::with_params(&parameters, signatures);
 
     let body = fn_compiler.compile_block(&declaration.body);
     Function {
@@ -181,15 +189,40 @@ fn compile_fun(
     }
 }
 
-struct FunctionCompiler {
+fn compile_signature(
+    declaration: &ast::FunctionDeclaration,
+    ast_types: &HashMap<String, ast::Declaration>,
+) -> FunctionSignature {
+    let param_types = declaration
+        .parameters
+        .iter()
+        .map(|param| compile_type_annotation(&param.type_annotation, ast_types))
+        .collect();
+    let return_type = declaration
+        .return_type
+        .as_ref()
+        .map_or(Type::None, |ty| compile_type_annotation(&ty, ast_types));
+
+    FunctionSignature {
+        param_types,
+        return_type,
+    }
+}
+
+struct FunctionCompiler<'a> {
     params: Vec<Type>,
     visible: Visible,
     stack: Vec<Type>,
     locals: Vec<Type>,
+
+    signatures: &'a HashMap<String, FunctionSignature>,
 }
 
-impl FunctionCompiler {
-    fn with_params(parameters: &[(String, Type)]) -> Self {
+impl<'a> FunctionCompiler<'a> {
+    fn with_params(
+        parameters: &[(String, Type)],
+        signatures: &'a HashMap<String, FunctionSignature>,
+    ) -> Self {
         let param_types: Vec<_> = parameters.iter().map(|(_, ty)| ty.clone()).collect();
         let mut visible = Visible::new();
         for (i, (s, _)) in parameters.iter().enumerate() {
@@ -201,6 +234,7 @@ impl FunctionCompiler {
             visible,
             stack: param_types.clone(),
             locals: param_types,
+            signatures,
         }
     }
 
@@ -259,8 +293,14 @@ impl FunctionCompiler {
                 for _ in 0..*num_arguments {
                     args.push(self.stack.pop().unwrap());
                 }
-                // Find function return type.
-                self.stack.push(Type::Builtin(PrimitiveType::Bool));
+                // The names here should already be resolved to their fully qualified name
+                self.stack.push(
+                    self.signatures
+                        .get(function)
+                        .expect(&format!("Function '{function}' does not exist"))
+                        .return_type
+                        .clone(),
+                );
             }
             Instruction::FieldAccess(field) => {
                 if let Type::Record(record) = self.stack.pop().unwrap() {
@@ -516,7 +556,7 @@ impl FunctionCompiler {
             BinaryOperator::NullCoalesce => todo!(),
         };
         // TODO: Append argument types from inferred expression types
-        let typed_name = format!("{name}__S64_S64");
+        let typed_name = format!("{name}__s64_s64");
         let ident = Expression::Identifier(typed_name.into());
 
         // TODO: Avoid cloning

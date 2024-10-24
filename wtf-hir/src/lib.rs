@@ -1,3 +1,4 @@
+mod builtin;
 mod compiler;
 mod visible;
 
@@ -233,26 +234,13 @@ impl Display for Module {
         Ok(())
     }
 }
+
 impl Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Type::Never => write!(f, "Never")?,
-            Type::None => write!(f, "None")?,
-            Type::Builtin(builtin) => match builtin {
-                PrimitiveType::Bool => write!(f, "Bool")?,
-                PrimitiveType::S8 => write!(f, "S8")?,
-                PrimitiveType::S16 => write!(f, "S16")?,
-                PrimitiveType::S32 => write!(f, "S32")?,
-                PrimitiveType::S64 => write!(f, "S64")?,
-                PrimitiveType::U8 => write!(f, "U8")?,
-                PrimitiveType::U16 => write!(f, "U16")?,
-                PrimitiveType::U32 => write!(f, "U32")?,
-                PrimitiveType::U64 => write!(f, "U64")?,
-                PrimitiveType::F32 => write!(f, "F32")?,
-                PrimitiveType::F64 => write!(f, "F64")?,
-                PrimitiveType::Char => write!(f, "Char")?,
-                PrimitiveType::String => write!(f, "String")?,
-            },
+            Type::Never => write!(f, "never")?,
+            Type::None => write!(f, "none")?,
+            Type::Builtin(builtin) => write!(f, "{}", builtin)?,
             Type::List(items) => write!(f, "[{}]", items)?,
             Type::Option(payload) => write!(f, "({payload})?")?,
             Type::Result { ok, err } => write!(f, "({ok})!({err})")?,
@@ -313,11 +301,33 @@ impl Display for Type {
         Ok(())
     }
 }
+
+impl Display for PrimitiveType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PrimitiveType::Bool => write!(f, "bool"),
+            PrimitiveType::S8 => write!(f, "s8"),
+            PrimitiveType::S16 => write!(f, "s16"),
+            PrimitiveType::S32 => write!(f, "s32"),
+            PrimitiveType::S64 => write!(f, "s64"),
+            PrimitiveType::U8 => write!(f, "u8"),
+            PrimitiveType::U16 => write!(f, "u16"),
+            PrimitiveType::U32 => write!(f, "u32"),
+            PrimitiveType::U64 => write!(f, "u64"),
+            PrimitiveType::F32 => write!(f, "f32"),
+            PrimitiveType::F64 => write!(f, "f64"),
+            PrimitiveType::Char => write!(f, "char"),
+            PrimitiveType::String => write!(f, "string"),
+        }
+    }
+}
+
 impl Display for Id {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "@{}", self.0)
     }
 }
+
 impl Block {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>, indentation: usize) -> std::fmt::Result {
         let ws = "  ";
@@ -336,11 +346,13 @@ impl Block {
         Ok(())
     }
 }
+
 impl Display for LocalId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "@{}", self.0)
     }
 }
+
 impl Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>, indentation: usize) -> std::fmt::Result {
         match &self {
