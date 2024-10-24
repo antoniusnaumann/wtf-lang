@@ -15,6 +15,19 @@ pub enum Declaration {
     Export(ExportDeclaration),
 }
 
+impl Declaration {
+    pub fn name(&self) -> &str {
+        match self {
+            Declaration::Function(f) => &f.name,
+            Declaration::Record(r) => &r.name,
+            Declaration::Resource(r) => &r.name,
+            Declaration::Enum(e) => &e.name,
+            Declaration::Variant(v) => &v.name,
+            Declaration::Export(e) => e.item.name(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionDeclaration {
     pub name: String,

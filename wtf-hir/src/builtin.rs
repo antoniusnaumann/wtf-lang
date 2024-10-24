@@ -6,6 +6,12 @@ pub trait WithBuiltins {
     fn with_builtins() -> Self;
 }
 
+impl WithBuiltins for HashMap<String, Type> {
+    fn with_builtins() -> Self {
+        HashMap::new()
+    }
+}
+
 impl WithBuiltins for HashMap<String, FunctionSignature> {
     fn with_builtins() -> HashMap<String, FunctionSignature> {
         use PrimitiveType as Ty;

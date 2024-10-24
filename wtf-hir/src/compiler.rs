@@ -8,6 +8,7 @@ use crate::{
 };
 
 pub fn compile(ast: ast::Module) -> Module {
+    // TODO: Convert into lookup of name -> export? on first pass
     let mut ast_types = HashMap::new();
     let mut ast_funs = HashMap::new();
     for declaration in ast.declarations {
@@ -27,11 +28,21 @@ pub fn compile(ast: ast::Module) -> Module {
             ast::Declaration::Variant(var) => {
                 ast_types.insert(var.name.to_string(), ast::Declaration::Variant(var));
             }
-            ast::Declaration::Export(_) => todo!(),
+            ast::Declaration::Export(ex) => {
+                ast_types.insert(ex.item.name().to_string(), ast::Declaration::Export(ex));
+            }
         }
     }
 
-    let mut signatures = dbg!(HashMap::with_builtins());
+    let mut types = HashMap::with_builtins();
+    for ty in ast_types.values() {
+        types.insert(
+            ty.name().to_owned(),
+            compile_type_declaration(ty, &ast_types),
+        );
+    }
+
+    let mut signatures = HashMap::with_builtins();
     for fun in ast_funs.values() {
         signatures.insert(fun.name.to_string(), compile_signature(fun, &ast_types));
     }
@@ -44,10 +55,7 @@ pub fn compile(ast: ast::Module) -> Module {
         );
     }
 
-    Module {
-        types: HashMap::new(),
-        functions,
-    }
+    Module { types, functions }
 }
 
 fn compile_type_declaration(
@@ -73,7 +81,7 @@ fn compile_type_declaration(
                         .return_type
                         .as_ref()
                         .map(|it| it.clone())
-                        .unwrap_or_else(|| TypeAnnotation::Simple("Nothing".to_string()));
+                        .unwrap_or_else(|| TypeAnnotation::Simple("none".to_string()));
                     compile_type_annotation(&annotation, ast_types)
                 };
                 methods.insert(
@@ -129,8 +137,8 @@ fn compile_type_annotation(
             "u64" => PrimitiveType::U64,
             "f32" => PrimitiveType::F32,
             "f64" => PrimitiveType::F64,
-            "Char" => PrimitiveType::Char,
-            "String" => PrimitiveType::String,
+            "char" => PrimitiveType::Char,
+            "string" => PrimitiveType::String,
             _ => {
                 let declaration = ast_types
                     .get(name)

@@ -16,6 +16,15 @@ fn main() {
                return y
             }
         }
+
+        record point {
+            x: s64 
+            y: s64
+        }
+
+        func double_point(p: point) -> point {
+            return p
+        }
         "#;
 
     let mut parser = Parser::new(input);

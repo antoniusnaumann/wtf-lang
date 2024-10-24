@@ -1,7 +1,10 @@
 use std::{fmt::Debug, iter};
 
 use wtf_hir as hir;
-use wtf_wasm::{ComponentBuilder, Function, Instance, Instruction, PrimitiveType, Type, TypeRef};
+use wtf_wasm::{
+    ComponentBuilder, Function, Instance, Instruction, PrimitiveType, Type, TypeDeclaration,
+    TypeRef,
+};
 
 // PERF: use hash map here if search turns out to be slow
 #[derive(Debug, Default)]
@@ -73,10 +76,35 @@ impl<'a> Convert<'a> for hir::Module {
 }
 
 impl Convert<'_> for (String, hir::Type) {
-    type Output = Type;
+    type Output = TypeDeclaration;
 
     fn convert(self, lookup: &mut TypeLookup) -> Self::Output {
-        todo!()
+        let (name, ty) = self;
+        let ty = match ty {
+            hir::Type::Never => todo!(),
+            hir::Type::None => todo!(),
+            hir::Type::List(_) => todo!(),
+            hir::Type::Option(_) => todo!(),
+            hir::Type::Result { ok, err } => todo!(),
+            hir::Type::Record(rec) => Type::Record {
+                fields: rec
+                    .into_iter()
+                    .map(|(k, v)| (k, v.convert(lookup).unwrap()))
+                    .collect(),
+            },
+            hir::Type::Resource(_) => todo!(),
+            hir::Type::Enum(_) => todo!(),
+            hir::Type::Variant(_) => todo!(),
+            hir::Type::Tuple(_) => todo!(),
+            hir::Type::Builtin(_) => todo!(),
+        };
+
+        // TODO: Preserve export information
+        TypeDeclaration {
+            name,
+            ty,
+            export: true,
+        }
     }
 }
 

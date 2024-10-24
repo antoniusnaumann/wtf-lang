@@ -21,6 +21,13 @@ pub use wasm_encoder::{
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TypeDeclaration {
+    pub name: String,
+    pub ty: Type,
+    pub export: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Type {
     Simple(TypeRef),
     List(TypeRef),
@@ -69,7 +76,7 @@ pub struct Local {
 pub struct Instance<'a> {
     pub name: String,
     pub functions: Vec<Function<'a>>,
-    pub types: Vec<Type>,
+    pub types: Vec<TypeDeclaration>,
 }
 
 #[derive(Debug, Default)]
@@ -87,6 +94,7 @@ pub struct ComponentBuilder<'a> {
     component_count: u32,
     component_lookup: HashMap<String, u32>,
     component_types: Vec<(Type, Vec<ValType>)>,
+    type_declarations: Vec<TypeDeclaration>,
     inner: wasm_encoder::ComponentBuilder,
 
     realloc_index: u32,
@@ -107,7 +115,8 @@ impl<'a> ComponentBuilder<'a> {
 
         let mut exports = Vec::new();
 
-        self.component_types = lower_types(instance.types);
+        self.component_types = lower_types(&instance.types);
+        self.type_declarations = instance.types;
 
         for func in instance.functions {
             if let Some(export) = self.encode_fn(func) {
@@ -262,13 +271,21 @@ impl<'a> ComponentBuilder<'a> {
                 ],
             );
             if function.export {
-                exports.push((function.name, idx))
+                exports.push((function.name, idx, ComponentExportKind::Func));
             }
         }
 
-        for (name, idx) in exports {
-            self.inner
-                .export(&name, ComponentExportKind::Func, idx, None);
+        // TODO: Make sure that types match here, e.g. by doing a lookup for the index instead of enumerating
+        for (idx, ty) in self.type_declarations.iter().enumerate() {
+            continue;
+            // TODO: This does not work currently
+            if ty.export {
+                exports.push((ty.name.clone(), idx as u32, ComponentExportKind::Type));
+            }
+        }
+
+        for (name, idx, kind) in exports {
+            self.inner.export(&name, kind, idx, None);
         }
 
         self.inner.finish()
@@ -493,7 +510,7 @@ impl<'a> ComponentBuilder<'a> {
     }
 }
 
-fn lower_types(types: Vec<Type>) -> Vec<(Type, Vec<ValType>)> {
+fn lower_types(types: &[TypeDeclaration]) -> Vec<(Type, Vec<ValType>)> {
     let mut result: Vec<Option<Vec<ValType>>> = types.iter().map(|_| None).collect();
 
     for (index, ty) in types.iter().enumerate() {
@@ -501,12 +518,20 @@ fn lower_types(types: Vec<Type>) -> Vec<(Type, Vec<ValType>)> {
             continue;
         }
 
-        result[index] = Some(lower_type_update(ty, &types, &mut result));
+        result[index] = Some(lower_type_update(
+            &ty.ty,
+            &types.iter().map(|decl| decl.ty.clone()).collect::<Vec<_>>(),
+            &mut result,
+        ));
     }
 
     let mapping = result.into_iter().map(|lowered| lowered.unwrap());
 
-    types.into_iter().zip(mapping).collect()
+    types
+        .into_iter()
+        .map(|decl| decl.ty.clone())
+        .zip(mapping)
+        .collect()
 }
 
 fn lower_locals<'a>(
