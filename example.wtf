@@ -150,7 +150,7 @@ func demo_pattern_matching() {
     }
 
     // Using variants and pattern matching
-    let red = RGB(255, 0, 0)
+    let red = rgb(255, 0, 0)
     describe_color(red)
     describe_color(Grayscale(128))
 }
@@ -196,7 +196,7 @@ func demo_strings_and_operators() {
     println(message)
 
     // Safe access operator with optional resource
-    var optional_counter: Counter? = Counter(5)
+    var optional_counter: counter? = counter(5)
     let counter_value = optional_counter?.get_value()
     println("Optional counter value: " + (counter_value?.to_string() ? "none"))
 
