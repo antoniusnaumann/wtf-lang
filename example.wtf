@@ -140,12 +140,12 @@ func demo_functions_and_errors() {
 
 // Function that demonstrates pattern matching
 func demo_pattern_matching() {
-    let dir = East
+    let dir = east
 
     // Match statement with patterns and variable binding
     match dir {
-        North => println("Going north")
-        East => println("Going east")
+        north => println("Going north")
+        east => println("Going east")
         let other => println("Going \(other)")
     }
 
