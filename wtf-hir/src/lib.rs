@@ -221,6 +221,7 @@ impl Display for Module {
         writeln!(f, "Type:")?;
         for (name, type_) in &self.types {
             writeln!(f, "{name} = {type_}")?;
+            write!(f, "\n")?;
         }
         writeln!(f, "Functions:")?;
         for (name, function) in &self.functions {
@@ -230,6 +231,7 @@ impl Display for Module {
             }
             write!(f, " -> {} ", function.return_type)?;
             function.body.fmt(f, 2)?;
+            write!(f, "\n")?;
         }
         Ok(())
     }

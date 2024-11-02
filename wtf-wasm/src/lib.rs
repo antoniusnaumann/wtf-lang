@@ -33,7 +33,7 @@ pub enum Type {
     List(TypeRef),
     Option(TypeRef),
     Result { ok: TypeRef, err: TypeRef },
-    Record { fields: Vec<(String, TypeRef)> },
+    Record { fields: HashMap<String, TypeRef> },
     Variant {},
     Tuple(Vec<TypeRef>),
     Flags(Vec<String>),

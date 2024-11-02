@@ -235,7 +235,17 @@ impl Convert<'_> for hir::Type {
 
                 Some(TypeRef::Type(ty))
             }
-            hir::Type::Record(_) => todo!(),
+            hir::Type::Record(fields) => {
+                let record = Type::Record {
+                    fields: fields
+                        .into_iter()
+                        .map(|(k, v)| (k, v.convert(lookup).unwrap()))
+                        .collect(),
+                };
+                let ty = lookup.insert(record);
+
+                Some(TypeRef::Type(ty))
+            }
             hir::Type::Resource(_) => todo!(),
             hir::Type::Enum(cases) => {
                 let ty = lookup.insert(Type::Enum(cases));
