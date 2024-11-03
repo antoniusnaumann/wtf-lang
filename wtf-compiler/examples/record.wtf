@@ -1,0 +1,10 @@
+package wtf:example@0.1.0
+
+record point {
+    x: s64 
+    y: s64
+}
+
+func double_point(p: point) -> point {
+    return { x: point.x * 2, y: point.y * 2 }
+}
