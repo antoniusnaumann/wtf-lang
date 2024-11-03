@@ -166,7 +166,7 @@ impl<'a> Convert<'a> for hir::Instruction {
             hir::Instruction::Float(_) => todo!(),
             hir::Instruction::String(_) => todo!(),
             hir::Instruction::Bool(_) => todo!(),
-            hir::Instruction::None => todo!(),
+            hir::Instruction::None => Instruction::Noop,
             hir::Instruction::Enum {
                 variant,
                 num_payloads,

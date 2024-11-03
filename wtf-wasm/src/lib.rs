@@ -404,6 +404,7 @@ impl<'a> ComponentBuilder<'a> {
             Instruction::Branch => vec![WasmInstruction::Br(todo!())],
             Instruction::BranchIf => vec![WasmInstruction::BrIf(todo!())],
             Instruction::Return => vec![WasmInstruction::Return],
+            Instruction::Noop => vec![],
 
             Instruction::Wasm(wasm) => vec![wasm.clone()],
             Instruction::Unreachable => vec![WasmInstruction::Unreachable],

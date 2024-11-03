@@ -27,6 +27,7 @@ pub enum Instruction<'a> {
     Return,
     End,
     Unreachable,
+    Noop,
 
     Wasm(WasmInstruction<'a>),
 }
