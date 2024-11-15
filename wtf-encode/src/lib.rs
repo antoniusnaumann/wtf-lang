@@ -176,7 +176,9 @@ impl<'a> Convert<'a> for hir::Instruction {
                 function,
                 num_arguments,
             } => Instruction::Call(function),
-            hir::Instruction::FieldAccess(_) => todo!(),
+            hir::Instruction::FieldAccess(field) => {
+                todo!("Lower field access to wasm (lookup offset of parent variable)")
+            }
             hir::Instruction::IndexAccess => todo!(),
             hir::Instruction::Return => Instruction::Return,
             hir::Instruction::Break => todo!(),
