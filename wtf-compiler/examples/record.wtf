@@ -6,5 +6,5 @@ record point {
 }
 
 func double_point(p: point) -> point {
-    return { x: point.x * 2, y: point.y * 2 }
+    return { x: p.x * 2, y: p.y * 2 }
 }
