@@ -11,47 +11,66 @@ pub fn compile(ast: ast::Module) -> Module {
     // TODO: Convert into lookup of name -> export? on first pass
     let mut ast_types = HashMap::new();
     let mut ast_funs = HashMap::new();
-    for declaration in ast.declarations {
+    for mut declaration in ast.declarations {
+        let is_export = if let ast::Declaration::Export(ex) = declaration {
+            declaration = *ex.item;
+            true
+        } else {
+            false
+        };
+
         match declaration {
             ast::Declaration::Function(fun) => {
-                ast_funs.insert(fun.name.to_string(), fun);
+                ast_funs.insert(fun.name.to_string(), (fun, is_export));
             }
             ast::Declaration::Record(rec) => {
-                ast_types.insert(rec.name.to_string(), ast::Declaration::Record(rec));
+                ast_types.insert(
+                    rec.name.to_string(),
+                    (ast::Declaration::Record(rec), is_export),
+                );
             }
             ast::Declaration::Resource(res) => {
-                ast_types.insert(res.name.to_string(), ast::Declaration::Resource(res));
+                ast_types.insert(
+                    res.name.to_string(),
+                    (ast::Declaration::Resource(res), is_export),
+                );
             }
             ast::Declaration::Enum(en) => {
-                ast_types.insert(en.name.to_string(), ast::Declaration::Enum(en));
+                ast_types.insert(en.name.to_string(), (ast::Declaration::Enum(en), is_export));
             }
             ast::Declaration::Variant(var) => {
-                ast_types.insert(var.name.to_string(), ast::Declaration::Variant(var));
+                ast_types.insert(
+                    var.name.to_string(),
+                    (ast::Declaration::Variant(var), is_export),
+                );
             }
             ast::Declaration::Export(ex) => {
-                ast_types.insert(ex.item.name().to_string(), ast::Declaration::Export(ex));
+                panic!("TODO: error: double export is not permitted!")
             }
         }
     }
 
     let mut types = HashMap::with_builtins();
-    for ty in ast_types.values() {
+    for (ty, is_export) in ast_types.values() {
         types.insert(
             ty.name().to_owned(),
-            compile_type_declaration(ty, &ast_types),
+            compile_type_declaration(ty, *is_export, &ast_types),
         );
     }
 
     let mut signatures = HashMap::with_builtins();
-    for fun in ast_funs.values() {
-        signatures.insert(fun.name.to_string(), compile_signature(fun, &ast_types));
+    for (fun, is_export) in ast_funs.values() {
+        signatures.insert(
+            fun.name.to_string(),
+            compile_signature(fun, *is_export, &ast_types),
+        );
     }
 
     let mut functions = HashMap::new();
-    for fun in ast_funs.values() {
+    for (fun, is_export) in ast_funs.values() {
         functions.insert(
             fun.name.to_string(),
-            compile_fun(fun, &ast_types, &signatures),
+            compile_fun(fun, *is_export, &ast_types, &signatures),
         );
     }
 
@@ -60,8 +79,12 @@ pub fn compile(ast: ast::Module) -> Module {
 
 fn compile_type_declaration(
     declaration: &ast::Declaration,
-    ast_types: &HashMap<String, ast::Declaration>,
+    is_export: bool,
+    ast_types: &HashMap<String, (ast::Declaration, bool)>,
 ) -> Type {
+    if is_export {
+        todo!("Use exports on type declarations");
+    }
     let type_ = match declaration {
         ast::Declaration::Record(record) => {
             let mut fields = HashMap::new();
@@ -93,6 +116,8 @@ fn compile_type_declaration(
                             .map(|param| compile_type_annotation(&param.type_annotation, ast_types))
                             .collect(),
                         return_type,
+                        // TODO: allow exporting resource functions
+                        is_export: false,
                     },
                 );
             }
@@ -122,7 +147,7 @@ fn compile_type_declaration(
 
 fn compile_type_annotation(
     annotation: &ast::TypeAnnotation,
-    ast_types: &HashMap<String, ast::Declaration>,
+    ast_types: &HashMap<String, (ast::Declaration, bool)>,
 ) -> Type {
     match annotation {
         ast::TypeAnnotation::Simple(name) => Type::Builtin(match name.as_str() {
@@ -140,10 +165,10 @@ fn compile_type_annotation(
             "char" => PrimitiveType::Char,
             "string" => PrimitiveType::String,
             _ => {
-                let declaration = ast_types
+                let (declaration, is_export) = ast_types
                     .get(name)
                     .unwrap_or_else(|| panic!("unknown type {name}"));
-                return compile_type_declaration(declaration, ast_types);
+                return compile_type_declaration(declaration, *is_export, ast_types);
             }
         }),
         ast::TypeAnnotation::List(item) => {
@@ -167,7 +192,8 @@ fn compile_type_annotation(
 
 fn compile_fun(
     declaration: &ast::FunctionDeclaration,
-    ast_types: &HashMap<String, ast::Declaration>,
+    is_export: bool,
+    ast_types: &HashMap<String, (ast::Declaration, bool)>,
     signatures: &HashMap<String, FunctionSignature>,
 ) -> Function {
     let parameters: Vec<_> = declaration
@@ -194,12 +220,14 @@ fn compile_fun(
         return_type,
         locals: fn_compiler.locals,
         body,
+        is_export,
     }
 }
 
 fn compile_signature(
     declaration: &ast::FunctionDeclaration,
-    ast_types: &HashMap<String, ast::Declaration>,
+    is_export: bool,
+    ast_types: &HashMap<String, (ast::Declaration, bool)>,
 ) -> FunctionSignature {
     let param_types = declaration
         .parameters
@@ -214,6 +242,7 @@ fn compile_signature(
     FunctionSignature {
         param_types,
         return_type,
+        is_export,
     }
 }
 

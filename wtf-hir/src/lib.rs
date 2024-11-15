@@ -56,6 +56,7 @@ pub struct ResourceType {
 pub struct FunctionSignature {
     param_types: Vec<Type>,
     return_type: Type,
+    is_export: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -64,6 +65,7 @@ pub struct Function {
     pub return_type: Type,
     pub locals: Vec<Type>, // include parameters
     pub body: Block,
+    pub is_export: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Copy)]

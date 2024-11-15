@@ -145,8 +145,7 @@ impl<'a> Convert<'a> for (String, hir::Function) {
             result,
             name: name.replace("_", "-"),
             instructions,
-            // TODO: only export functions with export keyword
-            export: true,
+            export: func.is_export,
             locals,
         };
 

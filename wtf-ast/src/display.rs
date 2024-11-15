@@ -303,9 +303,17 @@ impl Print for Expression {
                 object,
                 field,
                 safe,
-            } => todo!(),
+            } => {
+                if *safe {
+                    node!(f, indent, c, "access", object, field)
+                } else {
+                    node!(f, indent, c, "safeaccess", object, field)
+                }
+            }
             Expression::IndexAccess { collection, index } => todo!(),
-            Expression::Record { name, members } => todo!(),
+            Expression::Record { name, members } => {
+                node!(f, indent, c, "record", name, members)
+            }
             Expression::ListLiteral(_) => todo!(),
         }
     }
@@ -371,5 +379,21 @@ impl Print for UnaryOperator {
         };
 
         write!(f, "\n{c:indent$}(op {op})")
+    }
+}
+
+impl Print for [FieldAssignment] {
+    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
+        for elem in self {
+            elem.print(f, indent, c)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl Print for FieldAssignment {
+    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
+        node!(f, indent, c, "fieldinit", self.name, self.element)
     }
 }

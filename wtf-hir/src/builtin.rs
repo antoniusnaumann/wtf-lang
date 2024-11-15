@@ -65,6 +65,7 @@ fn fun(name: impl Into<String>, params: &[Type], return_type: Type) -> (String, 
         FunctionSignature {
             param_types: params.into(),
             return_type,
+            is_export: false,
         },
     )
 }

@@ -1,6 +1,6 @@
 package wtf:example@0.1.0
 
-func double_cap(x: s64, cap: s64) -> s64 {
+export func double_cap(x: s64, cap: s64) -> s64 {
     let y = x * 2
     if y > cap {
        return cap
