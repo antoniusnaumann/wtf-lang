@@ -11,3 +11,4 @@ wtf-parser = { path = "../wtf-parser" }
 wtf-hir = { path = "../wtf-hir" }
 wtf-encode = { path = "../wtf-encode" }
 wasmparser = "0.219.1"
+wasmtime = "26.0.1"
