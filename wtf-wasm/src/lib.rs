@@ -87,8 +87,9 @@ pub struct ComponentBuilder<'a> {
     codes: CodeSection,
     globals: GlobalSection,
 
+    functions: Vec<Function<'a>>,
     /// (Lowered ID, Function)
-    functions: Vec<(u32, Function<'a>)>,
+    lowered_functions: Vec<(u32, Function<'a>)>,
     function_count: u32,
     global_count: u32,
     component_count: u32,
@@ -117,6 +118,7 @@ impl<'a> ComponentBuilder<'a> {
 
         self.component_types = lower_types(&instance.types);
         self.type_declarations = instance.types;
+        self.functions = instance.functions.clone();
 
         for func in instance.functions {
             if let Some(export) = self.encode_fn(func) {
@@ -148,7 +150,7 @@ impl<'a> ComponentBuilder<'a> {
             None
         };
 
-        self.functions.push((idx, function));
+        self.lowered_functions.push((idx, function));
         self.component_count += 1;
 
         result
@@ -240,14 +242,14 @@ impl<'a> ComponentBuilder<'a> {
             }
         }
 
-        for (_, function) in &self.functions {
+        for (_, function) in &self.lowered_functions {
             self.inner
                 .core_alias_export(0, &function.name, ExportKind::Func);
         }
 
         self.inner.core_alias_export(0, "realloc", ExportKind::Func);
 
-        for (idx, function) in self.functions {
+        for (idx, function) in self.lowered_functions {
             let (type_idx, mut encoder) = self.inner.type_function();
             encoder.params(
                 function
@@ -479,14 +481,17 @@ impl<'a> ComponentBuilder<'a> {
             "less_eq__f64_f64" => WasmInstruction::F64Le,
 
             ident => {
+                let ident = ident.replace("_", "-");
+
                 let index = self
                     .functions
                     .iter()
+                    .enumerate()
                     .find(|(_, f)| f.name == ident)
                     .map(|(idx, _)| idx)
                     .expect("Function should exist");
 
-                WasmInstruction::Call(*index)
+                WasmInstruction::Call(index as u32)
             }
         }
     }

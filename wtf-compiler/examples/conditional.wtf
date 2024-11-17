@@ -9,7 +9,6 @@ export func double_cap(x: s64, cap: s64) -> s64 {
     }
 }
 
-export func main() {
-   // return double_cap(5, 11)
-   // return 12 * 2
+export func main() -> s64 {
+   return double_cap(5, 11)
 }
