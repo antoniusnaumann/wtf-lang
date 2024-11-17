@@ -56,11 +56,16 @@ impl From<&TypeRef> for Type {
 
 #[derive(Debug, Clone)]
 pub struct Function<'a> {
-    pub params: Vec<(String, TypeRef)>,
+    pub signature: Signature,
     pub locals: Vec<TypeRef>,
+    pub instructions: Vec<Instruction<'a>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Signature {
+    pub params: Vec<(String, TypeRef)>,
     pub result: Option<TypeRef>,
     pub name: String,
-    pub instructions: Vec<Instruction<'a>>,
     pub export: bool,
 }
 
@@ -80,16 +85,15 @@ pub struct Instance<'a> {
 }
 
 #[derive(Debug, Default)]
-pub struct ComponentBuilder<'a> {
+pub struct ComponentBuilder {
     types: TypeSection,
     signatures: FunctionSection,
     exports: ExportSection,
     codes: CodeSection,
     globals: GlobalSection,
 
-    functions: Vec<Function<'a>>,
-    /// (Lowered ID, Function)
-    lowered_functions: Vec<(u32, Function<'a>)>,
+    // lowered id is the index
+    functions: Vec<Signature>,
     function_count: u32,
     global_count: u32,
     component_count: u32,
@@ -103,12 +107,12 @@ pub struct ComponentBuilder<'a> {
 }
 
 // Probably embed https://docs.rs/wasm-encoder/latest/wasm_encoder/struct.ComponentBuilder.html and use the lower_func method from there
-impl<'a> ComponentBuilder<'a> {
-    pub fn new() -> ComponentBuilder<'a> {
+impl ComponentBuilder {
+    pub fn new() -> ComponentBuilder {
         Self::default()
     }
 
-    pub fn encode_instance(&mut self, instance: Instance<'a>) {
+    pub fn encode_instance(&mut self, instance: Instance<'_>) {
         if self.has_instance {
             panic!("Currently only one instance per component is supported.")
         }
@@ -118,7 +122,11 @@ impl<'a> ComponentBuilder<'a> {
 
         self.component_types = lower_types(&instance.types);
         self.type_declarations = instance.types;
-        self.functions = instance.functions.clone();
+        self.functions = instance
+            .functions
+            .iter()
+            .map(|f| f.signature.clone())
+            .collect();
 
         for func in instance.functions {
             if let Some(export) = self.encode_fn(func) {
@@ -137,12 +145,12 @@ impl<'a> ComponentBuilder<'a> {
         }
     }
 
-    fn encode_fn(&mut self, function: Function<'a>) -> Option<(String, ComponentExportKind, u32)> {
+    fn encode_fn(&mut self, function: Function<'_>) -> Option<(String, ComponentExportKind, u32)> {
         let idx = self.encode_lowered_fn(&function);
 
-        let result = if function.export {
+        let result = if function.signature.export {
             Some((
-                function.name.clone(),
+                function.signature.name.clone(),
                 ComponentExportKind::Func,
                 self.component_count,
             ))
@@ -150,17 +158,24 @@ impl<'a> ComponentBuilder<'a> {
             None
         };
 
-        self.lowered_functions.push((idx, function));
+        assert!(function.signature == self.functions[idx as usize]);
         self.component_count += 1;
 
         result
     }
 
-    fn encode_lowered_fn(&mut self, function: &Function<'a>) -> u32 {
-        let results = function.result.map_or_else(|| vec![], |ty| self.lower(&ty));
+    fn encode_lowered_fn(&mut self, function: &Function<'_>) -> u32 {
+        let results = function
+            .signature
+            .result
+            .map_or_else(|| vec![], |ty| self.lower(&ty));
 
-        let params: Vec<Vec<ValType>> =
-            function.params.iter().map(|(_, p)| self.lower(p)).collect();
+        let params: Vec<Vec<ValType>> = function
+            .signature
+            .params
+            .iter()
+            .map(|(_, p)| self.lower(p))
+            .collect();
         let mut offsets = Vec::with_capacity(params.len() + 1);
         offsets.push(0);
         for param in &params {
@@ -177,14 +192,14 @@ impl<'a> ComponentBuilder<'a> {
 
         // Encode the export section.
         self.exports.export(
-            &function.name.as_ref(),
+            &function.signature.name.as_ref(),
             ExportKind::Func,
             self.function_count,
         );
 
         let locals: Vec<Local> = self.enumerate_locals(&function.locals);
         let mut func = wasm_encoder::Function::new(
-            lower_locals(locals.iter().skip(function.params.len())).collect::<Vec<_>>(),
+            lower_locals(locals.iter().skip(function.signature.params.len())).collect::<Vec<_>>(),
         );
         for instruction in &function.instructions {
             for lowered_instruction in self.lower_instruction(instruction, &locals) {
@@ -242,14 +257,14 @@ impl<'a> ComponentBuilder<'a> {
             }
         }
 
-        for (_, function) in &self.lowered_functions {
+        for function in &self.functions {
             self.inner
                 .core_alias_export(0, &function.name, ExportKind::Func);
         }
 
         self.inner.core_alias_export(0, "realloc", ExportKind::Func);
 
-        for (idx, function) in self.lowered_functions {
+        for (idx, function) in self.functions.iter().enumerate() {
             let (type_idx, mut encoder) = self.inner.type_function();
             encoder.params(
                 function
@@ -265,7 +280,7 @@ impl<'a> ComponentBuilder<'a> {
                 encoder.results(r);
             }
             self.inner.lift_func(
-                idx,
+                idx as u32,
                 type_idx,
                 vec![
                     CanonicalOption::Memory(0),
@@ -273,7 +288,7 @@ impl<'a> ComponentBuilder<'a> {
                 ],
             );
             if function.export {
-                exports.push((function.name, idx, ComponentExportKind::Func));
+                exports.push((&function.name, idx, ComponentExportKind::Func));
             }
         }
 
@@ -282,12 +297,12 @@ impl<'a> ComponentBuilder<'a> {
             continue;
             // TODO: This does not work currently
             if ty.export {
-                exports.push((ty.name.clone(), idx as u32, ComponentExportKind::Type));
+                exports.push((&ty.name, idx, ComponentExportKind::Type));
             }
         }
 
         for (name, idx, kind) in exports {
-            self.inner.export(&name, kind, idx, None);
+            self.inner.export(&name, kind, idx as u32, None);
         }
 
         self.inner.finish()
@@ -366,11 +381,11 @@ impl<'a> ComponentBuilder<'a> {
         self.function_count += 1;
     }
 
-    fn lower_instruction(
-        &self,
+    fn lower_instruction<'a>(
+        &'a self,
         instruction: &'a Instruction,
         locals: &[Local],
-    ) -> Vec<WasmInstruction> {
+    ) -> Vec<WasmInstruction<'a>> {
         match instruction {
             // Locals
             Instruction::LocalSet(idx) => lower_local(&locals[*idx as usize])

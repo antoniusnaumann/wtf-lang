@@ -1,7 +1,8 @@
 use std::{fs, io::Write};
 
 use wtf_wasm::{
-    ComponentBuilder, Function, Instance, InstructionVec, PrimitiveType, TypeRef, WasmInstruction,
+    ComponentBuilder, Function, Instance, InstructionVec, PrimitiveType, Signature, TypeRef,
+    WasmInstruction,
 };
 
 // This main serves as a usage example
@@ -10,11 +11,13 @@ fn main() {
     let mut comp = ComponentBuilder::new();
 
     let functions = vec![Function {
-        params: vec![],
-        result: Some(TypeRef::Primitive(PrimitiveType::S32)),
-        name: "run".to_owned(),
+        signature: Signature {
+            params: vec![],
+            result: Some(TypeRef::Primitive(PrimitiveType::S32)),
+            name: "run".to_owned(),
+            export: true,
+        },
         instructions: vec![WasmInstruction::I32Const(21), WasmInstruction::End].into_instructions(),
-        export: true,
         locals: vec![],
     }];
     comp.encode_instance(Instance {
@@ -27,12 +30,15 @@ fn main() {
         name: "antoniusnaumann:example/math".to_owned(),
         types: vec![],
         functions: vec![Function {
-            params: vec![
-                ("a".to_owned(), TypeRef::Primitive(PrimitiveType::S32)),
-                ("b".to_owned(), TypeRef::Primitive(PrimitiveType::S32)),
-            ],
-            result: Some(TypeRef::Primitive(PrimitiveType::S32)),
-            name: "add".to_owned(),
+            signature: Signature {
+                params: vec![
+                    ("a".to_owned(), TypeRef::Primitive(PrimitiveType::S32)),
+                    ("b".to_owned(), TypeRef::Primitive(PrimitiveType::S32)),
+                ],
+                result: Some(TypeRef::Primitive(PrimitiveType::S32)),
+                name: "add".to_owned(),
+                export: true,
+            },
             instructions: vec![
                 WasmInstruction::LocalGet(0),
                 WasmInstruction::LocalGet(1),
@@ -40,7 +46,6 @@ fn main() {
                 WasmInstruction::End,
             ]
             .into_instructions(),
-            export: true,
             locals: vec![],
         }],
     });

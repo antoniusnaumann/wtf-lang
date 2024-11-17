@@ -2,8 +2,8 @@ use std::{fmt::Debug, iter};
 
 use wtf_hir as hir;
 use wtf_wasm::{
-    ComponentBuilder, Function, Instance, Instruction, PrimitiveType, Type, TypeDeclaration,
-    TypeRef,
+    ComponentBuilder, Function, Instance, Instruction, PrimitiveType, Signature, Type,
+    TypeDeclaration, TypeRef,
 };
 
 // PERF: use hash map here if search turns out to be slow
@@ -27,18 +27,18 @@ impl TypeLookup {
 }
 
 #[derive(Debug, Default)]
-pub struct Encoder<'a> {
+pub struct Encoder {
     // Lookup of all internal type definitions to their index
     types: TypeLookup,
-    builder: ComponentBuilder<'a>,
+    builder: ComponentBuilder,
 }
 
-impl<'a> Encoder<'a> {
+impl Encoder {
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn encode(mut self, module: hir::Module) -> Encoder<'a> {
+    pub fn encode(mut self, module: hir::Module) -> Encoder {
         let instance = module.convert(&mut self.types);
         self.builder.encode_instance(instance);
 
@@ -141,11 +141,13 @@ impl<'a> Convert<'a> for (String, hir::Function) {
             })
             .collect();
         let func = Function {
-            params,
-            result,
-            name: name.replace("_", "-"),
+            signature: Signature {
+                params,
+                result,
+                name: name.replace("_", "-"),
+                export: func.is_export,
+            },
             instructions,
-            export: func.is_export,
             locals,
         };
 
