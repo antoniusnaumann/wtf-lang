@@ -1,9 +1,5 @@
 use std::{env, fs};
 
-use wasmtime::{
-    component::{Component, Linker, Val},
-    Config, Engine, Store,
-};
 use wtf_parser::parser::Parser;
 
 fn main() {
@@ -43,6 +39,11 @@ fn main() {
 }
 
 fn run(wasm: &[u8]) -> wasmtime::Result<i64> {
+    use wasmtime::{
+        component::{Component, Linker, Val},
+        Config, Engine, Store,
+    };
+
     let mut config = Config::new();
     config.wasm_component_model(true);
 

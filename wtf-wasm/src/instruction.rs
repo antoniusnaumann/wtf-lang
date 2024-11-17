@@ -29,6 +29,7 @@ pub enum Instruction<'a> {
     Unreachable,
     Noop,
 
+    // Raw WASM instructions to allow writing inline WASM functions directly in the future
     Wasm(WasmInstruction<'a>),
 }
 
