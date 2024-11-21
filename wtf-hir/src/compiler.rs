@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Deref};
 
 use wtf_ast::{self as ast, BinaryOperator, Expression, TypeAnnotation};
 
@@ -524,10 +524,45 @@ impl<'a> FunctionCompiler<'a> {
             ast::Expression::FieldAccess {
                 object,
                 field,
+                // TODO: Desugar safe calls to if condition
                 safe,
             } => {
-                self.compile_expression(&object, block);
-                self.push(Instruction::FieldAccess(field.to_string()), block);
+                let mut inner = object;
+                let mut fields = vec![];
+                // Find out if this is a chain of member fields on a local value
+                loop {
+                    match inner.deref() {
+                        Expression::FieldAccess {
+                            object,
+                            field,
+                            safe: false,
+                        } => {
+                            inner = object;
+                            fields.push(field);
+                        }
+                        Expression::Identifier(name) => {
+                            // TODO: find ident here
+                            let local = self
+                                .visible
+                                .lookup(&name)
+                                .expect(&format!("Variable {} is not defined.", name));
+                            self.push(
+                                Instruction::MemberChain(
+                                    local,
+                                    fields.into_iter().cloned().rev().collect(),
+                                ),
+                                block,
+                            );
+                            break;
+                        }
+                        _ => {
+                            self.compile_expression(&object, block);
+
+                            self.push(Instruction::FieldAccess(field.to_string()), block);
+                            break;
+                        }
+                    }
+                }
             }
             ast::Expression::IndexAccess { collection, index } => {
                 self.compile_expression(&collection, block);

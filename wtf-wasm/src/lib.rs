@@ -33,7 +33,7 @@ pub enum Type {
     List(TypeRef),
     Option(TypeRef),
     Result { ok: TypeRef, err: TypeRef },
-    Record { fields: HashMap<String, TypeRef> },
+    Record { fields: Vec<(String, TypeRef)> },
     Variant {},
     Tuple(Vec<TypeRef>),
     Flags(Vec<String>),
@@ -403,6 +403,15 @@ impl ComponentBuilder {
                 }
                 // TODO: This only works if the struct is only composed of primitives
                 let id = *id as usize;
+                let ty = match locals[id].ty {
+                    TypeRef::Primitive(_) => {
+                        panic!("ERROR: field access on primitive not allowed")
+                    }
+                    TypeRef::Type(ty) => &self.type_declarations[ty as usize],
+                };
+                let Type::Record { fields } = &ty.ty else {
+                    panic!("ERROR: field access on non-records not allowed")
+                };
                 let lower = lower_local(&locals[id]);
 
                 vec![WasmInstruction::LocalGet(lower[member[0] as usize].0)]

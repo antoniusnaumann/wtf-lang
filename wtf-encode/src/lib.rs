@@ -125,13 +125,6 @@ impl<'a> Convert<'a> for (String, hir::Function) {
             })
             .collect();
         let result = func.return_type.convert(lookup);
-        let instructions: Vec<Instruction> = func
-            .body
-            .instructions
-            .into_iter()
-            .map(|exp| exp.convert(lookup))
-            .chain(iter::once(Instruction::End))
-            .collect();
         let locals = func
             .locals
             .into_iter()
@@ -139,6 +132,13 @@ impl<'a> Convert<'a> for (String, hir::Function) {
                 ty.convert(lookup)
                     .expect("Type of local must be defined before use")
             })
+            .collect::<Vec<_>>();
+        let instructions: Vec<Instruction> = func
+            .body
+            .instructions
+            .into_iter()
+            .map(|exp| exp.convert(lookup, &locals))
+            .chain(iter::once(Instruction::End))
             .collect();
         let func = Function {
             signature: Signature {
@@ -155,10 +155,27 @@ impl<'a> Convert<'a> for (String, hir::Function) {
     }
 }
 
-impl<'a> Convert<'a> for hir::Instruction {
+trait ConvertInstruction<'a> {
+    type Output;
+
+    fn convert(self, lookup: &mut TypeLookup, locals: &[TypeRef]) -> Self::Output;
+}
+
+impl<'a> ConvertInstruction<'a> for hir::Block {
+    type Output = Vec<Instruction<'a>>;
+
+    fn convert(self, lookup: &mut TypeLookup, locals: &[TypeRef]) -> Self::Output {
+        self.instructions
+            .into_iter()
+            .map(|inst| inst.convert(lookup, locals))
+            .collect()
+    }
+}
+
+impl<'a> ConvertInstruction<'a> for hir::Instruction {
     type Output = Instruction<'a>;
 
-    fn convert(self, lookup: &mut TypeLookup) -> Self::Output {
+    fn convert(self, lookup: &mut TypeLookup, locals: &[TypeRef]) -> Self::Output {
         match self {
             hir::Instruction::Pop => todo!(),
             hir::Instruction::Load(i) => Instruction::LocalGet(i.0 as u32),
@@ -178,11 +195,42 @@ impl<'a> Convert<'a> for hir::Instruction {
                 function,
                 num_arguments,
             } => Instruction::Call(function),
-            hir::Instruction::MemberChain(id, fields) => Instruction::LocalGetMember {
-                id: id.0 as u32,
-                // TODO: convert field names to indices
-                member: fields,
-            },
+            hir::Instruction::MemberChain(id, fields) => {
+                let mut current = &locals[id.0];
+                let mut member = vec![];
+                for field in fields {
+                    let record = match current {
+                        TypeRef::Primitive(_) => panic!("Cannot access member of a primitive"),
+                        TypeRef::Type(ty) => &lookup.0[*ty as usize],
+                    };
+                    let Type::Record { fields } = record else {
+                        panic!("ERROR: can only access fields of records");
+                    };
+
+                    let (index, ty) = fields
+                        .iter()
+                        .enumerate()
+                        .find_map(
+                            |(i, (name, ty))| {
+                                if *name == field {
+                                    Some((i, ty))
+                                } else {
+                                    None
+                                }
+                            },
+                        )
+                        .expect("Accessed field did not exist");
+
+                    member.push(index as u32);
+                    current = ty;
+                }
+
+                Instruction::LocalGetMember {
+                    id: id.0 as u32,
+                    // TODO: convert field names to indices
+                    member,
+                }
+            }
             hir::Instruction::FieldAccess(field) => {
                 todo!("look at type here and figure out what to pop?")
             }
@@ -192,24 +240,13 @@ impl<'a> Convert<'a> for hir::Instruction {
             hir::Instruction::Continue => todo!(),
             hir::Instruction::Throw => todo!(),
             hir::Instruction::If { then, else_ } => Instruction::If {
-                then: then.convert(lookup),
-                else_: else_.convert(lookup),
+                then: then.convert(lookup, locals),
+                else_: else_.convert(lookup, locals),
             },
             hir::Instruction::Match { arms } => todo!(),
             hir::Instruction::Loop(_) => todo!(),
             hir::Instruction::Unreachable => Instruction::Unreachable,
         }
-    }
-}
-
-impl<'a> Convert<'a> for hir::Block {
-    type Output = Vec<Instruction<'a>>;
-
-    fn convert(self, lookup: &mut TypeLookup) -> Self::Output {
-        self.instructions
-            .into_iter()
-            .map(|inst| inst.convert(lookup))
-            .collect()
     }
 }
 

@@ -305,9 +305,9 @@ impl Print for Expression {
                 safe,
             } => {
                 if *safe {
-                    node!(f, indent, c, "access", object, field)
-                } else {
                     node!(f, indent, c, "safeaccess", object, field)
+                } else {
+                    node!(f, indent, c, "access", object, field)
                 }
             }
             Expression::IndexAccess { collection, index } => todo!(),
