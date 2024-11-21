@@ -115,7 +115,10 @@ pub enum Instruction {
         function: String,
         num_arguments: usize,
     },
+    // Access field of current stack value
     FieldAccess(String),
+    // Optimized field access for locals
+    MemberChain(LocalId, Vec<String>),
     IndexAccess,
     Unreachable,
     Return,
@@ -401,6 +404,9 @@ impl Instruction {
                 write!(f, "call {function} with {num_arguments} arguments")?;
             }
             Instruction::FieldAccess(field) => write!(f, "field access {field}")?,
+            Instruction::MemberChain(id, fields) => {
+                write!(f, "access {} on {}", fields.join("."), id)?;
+            }
             Instruction::IndexAccess => write!(f, "index access")?,
             Instruction::Load(local) => write!(f, "load from {local}")?,
             Instruction::Store(local) => write!(f, "store to {local}")?,

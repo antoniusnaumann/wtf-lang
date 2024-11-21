@@ -396,6 +396,18 @@ impl ComponentBuilder {
                 .iter()
                 .map(|(i, _ty)| WasmInstruction::LocalGet(*i))
                 .collect(),
+
+            Instruction::LocalGetMember { id, member } => {
+                if member.len() > 1 {
+                    todo!("Implement access chains");
+                }
+                // TODO: This only works if the struct is only composed of primitives
+                let id = *id as usize;
+                let lower = lower_local(&locals[id]);
+
+                vec![WasmInstruction::LocalGet(lower[member[0] as usize].0)]
+            }
+
             Instruction::Const => todo!(),
             Instruction::Int(num) => vec![WasmInstruction::I64Const(*num)],
             Instruction::Call(ident) => vec![self.lower_call(ident)],

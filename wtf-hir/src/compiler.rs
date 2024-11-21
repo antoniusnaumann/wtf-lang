@@ -339,6 +339,9 @@ impl<'a> FunctionCompiler<'a> {
                         .clone(),
                 );
             }
+            Instruction::MemberChain(id, fields) => {
+                todo!()
+            }
             Instruction::FieldAccess(field) => {
                 if let Type::Record(record) = self.stack.pop().unwrap() {
                     self.stack.push(record[field].clone());

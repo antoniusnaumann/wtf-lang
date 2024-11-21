@@ -10,6 +10,12 @@ pub enum Instruction<'a> {
     LocalSet(u32),
     Call(String),
 
+    LocalGetMember {
+        id: u32,
+        /// Index of the field
+        member: Vec<u32>,
+    },
+
     // TODO: Add consts
     Const,
     Int(i64),

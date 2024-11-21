@@ -178,8 +178,13 @@ impl<'a> Convert<'a> for hir::Instruction {
                 function,
                 num_arguments,
             } => Instruction::Call(function),
+            hir::Instruction::MemberChain(id, fields) => Instruction::LocalGetMember {
+                id: id.0 as u32,
+                // TODO: convert field names to indices
+                member: fields,
+            },
             hir::Instruction::FieldAccess(field) => {
-                todo!("Lower field access to wasm (lookup offset of parent variable). alternative: look at previous instructions here and decide what to do based on that?")
+                todo!("look at type here and figure out what to pop?")
             }
             hir::Instruction::IndexAccess => todo!(),
             hir::Instruction::Return => Instruction::Return,
