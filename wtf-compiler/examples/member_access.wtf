@@ -1,0 +1,14 @@
+package wtf:example@0.1.0
+
+record point {
+    x: s64 
+    y: s64
+}
+
+func manhattan(p: point) -> s64 {
+    return p.x + p.y
+}
+
+export func main() -> s64 {
+    return manhattan({ x: 10, y: 5 })
+}

@@ -19,6 +19,7 @@ pub enum Instruction<'a> {
     // TODO: Add consts
     Const,
     Int(i64),
+    Float(f64),
 
     // Control Flow
     If {

@@ -109,6 +109,7 @@ pub enum Instruction {
         variant: String,
         num_payloads: usize,
     },
+    // TODO: @marcel: we assume from here on that this is already in declaration field order
     Record(Vec<String>),
     List(usize),
     Call {

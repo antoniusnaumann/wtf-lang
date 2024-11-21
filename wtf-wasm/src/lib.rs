@@ -419,6 +419,7 @@ impl ComponentBuilder {
 
             Instruction::Const => todo!(),
             Instruction::Int(num) => vec![WasmInstruction::I64Const(*num)],
+            Instruction::Float(num) => vec![WasmInstruction::F64Const(*num)],
             Instruction::Call(ident) => vec![self.lower_call(ident)],
 
             // Control Flow

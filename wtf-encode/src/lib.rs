@@ -181,7 +181,7 @@ impl<'a> ConvertInstruction<'a> for hir::Instruction {
             hir::Instruction::Load(i) => Instruction::LocalGet(i.0 as u32),
             hir::Instruction::Store(i) => Instruction::LocalSet(i.0 as u32),
             hir::Instruction::Int(num) => Instruction::Int(num),
-            hir::Instruction::Float(_) => todo!(),
+            hir::Instruction::Float(num) => Instruction::Float(num),
             hir::Instruction::String(_) => todo!(),
             hir::Instruction::Bool(_) => todo!(),
             hir::Instruction::None => Instruction::Noop,
@@ -189,7 +189,7 @@ impl<'a> ConvertInstruction<'a> for hir::Instruction {
                 variant,
                 num_payloads,
             } => todo!(),
-            hir::Instruction::Record(_) => todo!(),
+            hir::Instruction::Record(_) => Instruction::Noop,
             hir::Instruction::List(_) => todo!(),
             hir::Instruction::Call {
                 function,

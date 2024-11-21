@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ops::Deref};
+use std::{any::Any, collections::HashMap, ops::Deref};
 
 use wtf_ast::{self as ast, BinaryOperator, Expression, TypeAnnotation};
 
@@ -340,7 +340,16 @@ impl<'a> FunctionCompiler<'a> {
                 );
             }
             Instruction::MemberChain(id, fields) => {
-                todo!()
+                let mut ty = &self.locals[id.0];
+                for field in fields {
+                    let Type::Record(fields) = ty else {
+                        panic!("Member access on non-record.")
+                    };
+
+                    ty = &fields[field];
+                }
+
+                self.stack.push(ty.clone());
             }
             Instruction::FieldAccess(field) => {
                 if let Type::Record(record) = self.stack.pop().unwrap() {
@@ -528,7 +537,7 @@ impl<'a> FunctionCompiler<'a> {
                 safe,
             } => {
                 let mut inner = object;
-                let mut fields = vec![];
+                let mut fields = vec![field];
                 // Find out if this is a chain of member fields on a local value
                 loop {
                     match inner.deref() {
