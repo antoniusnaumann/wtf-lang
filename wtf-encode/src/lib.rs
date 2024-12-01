@@ -182,7 +182,9 @@ impl<'a> ConvertInstruction<'a> for hir::Instruction {
             hir::Instruction::Store(i) => Instruction::LocalSet(i.0 as u32),
             hir::Instruction::Int(num) => Instruction::Int(num),
             hir::Instruction::Float(num) => Instruction::Float(num),
-            hir::Instruction::String(_) => todo!(),
+            hir::Instruction::String(_) => {
+                todo!("Create \"Data\" lookup and save string literal there")
+            }
             hir::Instruction::Bool(_) => todo!(),
             hir::Instruction::None => Instruction::Noop,
             hir::Instruction::Enum {
