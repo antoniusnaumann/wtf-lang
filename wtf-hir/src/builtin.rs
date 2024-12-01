@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, iter};
 
 use crate::{FunctionSignature, PrimitiveType, Type};
 
@@ -55,6 +55,11 @@ impl WithBuiltins for HashMap<String, FunctionSignature> {
                     }))
                     .collect::<Vec<_>>()
             })
+            .chain(iter::once(fun(
+                "println".to_owned(),
+                &[Type::Builtin(Ty::String)],
+                Type::None,
+            )))
             .collect()
     }
 }
