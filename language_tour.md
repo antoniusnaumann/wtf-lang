@@ -20,6 +20,10 @@ Welcome to the Wasm Types & Functions (WTF) language tour! This guide will intro
   - [Resources](#resources)
   - [Enums](#enums)
   - [Variants (Sum Types)](#variants-sum-types)
+  - [Embedding](#embedding)
+    - [Record Embedding](#embedding-record)
+    - [Enum Embedding](#embedding-enum)
+    - [Variant Embedding](#embedding-variant)
   - [Functions](#functions)
     - [Function Declaration](#function-declaration)
     - [Function Parameters and Return Types](#function-parameters-and-return-types)
@@ -271,6 +275,62 @@ variant color {
 ```wtf
 let red = rgb(255, 0, 0)
 ```
+
+## Embedding
+Records, Resources, Enums, Variants and Flags can be composed to avoid repetition. This is useful considering WTF’s structural and behavioral typing.
+
+### Record Embedding
+```
+record human {
+    age: s8
+    name: string
+}   
+
+record citizen {
+    ..human // citizen has all fields human has
+    id: s64 
+} 
+
+func main() {
+    let kim = { 
+        age: 21,
+        name: "Kim",
+    }
+
+    let with_id = {
+        ..kim,
+        id: 42,
+    }
+
+    let alex = {
+        age: 31,
+        name: "Alex",
+        id: 21,
+    }
+}
+```
+
+### Enum Embedding
+```
+enum pet {
+    dog
+    cat 
+}
+
+enum animal {
+    ..pet
+    wolf
+    lion
+}
+```
+As enums in WTF conform to each other when they have the same cases, an instance of type pets can be supplied anywhere where an  animal is expected
+
+If multiple embedded enums declare the same case, they are merged. Explicit redeclarations are allowed but are discouraged
+
+### Variant Embedding
+Similar to enums, variant types can also embed other variants.
+
+Redeclaring a case is only allowed if its associated values match
 
 ## Functions
 
