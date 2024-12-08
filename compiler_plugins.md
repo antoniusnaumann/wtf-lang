@@ -27,4 +27,5 @@ func register_types(types: [Type]) {}
 func register_functions(funcs: [Func]) {}
 ```
 
+These hooks can be used for code generation, for example to generate TypeScript bindings for your frontend from your WTF backend code or an openapi documentation.
 In the future, more hooks might be added, e.g. to modify functions (e.g. to add tracing) or to add types. 
