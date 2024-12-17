@@ -9,6 +9,10 @@ Welcome to the Wasm Types & Functions (WTF) language tour! This guide will intro
 - [Wasm Types \& Functions (WTF) Language Tour](#wasm-types--functions-wtf-language-tour)
   - [Table of Contents](#table-of-contents)
   - [Introduction](#introduction)
+  - [Principles](#principles)
+    - [Be Simple](#simplicity)
+    - [Be Correct](#correctness)
+    - [Be Interoparable](#interoperability)
   - [Package Declaration](#package-declaration)
   - [Use Statements (`use`)](#use-statements-use)
   - [Comments](#comments)
@@ -50,6 +54,16 @@ Welcome to the Wasm Types & Functions (WTF) language tour! This guide will intro
 ## Introduction
 
 WTF is a statically-typed language that emphasizes simplicity and expressiveness. It is designed to work seamlessly with WebAssembly, providing developers with powerful abstractions and a modern syntax.
+
+## Principles
+### Be Simple
+The language should be obvious and unambigous. If a piece of code has two interpretations, one of them should be a compiler error, e.g., function parameters are always immutable unless copied into a new variable. This avoids the *incorrect* interpretation, i.e. pass-by-value vs. pass-by-reference behavior.
+
+### Be Correct
+The code should reflect the programmer's intent. The language is statically typed. Errors are handled exhaustively or forwarded explicitly. Types are non-nullable by default. Mutability is explicit.
+
+### Be Interoperable
+WTF is designed around the WASM component proposal, to easily interoperate with WASM components written in other languages. The language should therefore closely follow WASM component concepts and the WIT interface language syntax.
 
 ## Package Declaration
 
