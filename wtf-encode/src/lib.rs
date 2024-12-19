@@ -71,6 +71,7 @@ impl<'a> Convert<'a> for hir::Module {
             name: "todo".to_owned(),
             functions,
             types,
+            constants: self.constants,
         }
     }
 }
@@ -177,12 +178,12 @@ impl<'a> ConvertInstruction<'a> for hir::Instruction {
 
     fn convert(self, lookup: &mut TypeLookup, locals: &[TypeRef]) -> Self::Output {
         match self {
-            hir::Instruction::Pop => todo!(),
+            hir::Instruction::Pop => Instruction::Pop,
             hir::Instruction::Load(i) => Instruction::LocalGet(i.0 as u32),
             hir::Instruction::Store(i) => Instruction::LocalSet(i.0 as u32),
             hir::Instruction::Int(num) => Instruction::Int(num),
             hir::Instruction::Float(num) => Instruction::Float(num),
-            hir::Instruction::String(string) => Instruction::String(string),
+            hir::Instruction::String(string) => Instruction::Bytes(string.into_bytes()),
             hir::Instruction::Bool(_) => todo!(),
             hir::Instruction::None => Instruction::Noop,
             hir::Instruction::Enum {

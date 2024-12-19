@@ -204,7 +204,7 @@ fn compile_fun(
     is_export: bool,
     ast_types: &HashMap<String, (ast::Declaration, bool)>,
     signatures: &HashMap<String, FunctionSignature>,
-    constants: &mut HashSet<String>,
+    constants: &mut HashSet<Vec<u8>>,
 ) -> Function {
     let parameters: Vec<_> = declaration
         .parameters
@@ -262,14 +262,14 @@ struct FunctionCompiler<'a> {
     locals: Vec<Type>,
 
     signatures: &'a HashMap<String, FunctionSignature>,
-    constants: &'a mut HashSet<String>,
+    constants: &'a mut HashSet<Vec<u8>>,
 }
 
 impl<'a> FunctionCompiler<'a> {
     fn with_params(
         parameters: &[(String, Type)],
         signatures: &'a HashMap<String, FunctionSignature>,
-        constants: &'a mut HashSet<String>,
+        constants: &'a mut HashSet<Vec<u8>>,
     ) -> Self {
         let param_types: Vec<_> = parameters.iter().map(|(_, ty)| ty.clone()).collect();
         let mut visible = Visible::new();
@@ -515,7 +515,7 @@ impl<'a> FunctionCompiler<'a> {
                     ast::Literal::Integer(int) => Instruction::Int(*int),
                     ast::Literal::Float(float) => Instruction::Float(*float),
                     ast::Literal::String(string) => {
-                        self.constants.insert(string.clone());
+                        self.constants.insert(string.as_bytes().into());
                         Instruction::String(string.clone())
                     }
                     ast::Literal::Boolean(bool) => Instruction::Bool(*bool),

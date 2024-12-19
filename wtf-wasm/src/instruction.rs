@@ -16,7 +16,7 @@ pub enum Instruction<'a> {
         member: Vec<u32>,
     },
 
-    String(String),
+    Bytes(Vec<u8>),
     Int(i64),
     Float(f64),
 
@@ -33,6 +33,7 @@ pub enum Instruction<'a> {
     Return,
     End,
     Unreachable,
+    Pop,
     Noop,
 
     // Raw WASM instructions to allow writing inline WASM functions directly in the future

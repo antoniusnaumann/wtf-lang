@@ -82,6 +82,7 @@ pub struct Instance<'a> {
     pub name: String,
     pub functions: Vec<Function<'a>>,
     pub types: Vec<TypeDeclaration>,
+    pub constants: HashSet<Vec<u8>>,
 }
 
 #[derive(Debug, Default)]
@@ -101,7 +102,7 @@ pub struct ComponentBuilder {
     component_types: Vec<(Type, Vec<ValType>)>,
     type_declarations: Vec<TypeDeclaration>,
     inner: wasm_encoder::ComponentBuilder,
-    constants: HashMap<String, (u32, u32)>,
+    constants: HashMap<Vec<u8>, (u32, u32)>,
 
     realloc_index: u32,
     has_instance: bool,
@@ -109,11 +110,8 @@ pub struct ComponentBuilder {
 
 // Probably embed https://docs.rs/wasm-encoder/latest/wasm_encoder/struct.ComponentBuilder.html and use the lower_func method from there
 impl ComponentBuilder {
-    pub fn new(constants: HashSet<String>) -> ComponentBuilder {
-        let mut result = Self::default();
-        todo!("Construct offsets for constants");
-
-        result
+    pub fn new(constants: HashSet<Vec<u8>>) -> ComponentBuilder {
+        Self::default()
     }
 
     pub fn encode_instance(&mut self, instance: Instance<'_>) {
@@ -121,6 +119,13 @@ impl ComponentBuilder {
             panic!("Currently only one instance per component is supported.")
         }
         self.has_instance = true;
+        let mut offset = 0;
+
+        for constant in instance.constants {
+            let len = constant.len();
+            self.constants.insert(constant, (offset as u32, len as u32));
+            offset += len;
+        }
 
         let mut exports = Vec::new();
 
@@ -421,8 +426,8 @@ impl ComponentBuilder {
                 vec![WasmInstruction::LocalGet(lower[member[0] as usize].0)]
             }
 
-            Instruction::String(string) => {
-                let (offset, length) = self.constants[string];
+            Instruction::Bytes(bytes) => {
+                let (offset, length) = self.constants[bytes];
                 vec![
                     WasmInstruction::I32Const(offset as i32),
                     WasmInstruction::I32Const(length as i32),
@@ -453,6 +458,7 @@ impl ComponentBuilder {
             Instruction::Branch => vec![WasmInstruction::Br(todo!())],
             Instruction::BranchIf => vec![WasmInstruction::BrIf(todo!())],
             Instruction::Return => vec![WasmInstruction::Return],
+            Instruction::Pop => vec![WasmInstruction::Drop], // TODO: Figure out how and where to handle dropping of more complex types (that lower to more than one value)
             Instruction::Noop => vec![],
 
             Instruction::Wasm(wasm) => vec![wasm.clone()],
@@ -536,7 +542,12 @@ impl ComponentBuilder {
                     .enumerate()
                     .find(|(_, f)| f.name == ident)
                     .map(|(idx, _)| idx)
-                    .expect("Function should exist");
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "Function '{ident}' should exist, got: {:#?}",
+                            self.functions
+                        )
+                    });
 
                 WasmInstruction::Call(index as u32)
             }

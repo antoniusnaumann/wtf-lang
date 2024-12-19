@@ -12,7 +12,7 @@ use std::{
 pub struct Module {
     pub types: HashMap<String, Type>,
     pub functions: HashMap<String, Function>,
-    pub constants: HashSet<String>,
+    pub constants: HashSet<Vec<u8>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
