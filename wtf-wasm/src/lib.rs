@@ -101,6 +101,7 @@ pub struct ComponentBuilder {
     component_types: Vec<(Type, Vec<ValType>)>,
     type_declarations: Vec<TypeDeclaration>,
     inner: wasm_encoder::ComponentBuilder,
+    constants: HashMap<String, (u32, u32)>,
 
     realloc_index: u32,
     has_instance: bool,
@@ -108,8 +109,11 @@ pub struct ComponentBuilder {
 
 // Probably embed https://docs.rs/wasm-encoder/latest/wasm_encoder/struct.ComponentBuilder.html and use the lower_func method from there
 impl ComponentBuilder {
-    pub fn new() -> ComponentBuilder {
-        Self::default()
+    pub fn new(constants: HashSet<String>) -> ComponentBuilder {
+        let mut result = Self::default();
+        todo!("Construct offsets for constants");
+
+        result
     }
 
     pub fn encode_instance(&mut self, instance: Instance<'_>) {
@@ -417,7 +421,13 @@ impl ComponentBuilder {
                 vec![WasmInstruction::LocalGet(lower[member[0] as usize].0)]
             }
 
-            Instruction::Const => todo!(),
+            Instruction::String(string) => {
+                let (offset, length) = self.constants[string];
+                vec![
+                    WasmInstruction::I32Const(offset as i32),
+                    WasmInstruction::I32Const(length as i32),
+                ]
+            }
             Instruction::Int(num) => vec![WasmInstruction::I64Const(*num)],
             Instruction::Float(num) => vec![WasmInstruction::F64Const(*num)],
             Instruction::Call(ident) => vec![self.lower_call(ident)],

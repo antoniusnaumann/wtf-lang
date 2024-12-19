@@ -5,6 +5,7 @@ pub struct Visible {
 }
 // TODO: add mutability
 struct Binding {
+    mutable: bool,
     name: String,
     id: LocalId,
 }
@@ -16,8 +17,8 @@ impl Visible {
     pub fn new() -> Self {
         Self { bindings: vec![] }
     }
-    pub fn bind(&mut self, name: String, id: LocalId) {
-        self.bindings.push(Binding { name, id });
+    pub fn bind(&mut self, name: String, id: LocalId, mutable: bool) {
+        self.bindings.push(Binding { mutable, name, id });
     }
     pub fn lookup(&self, name: &str) -> Option<LocalId> {
         self.bindings

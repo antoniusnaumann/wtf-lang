@@ -1,4 +1,8 @@
-use std::{any::Any, collections::HashMap, ops::Deref};
+use std::{
+    any::Any,
+    collections::{HashMap, HashSet},
+    ops::Deref,
+};
 
 use wtf_ast::{self as ast, BinaryOperator, Expression, TypeAnnotation};
 
@@ -66,15 +70,20 @@ pub fn compile(ast: ast::Module) -> Module {
         );
     }
 
+    let mut constants = HashSet::new();
     let mut functions = HashMap::new();
     for (fun, is_export) in ast_funs.values() {
         functions.insert(
             fun.name.to_string(),
-            compile_fun(fun, *is_export, &ast_types, &signatures),
+            compile_fun(fun, *is_export, &ast_types, &signatures, &mut constants),
         );
     }
 
-    Module { types, functions }
+    Module {
+        types,
+        functions,
+        constants,
+    }
 }
 
 fn compile_type_declaration(
@@ -195,6 +204,7 @@ fn compile_fun(
     is_export: bool,
     ast_types: &HashMap<String, (ast::Declaration, bool)>,
     signatures: &HashMap<String, FunctionSignature>,
+    constants: &mut HashSet<String>,
 ) -> Function {
     let parameters: Vec<_> = declaration
         .parameters
@@ -212,7 +222,7 @@ fn compile_fun(
         .map(|type_| compile_type_annotation(&type_, ast_types))
         .unwrap_or(Type::None);
 
-    let mut fn_compiler = FunctionCompiler::with_params(&parameters, signatures);
+    let mut fn_compiler = FunctionCompiler::with_params(&parameters, signatures, constants);
 
     let body = fn_compiler.compile_block(&declaration.body);
     Function {
@@ -247,31 +257,32 @@ fn compile_signature(
 }
 
 struct FunctionCompiler<'a> {
-    params: Vec<Type>,
     visible: Visible,
     stack: Vec<Type>,
     locals: Vec<Type>,
 
     signatures: &'a HashMap<String, FunctionSignature>,
+    constants: &'a mut HashSet<String>,
 }
 
 impl<'a> FunctionCompiler<'a> {
     fn with_params(
         parameters: &[(String, Type)],
         signatures: &'a HashMap<String, FunctionSignature>,
+        constants: &'a mut HashSet<String>,
     ) -> Self {
         let param_types: Vec<_> = parameters.iter().map(|(_, ty)| ty.clone()).collect();
         let mut visible = Visible::new();
         for (i, (s, _)) in parameters.iter().enumerate() {
-            visible.bind(s.clone(), LocalId(i));
+            visible.bind(s.clone(), LocalId(i), false);
         }
 
         FunctionCompiler {
-            params: param_types.clone(),
             visible,
             stack: param_types.clone(),
             locals: param_types,
             signatures,
+            constants,
         }
     }
 
@@ -418,7 +429,11 @@ impl<'a> FunctionCompiler<'a> {
                 let type_ = self.stack.last().unwrap().clone();
                 let local = LocalId(self.locals.len());
                 self.locals.push(type_);
-                self.visible.bind(variable_declaration.name.clone(), local);
+                self.visible.bind(
+                    variable_declaration.name.clone(),
+                    local,
+                    variable_declaration.mutable,
+                );
                 self.push(Instruction::Store(local), block);
             }
             ast::Statement::Assignment { target, value } => {
@@ -495,18 +510,20 @@ impl<'a> FunctionCompiler<'a> {
 
     fn compile_expression(&mut self, expression: &ast::Expression, block: &mut Block) {
         match expression {
-            ast::Expression::Literal(literal) => self.push(
-                {
-                    match literal {
-                        ast::Literal::Integer(int) => Instruction::Int(*int),
-                        ast::Literal::Float(float) => Instruction::Float(*float),
-                        ast::Literal::String(string) => Instruction::String(string.clone()),
-                        ast::Literal::Boolean(bool) => Instruction::Bool(*bool),
-                        ast::Literal::None => Instruction::None,
+            ast::Expression::Literal(literal) => {
+                let lit = match literal {
+                    ast::Literal::Integer(int) => Instruction::Int(*int),
+                    ast::Literal::Float(float) => Instruction::Float(*float),
+                    ast::Literal::String(string) => {
+                        self.constants.insert(string.clone());
+                        Instruction::String(string.clone())
                     }
-                },
-                block,
-            ),
+                    ast::Literal::Boolean(bool) => Instruction::Bool(*bool),
+                    ast::Literal::None => Instruction::None,
+                };
+
+                self.push(lit, block)
+            }
             ast::Expression::Identifier(name) => {
                 let local = self
                     .visible

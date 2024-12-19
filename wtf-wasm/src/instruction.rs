@@ -16,8 +16,7 @@ pub enum Instruction<'a> {
         member: Vec<u32>,
     },
 
-    // TODO: Add consts
-    Const,
+    String(String),
     Int(i64),
     Float(f64),
 

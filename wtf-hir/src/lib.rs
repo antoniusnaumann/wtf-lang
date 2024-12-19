@@ -10,9 +10,9 @@ use std::{
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Module {
-    // TODO: How should we mark exported types and functions here?
     pub types: HashMap<String, Type>,
     pub functions: HashMap<String, Function>,
+    pub constants: HashSet<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

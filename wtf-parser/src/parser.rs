@@ -660,7 +660,6 @@ impl Parser {
 
             members.push(FieldAssignment { name, element });
 
-            // TODO: Do we want to allow new lines here as delimiter?
             self.skip_newline();
             if self.current.token != Token::Comma {
                 break;
