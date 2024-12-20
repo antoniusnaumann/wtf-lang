@@ -1,5 +1,7 @@
 package wtf:example@0.1.0
 
+func println(arg: string) {}
+
 export func main() {
     println("Hello World!")
 }

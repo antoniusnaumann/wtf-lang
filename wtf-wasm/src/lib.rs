@@ -458,7 +458,7 @@ impl ComponentBuilder {
             Instruction::Branch => vec![WasmInstruction::Br(todo!())],
             Instruction::BranchIf => vec![WasmInstruction::BrIf(todo!())],
             Instruction::Return => vec![WasmInstruction::Return],
-            Instruction::Pop => vec![WasmInstruction::Drop], // TODO: Figure out how and where to handle dropping of more complex types (that lower to more than one value)
+            Instruction::Pop => vec![], // vec![WasmInstruction::Drop], // TODO: Figure out how and where to handle dropping of more complex types (that lower to more than one value)
             Instruction::Noop => vec![],
 
             Instruction::Wasm(wasm) => vec![wasm.clone()],
