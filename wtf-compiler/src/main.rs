@@ -1,21 +1,47 @@
-use std::{env, fs};
+use std::{env, fmt::Display, fs, ops::Deref};
 
 use wtf_parser::parser::Parser;
 
 fn main() {
     println!("WTF!");
 
-    let args: Vec<String> = env::args().collect();
+    let mut args: Vec<String> = env::args().collect();
+    let verbose = {
+        if let Some(pos) = args
+            .iter()
+            .position(|arg| arg == "--verbose" || arg == "-v")
+        {
+            args.remove(pos);
+            true
+        } else {
+            false
+        }
+    };
     let is_run = args.len() > 2 && &args[1] == "run";
     let file_path = if is_run { &args[2] } else { &args[1] };
 
     let input = fs::read_to_string(file_path).unwrap();
     let compiler = Compiler {
-        verbose: true,
+        verbose,
         run: is_run,
     };
 
     compiler.compile(input);
+}
+
+#[derive(Debug)]
+enum MainOutput {
+    ExitCode(i64),
+    Message(String),
+}
+
+impl Display for MainOutput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MainOutput::ExitCode(int) => write!(f, "{int}"),
+            MainOutput::Message(str) => write!(f, "{str}"),
+        }
+    }
 }
 
 struct Compiler {
@@ -53,17 +79,19 @@ impl Compiler {
         fs::write("output.wasm", &wasm).unwrap();
 
         if self.run {
-            println!();
-            println!("===== OUT =====");
+            if self.verbose {
+                println!();
+                println!("===== OUT =====");
 
-            println!();
+                println!();
+            }
             println!("Exit Code: {}", self.run(&wasm).unwrap());
         }
     }
 
-    fn run(&self, wasm: &[u8]) -> wasmtime::Result<i64> {
+    fn run(&self, wasm: &[u8]) -> wasmtime::Result<MainOutput> {
         use wasmtime::{
-            component::{Component, Linker, Val},
+            component::{Component, Linker, Type, Val},
             Config, Engine, Store,
         };
 
@@ -93,16 +121,23 @@ impl Compiler {
             let mut result = [];
             func.call(&mut store, &[], &mut result)?;
 
-            return Ok(0);
+            return Ok(MainOutput::ExitCode(0));
         }
 
-        let mut result = [wasmtime::component::Val::S64(0)];
-        func.call(&mut store, &[], &mut result)?;
-
-        let Val::S64(result) = result[0] else {
-            panic!("main function had unexpected result type!")
+        let mut result = match func.results(&store).deref() {
+            [Type::String] => [Val::String(String::new())],
+            [Type::S64] => [Val::S64(0)],
+            _ => {
+                panic!("main function had unexpected result type!");
+            }
         };
 
-        Ok(result)
+        func.call(&mut store, &[], &mut result)?;
+
+        match result {
+            [Val::String(str)] => Ok(MainOutput::Message(str)),
+            [Val::S64(int)] => Ok(MainOutput::ExitCode(int)),
+            _ => panic!("main function returned unexpected result!"),
+        }
     }
 }

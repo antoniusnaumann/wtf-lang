@@ -2,7 +2,11 @@ package wtf:example@0.1.0
 
 // func println(arg: string) {}
 
-export func main() {
-    let str = "Hello World!"
-    let other = "Hi?"
+export func main() -> string {
+    // let hello = "Hello"
+    // let world = "World!"
+
+    // return hello + " " + world
+    let hello_world = "Hello World!"
+    return hello_world
 }
