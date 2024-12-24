@@ -10,75 +10,99 @@ fn main() {
     let file_path = if is_run { &args[2] } else { &args[1] };
 
     let input = fs::read_to_string(file_path).unwrap();
+    let compiler = Compiler {
+        verbose: true,
+        run: is_run,
+    };
 
-    let mut parser = Parser::new(&input);
-    println!();
-    println!("===== AST =====");
-    let ast = parser.parse_module().expect("No AST.");
-    println!("{ast}");
-
-    println!();
-    println!("===== HIR =====");
-    let hir = wtf_hir::compile(ast);
-    println!("{hir}");
-
-    println!();
-    println!("===== WAT =====");
-    let wasm = wtf_encode::Encoder::new().encode(hir).finish();
-    println!("{:?}", wasmparser::validate(&wasm).err());
-
-    fs::write("output.wasm", &wasm).unwrap();
-
-    if is_run {
-        println!();
-        println!("===== OUT =====");
-
-        println!();
-        println!("Exit Code: {}", run(&wasm).unwrap());
-    }
+    compiler.compile(input);
 }
 
-fn run(wasm: &[u8]) -> wasmtime::Result<i64> {
-    use wasmtime::{
-        component::{Component, Linker, Val},
-        Config, Engine, Store,
-    };
+struct Compiler {
+    verbose: bool,
+    run: bool,
+}
 
-    let mut config = Config::new();
-    config.wasm_component_model(true);
+impl Compiler {
+    fn compile(&self, input: String) {
+        let mut parser = Parser::new(&input);
+        if self.verbose {
+            println!();
+            println!("===== AST =====");
+        }
+        let ast = parser.parse_module().expect("No AST.");
 
-    let engine = Engine::new(&config)?;
-    let mut store = Store::new(&engine, {});
-    let mut linker = Linker::new(&engine);
-    linker
-        .root()
-        .func_wrap("println", |_store, params: (String,)| {
-            println!("{}", params.0);
-            Ok(())
-        })?;
+        if self.verbose {
+            println!("{ast}");
 
-    let component = Component::from_binary(&engine, wasm)?;
+            println!();
+            println!("===== HIR =====");
+        }
+        let hir = wtf_hir::compile(ast);
+        if self.verbose {
+            println!("{hir}");
 
-    let instance = linker.instantiate(&mut store, &component)?;
+            println!();
+            println!("===== WAT =====");
+        }
+        let wasm = wtf_encode::Encoder::new().encode(hir).finish();
+        if self.verbose {
+            println!("{:?}", wasmparser::validate(&wasm).err());
+        }
 
-    let func = instance
-        .get_func(&mut store, "main")
-        .expect("main function did not exist");
+        fs::write("output.wasm", &wasm).unwrap();
 
-    // This allows main functions without return value
-    if func.results(&store).len() == 0 {
-        let mut result = [];
-        func.call(&mut store, &[], &mut result)?;
+        if self.run {
+            println!();
+            println!("===== OUT =====");
 
-        return Ok(0);
+            println!();
+            println!("Exit Code: {}", self.run(&wasm).unwrap());
+        }
     }
 
-    let mut result = [wasmtime::component::Val::S64(0)];
-    func.call(&mut store, &[], &mut result)?;
+    fn run(&self, wasm: &[u8]) -> wasmtime::Result<i64> {
+        use wasmtime::{
+            component::{Component, Linker, Val},
+            Config, Engine, Store,
+        };
 
-    let Val::S64(result) = result[0] else {
-        panic!("main function had unexpected result type!")
-    };
+        let mut config = Config::new();
+        config.wasm_component_model(true);
 
-    Ok(result)
+        let engine = Engine::new(&config)?;
+        let mut store = Store::new(&engine, {});
+        let mut linker = Linker::new(&engine);
+        linker
+            .root()
+            .func_wrap("println", |_store, params: (String,)| {
+                println!("{}", params.0);
+                Ok(())
+            })?;
+
+        let component = Component::from_binary(&engine, wasm)?;
+
+        let instance = linker.instantiate(&mut store, &component)?;
+
+        let func = instance
+            .get_func(&mut store, "main")
+            .expect("main function did not exist");
+
+        // This allows main functions without return value
+        if func.results(&store).len() == 0 {
+            let mut result = [];
+            func.call(&mut store, &[], &mut result)?;
+
+            return Ok(0);
+        }
+
+        let mut result = [wasmtime::component::Val::S64(0)];
+        func.call(&mut store, &[], &mut result)?;
+
+        let Val::S64(result) = result[0] else {
+            panic!("main function had unexpected result type!")
+        };
+
+        Ok(result)
+    }
 }
