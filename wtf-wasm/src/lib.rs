@@ -9,7 +9,7 @@ use std::{
 use wasm_encoder::{
     BlockType, CanonicalOption, CodeSection, ComponentExportKind, ConstExpr, DataSection,
     ExportKind, ExportSection, FunctionSection, GlobalSection, GlobalType, MemorySection,
-    MemoryType, Module, PrimitiveValType, TypeSection, ValType,
+    MemoryType, Module, PrimitiveValType, Section, TypeSection, ValType,
 };
 
 mod instruction;
@@ -191,7 +191,7 @@ impl ComponentBuilder {
             offsets.push(offsets.last().unwrap() + param.len());
         }
 
-        self.types.function(
+        self.types.ty().function(
             params.iter().flatten().cloned().collect::<Vec<_>>(),
             results,
         );
@@ -207,9 +207,12 @@ impl ComponentBuilder {
         );
 
         let locals: Vec<Local> = self.enumerate_locals(&function.locals);
-        let mut func = wasm_encoder::Function::new(
-            lower_locals(locals.iter().skip(function.signature.params.len())).collect::<Vec<_>>(),
+        let mut func = wasm_encoder::Function::new_with_locals_types(
+            lower_locals(locals.iter().skip(function.signature.params.len()))
+                .map(|(_, ty)| ty)
+                .collect::<Vec<_>>(),
         );
+
         for instruction in &function.instructions {
             for lowered_instruction in self.lower_instruction(instruction, &locals) {
                 func.instruction(&lowered_instruction);
@@ -238,7 +241,7 @@ impl ComponentBuilder {
         self.inner.core_module(&module);
         self.inner.core_instantiate(0, vec![]);
         self.inner
-            .alias_core_export(0, "memory", ExportKind::Memory);
+            .core_alias_export(0, "memory", ExportKind::Memory);
 
         let mut exports = vec![];
 
@@ -338,7 +341,7 @@ impl ComponentBuilder {
 
     // Creates the realloc function
     fn realloc(&mut self) {
-        self.types.function(
+        self.types.ty().function(
             vec![ValType::I32, ValType::I32, ValType::I32, ValType::I32],
             vec![ValType::I32],
         );

@@ -231,13 +231,18 @@ impl Display for Module {
         }
         writeln!(f, "Functions:")?;
         for (name, function) in &self.functions {
+            write!(f, "Locals:")?;
+            for (i, ty) in function.locals.iter().enumerate() {
+                write!(f, " {i}: {ty}")?;
+            }
+            write!(f, "\n")?;
             write!(f, "fun {}", name)?;
             for (name, type_) in &function.parameters {
                 write!(f, " {}: ({})", name, type_)?;
             }
             write!(f, " -> {} ", function.return_type)?;
             function.body.fmt(f, 2)?;
-            write!(f, "\n")?;
+            write!(f, "\n\n")?;
         }
         Ok(())
     }
