@@ -85,6 +85,12 @@ pub struct Instance<'a> {
     pub constants: HashSet<Vec<u8>>,
 }
 
+#[derive(Debug)]
+struct ConstantPosition {
+    offset: u32,
+    length: u32,
+}
+
 #[derive(Debug, Default)]
 pub struct ComponentBuilder {
     types: TypeSection,
@@ -102,7 +108,7 @@ pub struct ComponentBuilder {
     component_types: Vec<(Type, Vec<ValType>)>,
     type_declarations: Vec<TypeDeclaration>,
     inner: wasm_encoder::ComponentBuilder,
-    constants: HashMap<Vec<u8>, (u32, u32)>,
+    constants: HashMap<Vec<u8>, ConstantPosition>,
 
     realloc_index: u32,
     has_instance: bool,
@@ -110,7 +116,7 @@ pub struct ComponentBuilder {
 
 // Probably embed https://docs.rs/wasm-encoder/latest/wasm_encoder/struct.ComponentBuilder.html and use the lower_func method from there
 impl ComponentBuilder {
-    pub fn new(constants: HashSet<Vec<u8>>) -> ComponentBuilder {
+    pub fn new() -> ComponentBuilder {
         Self::default()
     }
 
@@ -122,9 +128,10 @@ impl ComponentBuilder {
         let mut offset = 0;
 
         for constant in instance.constants {
-            let len = constant.len();
-            self.constants.insert(constant, (offset as u32, len as u32));
-            offset += len;
+            let length = constant.len() as u32;
+            self.constants
+                .insert(constant, ConstantPosition { offset, length });
+            offset += length;
         }
 
         let mut exports = Vec::new();
@@ -333,8 +340,23 @@ impl ComponentBuilder {
         let mut data = DataSection::new();
         let memory_index = 0;
         let offset = ConstExpr::i32_const(42);
-        let segment_data = b"hello";
-        data.active(memory_index, &offset, segment_data.iter().copied());
+        let data_length = self
+            .constants
+            .iter()
+            .fold(0, |acc, (_key, ConstantPosition { offset: _, length })| {
+                acc + length
+            });
+        let mut segment_data = vec![0; data_length as usize];
+        for (constant, ConstantPosition { offset, length }) in &self.constants {
+            let offset = *offset as usize;
+            let length = *length as usize;
+            for (index, byte) in constant.iter().enumerate() {
+                debug_assert!(offset + length > offset + index);
+                debug_assert!(segment_data[offset + index] == 0);
+                segment_data[offset + index] = *byte;
+            }
+        }
+        data.active(memory_index, &offset, segment_data);
 
         (memory, data)
     }
@@ -430,7 +452,7 @@ impl ComponentBuilder {
             }
 
             Instruction::Bytes(bytes) => {
-                let (offset, length) = self.constants[bytes];
+                let ConstantPosition { offset, length } = self.constants[bytes];
                 vec![
                     WasmInstruction::I32Const(offset as i32),
                     WasmInstruction::I32Const(length as i32),
