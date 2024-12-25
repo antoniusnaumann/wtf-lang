@@ -110,6 +110,7 @@ pub struct ComponentBuilder {
     inner: wasm_encoder::ComponentBuilder,
     constants: HashMap<Vec<u8>, ConstantPosition>,
     data_ptr: u32,
+    constant_ptr: u32,
 
     realloc_index: u32,
     has_instance: bool,
@@ -134,7 +135,9 @@ impl ComponentBuilder {
                 .insert(constant, ConstantPosition { offset, length });
             offset += length;
         }
-        self.data_ptr = offset;
+        // 64bit alignment
+        self.constant_ptr = offset;
+        self.data_ptr = offset + offset % 64;
 
         let mut exports = Vec::new();
 
@@ -422,7 +425,7 @@ impl ComponentBuilder {
         let mut data = DataSection::new();
         let memory_index = 0;
         let offset = ConstExpr::i32_const(0);
-        let mut segment_data = vec![0; self.data_ptr as usize];
+        let mut segment_data = vec![0; self.constant_ptr as usize];
         for (constant, ConstantPosition { offset, length }) in &self.constants {
             let offset = *offset as usize;
             let length = *length as usize;
@@ -448,43 +451,84 @@ impl ComponentBuilder {
         self.exports
             .export("realloc", ExportKind::Func, self.function_count);
 
-        // Global $heap_ptr (mut i32) = initial value 65536
+        // Global $heap_ptr (mut i32) = initial value 65536, the first page is used for constants
         self.globals.global(
             GlobalType {
                 val_type: ValType::I32,
                 mutable: true,
                 shared: false,
             },
-            &ConstExpr::i32_const(65536),
+            &ConstExpr::i32_const(0x10000),
         );
         let heap_ptr = self.global_count;
         self.global_count += 1;
 
-        // Declare local $ret
-        let mut realloc_func = wasm_encoder::Function::new(vec![(1, ValType::I32)]);
+        // Page pointer, that always points to the end of the current page
+        self.globals.global(
+            GlobalType {
+                val_type: ValType::I32,
+                mutable: true,
+                shared: false,
+            },
+            &ConstExpr::i32_const(0xFFFF),
+        );
+        let page_pointer = self.global_count;
+        self.global_count += 1;
 
-        // Function body:
-        // param $ptr i32       ; local index 0
-        // param $old_size i32  ; local index 1
-        // param $align i32     ; local index 2
-        // param $new_size i32  ; local index 3
-        // local $ret i32       ; local index 4
+        // Declare local $ret
+        let mut realloc_func = wasm_encoder::Function::new(vec![(2, ValType::I32)]);
+
+        // TODO: free memory and use these
+        let _param_ptr = 0;
+        let _param_old_size = 1;
+        // TODO: should we use alignment here?
+        let _param_align = 2;
+        let param_new_size = 3;
+        let local_ret = 4;
+        let local_new_heap = 5;
 
         // TODO: This is currently a simple bump allocator that never reallocates. Use some library realloc function instead
 
-        // Get the current heap pointer and store it in $ret
-        realloc_func.instruction(&WasmInstruction::GlobalGet(heap_ptr)); // global.get $heap_ptr
-        realloc_func.instruction(&WasmInstruction::LocalSet(4)); // local.set $ret
+        let instructions = {
+            use WasmInstruction::*;
+            [
+                // Get the current heap pointer and store it in $ret
+                GlobalGet(heap_ptr),
+                LocalSet(local_ret),
+                // Update the heap pointer: $heap_ptr += $new_size
+                GlobalGet(heap_ptr),
+                LocalGet(param_new_size),
+                I32Add,
+                LocalTee(local_new_heap),
+                GlobalSet(heap_ptr),
+                // Grow memory if page limit was surpassed
+                GlobalGet(page_pointer),
+                LocalGet(local_new_heap),
+                I32LeU,
+                // TODO: calculate how many pages we should grow here
+                If(BlockType::Empty),
+                GlobalGet(page_pointer),
+                I32Const(0x10000),
+                I32Add,
+                GlobalSet(page_pointer),
+                // Grow memory by one page
+                I32Const(1),
+                MemoryGrow(0),
+                I32Const(-1),
+                I32Eq,
+                If(BlockType::Empty),
+                Unreachable,
+                End,
+                End,
+                // Return the original heap pointer (stored in $ret)
+                LocalGet(local_ret),
+                End,
+            ]
+        };
 
-        // Update the heap pointer: $heap_ptr += $new_size
-        realloc_func.instruction(&WasmInstruction::GlobalGet(heap_ptr)); // global.get $heap_ptr
-        realloc_func.instruction(&WasmInstruction::LocalGet(3)); // local.get $new_size
-        realloc_func.instruction(&WasmInstruction::I32Add); // i32.add
-        realloc_func.instruction(&WasmInstruction::GlobalSet(heap_ptr)); // global.set $heap_ptr
-
-        // Return the original heap pointer (stored in $ret)
-        realloc_func.instruction(&WasmInstruction::LocalGet(4)); // local.get $ret
-        realloc_func.instruction(&WasmInstruction::End);
+        for instruction in &instructions {
+            realloc_func.instruction(instruction);
+        }
 
         self.codes.function(&realloc_func);
         self.realloc_index = self.function_count;
@@ -571,7 +615,6 @@ impl ComponentBuilder {
     }
 
     fn lower_call(&self, ident: &str) -> WasmInstruction {
-        println!("{ident}");
         match ident {
             // Arithmetic Operators
             "add__s32_s32" | "add__u32_u32" => WasmInstruction::I32Add,

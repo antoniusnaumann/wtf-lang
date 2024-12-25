@@ -62,9 +62,9 @@ pub fn compile(ast: ast::Module) -> Module {
     }
 
     let mut signatures = HashMap::with_builtins();
-    let mut keys = signatures.keys().collect::<Vec<_>>();
-    keys.sort();
-    println!("{:#?}", keys);
+    // let mut keys = signatures.keys().collect::<Vec<_>>();
+    // keys.sort();
+    // println!("{:#?}", keys);
     for (fun, is_export) in ast_funs.values() {
         signatures.insert(
             fun.name.to_string(),
