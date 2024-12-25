@@ -24,8 +24,11 @@ impl WithBuiltins for HashMap<String, FunctionSignature> {
             Ty::U16,
             Ty::U32,
             Ty::U64,
+            Ty::F32,
+            Ty::F64,
         ];
-        let arithmetic = ["add", "sub", "mul", "div"];
+        let float_types = [Ty::F32, Ty::F64];
+        let arithmetic = ["add", "sub", "mul", "div", "min", "max"];
         let compare = [
             "eq",
             "greater_eq",
@@ -34,27 +37,32 @@ impl WithBuiltins for HashMap<String, FunctionSignature> {
             "less_than",
             "ne",
         ];
+        let float_instructions = ["ceil", "floor", "trunc", "sqrt"];
+        let float_operations = float_types.into_iter().flat_map(|ty| {
+            float_instructions
+                .iter()
+                .map(|op| un_op(op, ty, ty))
+                .collect::<Vec<_>>()
+        });
+
+        let conversions = [
+            conv(Ty::S64, Ty::F32),
+            conv(Ty::S64, Ty::F64),
+            conv(Ty::S32, Ty::F32),
+            conv(Ty::S32, Ty::F64),
+        ];
+
         num_types
             .into_iter()
             .flat_map(|ty| {
                 arithmetic
                     .iter()
-                    .map(|op| {
-                        fun(
-                            format!("{op}__{ty}_{ty}"),
-                            &[Type::Builtin(ty), Type::Builtin(ty)],
-                            Type::Builtin(ty),
-                        )
-                    })
-                    .chain(compare.iter().map(|op| {
-                        fun(
-                            format!("{op}__{ty}_{ty}"),
-                            &[Type::Builtin(ty), Type::Builtin(ty)],
-                            Type::Builtin(Ty::Bool),
-                        )
-                    }))
+                    .map(|op| bin_op(op, ty, ty))
+                    .chain(compare.iter().map(|op| bin_op(op, ty, Ty::Bool)))
                     .collect::<Vec<_>>()
             })
+            .chain(float_operations)
+            .chain(conversions)
             .chain(iter::once(fun(
                 "println".to_owned(),
                 &[Type::Builtin(Ty::String)],
@@ -62,6 +70,30 @@ impl WithBuiltins for HashMap<String, FunctionSignature> {
             )))
             .collect()
     }
+}
+
+fn conv(target: PrimitiveType, arg: PrimitiveType) -> (String, FunctionSignature) {
+    fun(
+        format!("{target}__{arg}"),
+        &[Type::Builtin(arg)],
+        Type::Builtin(target),
+    )
+}
+
+fn un_op(op: &str, arg: PrimitiveType, ret: PrimitiveType) -> (String, FunctionSignature) {
+    fun(
+        format!("{op}__{arg}"),
+        &[Type::Builtin(arg), Type::Builtin(arg)],
+        Type::Builtin(ret),
+    )
+}
+
+fn bin_op(op: &str, arg: PrimitiveType, ret: PrimitiveType) -> (String, FunctionSignature) {
+    fun(
+        format!("{op}__{arg}_{arg}"),
+        &[Type::Builtin(arg), Type::Builtin(arg)],
+        Type::Builtin(ret),
+    )
 }
 
 fn fun(name: impl Into<String>, params: &[Type], return_type: Type) -> (String, FunctionSignature) {

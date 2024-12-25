@@ -1,5 +1,4 @@
 use std::{
-    any::Any,
     collections::{HashMap, HashSet},
     ops::Deref,
 };
@@ -48,7 +47,7 @@ pub fn compile(ast: ast::Module) -> Module {
                     (ast::Declaration::Variant(var), is_export),
                 );
             }
-            ast::Declaration::Export(ex) => {
+            ast::Declaration::Export(_) => {
                 panic!("TODO: error: double export is not permitted!")
             }
         }
@@ -63,6 +62,9 @@ pub fn compile(ast: ast::Module) -> Module {
     }
 
     let mut signatures = HashMap::with_builtins();
+    let mut keys = signatures.keys().collect::<Vec<_>>();
+    keys.sort();
+    println!("{:#?}", keys);
     for (fun, is_export) in ast_funs.values() {
         signatures.insert(
             fun.name.to_string(),
@@ -345,7 +347,7 @@ impl<'a> FunctionCompiler<'a> {
                 self.stack.push(
                     self.signatures
                         .get(function)
-                        .expect(&format!("Function '{function}' does not exist"))
+                        .expect(&format!("Resolved function {function} should exist"))
                         .return_type
                         .clone(),
                 );
@@ -614,14 +616,56 @@ impl<'a> FunctionCompiler<'a> {
     }
 
     fn push_fn(&mut self, function: &Expression, arguments: &[Expression], block: &mut Block) {
+        fn mangle(ty: &Type) -> std::borrow::Cow<str> {
+            match ty {
+                Type::Never => panic!("Never as an arg is not allowed"),
+                Type::None => panic!("None as an arg ist not allowed"),
+                Type::List(elem) => format!("list___{}", mangle(elem)).into(),
+                Type::Option(inner) => format!("option___{}", mangle(inner)).into(),
+                Type::Result { ok, err } => {
+                    format!("result___{}__{}", mangle(ok), mangle(err)).into()
+                }
+                Type::Record(_) => todo!(),
+                Type::Resource(_) => todo!(),
+                Type::Enum(_) => todo!(),
+                Type::Variant(_) => todo!(),
+                Type::Tuple(_) => todo!(),
+                Type::Builtin(ty) => ty.name().into(),
+            }
+        }
+
+        fn mangle_fn<'a>(name: &'a str, args: &[Type]) -> std::borrow::Cow<'a, str> {
+            if args.len() == 0 {
+                name.into()
+            } else {
+                let postfix = args
+                    .iter()
+                    .map(|arg| mangle(arg))
+                    .collect::<Vec<_>>()
+                    .join("_");
+                format!("{name}__{postfix}").into()
+            }
+        }
+
         let mut arg_types = vec![];
         for arg in arguments {
             self.compile_expression(arg, block);
             arg_types.push(self.stack.last().unwrap().clone());
         }
-        // TODO: function overloading
+
+        // TODO: Function overloading for non-builtin functions
+        // TODO: Resolve functions into fully qualified names
         let function = match function {
-            ast::Expression::Identifier(name) => name.to_string(),
+            ast::Expression::Identifier(name) if self.signatures.contains_key(name) => name.into(),
+            ast::Expression::Identifier(name) => {
+                let mangled = mangle_fn(name, &arg_types);
+                if self.signatures.contains_key(mangled.deref()) {
+                    mangled.into()
+                } else {
+                    dbg!(&self.signatures.keys());
+                    panic!("Function '{name}' does not exist");
+                }
+            }
             _ => panic!("You can only call names."),
         };
         self.push(

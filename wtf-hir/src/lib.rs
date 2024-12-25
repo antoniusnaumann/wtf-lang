@@ -47,6 +47,26 @@ pub enum PrimitiveType {
     String,
 }
 
+impl PrimitiveType {
+    pub fn name(&self) -> &str {
+        match self {
+            PrimitiveType::Bool => "bool",
+            PrimitiveType::S8 => "s8",
+            PrimitiveType::U8 => "u8",
+            PrimitiveType::S16 => "s16",
+            PrimitiveType::U16 => "u16",
+            PrimitiveType::S32 => "s32",
+            PrimitiveType::U32 => "u32",
+            PrimitiveType::S64 => "s64",
+            PrimitiveType::U64 => "u64",
+            PrimitiveType::F32 => "f32",
+            PrimitiveType::F64 => "f64",
+            PrimitiveType::Char => "char",
+            PrimitiveType::String => "string",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResourceType {
     pub methods: HashMap<String, FunctionSignature>,
@@ -317,21 +337,7 @@ impl Display for Type {
 
 impl Display for PrimitiveType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PrimitiveType::Bool => write!(f, "bool"),
-            PrimitiveType::S8 => write!(f, "s8"),
-            PrimitiveType::S16 => write!(f, "s16"),
-            PrimitiveType::S32 => write!(f, "s32"),
-            PrimitiveType::S64 => write!(f, "s64"),
-            PrimitiveType::U8 => write!(f, "u8"),
-            PrimitiveType::U16 => write!(f, "u16"),
-            PrimitiveType::U32 => write!(f, "u32"),
-            PrimitiveType::U64 => write!(f, "u64"),
-            PrimitiveType::F32 => write!(f, "f32"),
-            PrimitiveType::F64 => write!(f, "f64"),
-            PrimitiveType::Char => write!(f, "char"),
-            PrimitiveType::String => write!(f, "string"),
-        }
+        write!(f, "{}", self.name())
     }
 }
 

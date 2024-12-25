@@ -571,8 +571,9 @@ impl ComponentBuilder {
     }
 
     fn lower_call(&self, ident: &str) -> WasmInstruction {
+        println!("{ident}");
         match ident {
-            // # Arithmetic Operators
+            // Arithmetic Operators
             "add__s32_s32" | "add__u32_u32" => WasmInstruction::I32Add,
             "add__s64_s64" | "add__u64_u64" => WasmInstruction::I64Add,
             "add__f32_f32" => WasmInstruction::F32Add,
@@ -598,7 +599,7 @@ impl ComponentBuilder {
             "div__f32_f32" => WasmInstruction::F32Div,
             "div__f64_f64" => WasmInstruction::F64Div,
 
-            // # Comparison Operators
+            // Comparison Operators
             "eq__u32_u32" | "eq__s32_s32" => WasmInstruction::I32Eq,
             "eq__u64_u64" | "eq__s64_s64" => WasmInstruction::I64Eq,
             "eq__f32" => WasmInstruction::F32Eq,
@@ -637,6 +638,34 @@ impl ComponentBuilder {
             "less_eq__f32_f32" => WasmInstruction::F32Le,
             "less_eq__f64_f64" => WasmInstruction::F64Le,
 
+            "min__f32_f32" => WasmInstruction::F32Min,
+            "min__f64_f64" => WasmInstruction::F64Min,
+
+            "max__f32_f32" => WasmInstruction::F32Max,
+            "max__f64_f64" => WasmInstruction::F64Max,
+
+            // Unary float operations
+            "floor__f64" => WasmInstruction::F64Floor,
+            "floor__f32" => WasmInstruction::F32Floor,
+
+            "ceil__f64" => WasmInstruction::F64Ceil,
+            "ceil__f32" => WasmInstruction::F32Ceil,
+
+            "abs__f32" => WasmInstruction::F32Abs,
+            "abs__f64" => WasmInstruction::F64Abs,
+
+            // Conversions
+            "s32__f32" => WasmInstruction::I32TruncF32S,
+            "s64__f32" => WasmInstruction::I64TruncF32S,
+            "u32__f32" => WasmInstruction::I32TruncF32U,
+            "u64__f32" => WasmInstruction::I64TruncF32U,
+
+            "s32__f64" => WasmInstruction::I32TruncF64S,
+            "s64__f64" => WasmInstruction::I64TruncF64S,
+            "u32__f64" => WasmInstruction::I32TruncF64U,
+            "u64__f64" => WasmInstruction::I64TruncF64U,
+
+            // Regular function call
             ident => {
                 let ident = ident.replace("_", "-");
 
