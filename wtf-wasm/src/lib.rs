@@ -8,8 +8,8 @@ use std::{
 
 use wasm_encoder::{
     BlockType, CanonicalOption, CodeSection, ComponentExportKind, ConstExpr, DataSection,
-    ExportKind, ExportSection, FunctionSection, GlobalSection, GlobalType, MemorySection,
-    MemoryType, Module, PrimitiveValType, Section, TypeSection, ValType,
+    ExportKind, ExportSection, FunctionSection, GlobalSection, GlobalType, MemArg, MemorySection,
+    MemoryType, Module, PrimitiveValType, TypeSection, ValType,
 };
 
 mod instruction;
@@ -109,6 +109,7 @@ pub struct ComponentBuilder {
     type_declarations: Vec<TypeDeclaration>,
     inner: wasm_encoder::ComponentBuilder,
     constants: HashMap<Vec<u8>, ConstantPosition>,
+    data_ptr: u32,
 
     realloc_index: u32,
     has_instance: bool,
@@ -133,6 +134,7 @@ impl ComponentBuilder {
                 .insert(constant, ConstantPosition { offset, length });
             offset += length;
         }
+        self.data_ptr = offset;
 
         let mut exports = Vec::new();
 
@@ -186,6 +188,80 @@ impl ComponentBuilder {
             .result
             .map_or_else(|| vec![], |ty| self.lower(&ty));
 
+        let mut locals: Vec<Local> = self.enumerate_locals(&function.locals);
+        let mut intermediate_locals = vec![];
+        // Additional instructions and locals to handle multi-value return functions
+        let mut additional_instructions = vec![];
+        let results = if results.len() <= 1 {
+            results
+        } else {
+            // The component proposal currently does not support multi-value return types, they therefore have to be transferred using the linear memory: https://github.com/WebAssembly/component-model/blob/main/design/mvp/CanonicalABI.md#flattening
+            let mut local_idx = locals.iter().fold(0, |acc, local| acc + local.lower.len());
+            let mem_arg = MemArg {
+                offset: 0,
+                align: 0,
+                memory_index: 0,
+            };
+            let offset = self.data_ptr;
+            self.data_ptr = results.iter().fold(self.data_ptr, |acc, result| {
+                additional_instructions.push(WasmInstruction::I32Const(acc as i32));
+                additional_instructions.push(WasmInstruction::LocalGet(local_idx as u32));
+                let len = match result {
+                    ValType::I32 => {
+                        additional_instructions.push(WasmInstruction::I32Store(mem_arg));
+                        intermediate_locals.push(Local {
+                            index: local_idx as u32,
+                            ty: TypeRef::Primitive(PrimitiveValType::S32),
+                            lower: vec![ValType::I32],
+                        });
+                        4
+                    }
+                    ValType::I64 => {
+                        additional_instructions.push(WasmInstruction::I64Store(mem_arg));
+                        intermediate_locals.push(Local {
+                            index: local_idx as u32,
+                            ty: TypeRef::Primitive(PrimitiveValType::S64),
+                            lower: vec![ValType::I64],
+                        });
+                        8
+                    }
+                    ValType::F32 => {
+                        additional_instructions.push(WasmInstruction::F32Store(mem_arg));
+                        intermediate_locals.push(Local {
+                            index: local_idx as u32,
+                            ty: TypeRef::Primitive(PrimitiveValType::F32),
+                            lower: vec![ValType::F32],
+                        });
+                        4
+                    }
+                    ValType::F64 => {
+                        additional_instructions.push(WasmInstruction::F64Store(mem_arg));
+                        intermediate_locals.push(Local {
+                            index: local_idx as u32,
+                            ty: TypeRef::Primitive(PrimitiveValType::F64),
+                            lower: vec![ValType::F64],
+                        });
+                        8
+                    }
+                    ValType::V128 => todo!("V128 in multiple return type"),
+                    ValType::Ref(_) => todo!("Ref-Type in multiple return type"),
+                };
+                local_idx += 1;
+                acc + len
+            });
+            additional_instructions = intermediate_locals
+                .iter()
+                // it seems that this .rev() call is wrong here, but I don't know why
+                // .rev()
+                .map(|local| WasmInstruction::LocalSet(local.index))
+                .chain(additional_instructions)
+                .chain(iter::once(WasmInstruction::I32Const(offset as i32)))
+                .collect();
+
+            vec![ValType::I32]
+        };
+        locals.extend(intermediate_locals);
+
         let params: Vec<Vec<ValType>> = function
             .signature
             .params
@@ -213,7 +289,6 @@ impl ComponentBuilder {
             self.function_count,
         );
 
-        let locals: Vec<Local> = self.enumerate_locals(&function.locals);
         let mut func = wasm_encoder::Function::new_with_locals_types(
             lower_locals(locals.iter().skip(function.signature.params.len()))
                 .map(|(_, ty)| ty)
@@ -222,6 +297,13 @@ impl ComponentBuilder {
 
         for instruction in &function.instructions {
             for lowered_instruction in self.lower_instruction(instruction, &locals) {
+                if additional_instructions.len() > 0
+                    && matches!(lowered_instruction, WasmInstruction::Return)
+                {
+                    for additional in &additional_instructions {
+                        func.instruction(additional);
+                    }
+                }
                 func.instruction(&lowered_instruction);
             }
         }
@@ -339,14 +421,8 @@ impl ComponentBuilder {
 
         let mut data = DataSection::new();
         let memory_index = 0;
-        let offset = ConstExpr::i32_const(42);
-        let data_length = self
-            .constants
-            .iter()
-            .fold(0, |acc, (_key, ConstantPosition { offset: _, length })| {
-                acc + length
-            });
-        let mut segment_data = vec![0; data_length as usize];
+        let offset = ConstExpr::i32_const(0);
+        let mut segment_data = vec![0; self.data_ptr as usize];
         for (constant, ConstantPosition { offset, length }) in &self.constants {
             let offset = *offset as usize;
             let length = *length as usize;
@@ -482,7 +558,10 @@ impl ComponentBuilder {
             Instruction::Block => vec![WasmInstruction::Block(todo!())],
             Instruction::Branch => vec![WasmInstruction::Br(todo!())],
             Instruction::BranchIf => vec![WasmInstruction::BrIf(todo!())],
-            Instruction::Return => vec![WasmInstruction::Return],
+            Instruction::Return => {
+                // TODO: Put return values in register if string is returned
+                vec![WasmInstruction::Return]
+            }
             Instruction::Pop => vec![], // vec![WasmInstruction::Drop], // TODO: Figure out how and where to handle dropping of more complex types (that lower to more than one value)
             Instruction::Noop => vec![],
 
