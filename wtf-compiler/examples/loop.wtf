@@ -1,0 +1,10 @@
+package wtf:example@0.1.0
+
+export func main() -> s64 {
+    var x = 5
+    while x < 15 {
+        x += 1
+    }
+
+    return x
+}

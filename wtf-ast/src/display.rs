@@ -237,7 +237,7 @@ impl Print for Statement {
             Statement::ThrowStatement(v) => node!(f, indent, c, "throw", v),
             Statement::IfStatement(v) => v.print(f, indent, c),
             Statement::MatchStatement(_) => todo!(),
-            Statement::WhileStatement(_) => todo!(),
+            Statement::WhileStatement(v) => v.print(f, indent, c),
             Statement::ForStatement(_) => todo!(),
         }
     }
@@ -268,6 +268,12 @@ impl Print for IfStatement {
             self.then_branch,
             self.else_branch
         )
+    }
+}
+
+impl Print for WhileStatement {
+    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
+        node!(f, indent, c, "while", self.condition, self.body)
     }
 }
 
