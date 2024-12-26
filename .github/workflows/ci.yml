@@ -1,4 +1,4 @@
-name: Examples
+name: Health Check
 
 on:
   push:
@@ -11,9 +11,17 @@ env:
 
 jobs:
   tests:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: cargo build --workspace
+      - name: Run Tests
+        run: cargo test --workspace  
+  examples:
     strategy:
       matrix:
-        path:
+        example:
           [
             "./examples/loop.wtf",
             "./examples/record.wtf",
