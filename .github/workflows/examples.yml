@@ -1,0 +1,33 @@
+name: Examples
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  tests:
+    strategy:
+      matrix:
+        path:
+          [
+            "./examples/loop.wtf",
+            "./examples/record.wtf",
+            "./examples/string.wtf",
+            "./examples/numeric.wtf",
+            "./examples/conditional.wtf",
+            "./examples/member_access.wtf",
+          ]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile ${{ matrix.example }}
+        working-directory: ./wtf-compiler
+        run: cargo run -- ${{ matrix.example }} -v
+      - name: Run ${{ matrix.example }}
+        working-directory: ./wtf-compiler
+        run: cargo run -- ${{ matrix.example }} -v
