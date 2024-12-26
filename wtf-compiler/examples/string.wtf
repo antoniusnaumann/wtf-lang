@@ -1,12 +1,7 @@
 package wtf:example@0.1.0
 
-// func println(arg: string) {}
-
+// should return "Hello World!"
 export func main() -> string {
-    // let hello = "Hello"
-    // let world = "World!"
-
-    // return hello + " " + world
     let hello_world = "Hello World!"
     return hello_world
 }

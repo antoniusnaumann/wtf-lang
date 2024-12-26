@@ -9,6 +9,7 @@ func manhattan(p: point) -> s64 {
     return p.x + p.y
 }
 
+// should return 0
 export func main() -> s64 {
-    return manhattan({ x: 10, y: 5 })
+    return manhattan({ x: 10, y: 5 }) // - 15
 }

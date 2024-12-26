@@ -2,9 +2,7 @@ use std::{env, fmt::Display, fs, ops::Deref};
 
 use wtf_parser::parser::Parser;
 
-fn main() {
-    println!("WTF!");
-
+fn main() -> Result<(), i64> {
     let mut args: Vec<String> = env::args().collect();
     let verbose = {
         if let Some(pos) = args
@@ -26,7 +24,7 @@ fn main() {
         run: is_run,
     };
 
-    compiler.compile(input);
+    compiler.compile(input)
 }
 
 #[derive(Debug)]
@@ -50,7 +48,11 @@ struct Compiler {
 }
 
 impl Compiler {
-    fn compile(&self, input: String) {
+    fn compile(&self, input: String) -> Result<(), i64> {
+        if self.verbose {
+            println!("WTF!");
+        }
+
         let mut parser = Parser::new(&input);
         if self.verbose {
             println!();
@@ -85,7 +87,23 @@ impl Compiler {
 
                 println!();
             }
-            println!("Exit Code: {}", self.run(&wasm).unwrap());
+            let result = self.run(&wasm).unwrap();
+
+            if self.verbose {
+                println!("'main': {}", result);
+            }
+
+            match result {
+                MainOutput::ExitCode(0) => Ok(()),
+                MainOutput::Message(msg) => {
+                    println!("{}", msg);
+
+                    Ok(())
+                }
+                MainOutput::ExitCode(status) => Err(status),
+            }
+        } else {
+            Ok(())
         }
     }
 
