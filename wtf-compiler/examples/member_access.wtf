@@ -11,5 +11,5 @@ func manhattan(p: point) -> s64 {
 
 // should return 0
 export func main() -> s64 {
-    return manhattan({ x: 10, y: 5 }) // - 15
+    return manhattan({ x: 10, y: 5 }) - 15
 }

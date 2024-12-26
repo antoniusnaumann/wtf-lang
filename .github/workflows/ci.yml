@@ -17,7 +17,8 @@ jobs:
         example:
           [
             "./examples/loop.wtf",
-            "./examples/record.wtf",
+            # Include this once type-checking is implemented:
+            # "./examples/record.wtf",
             "./examples/string.wtf",
             "./examples/numeric.wtf",
             "./examples/conditional.wtf",
