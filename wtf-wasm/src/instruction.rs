@@ -1,7 +1,5 @@
 use wasm_encoder::Instruction as WasmInstruction;
 
-use crate::Type;
-
 /// High level instruction that can handle high-level types
 #[derive(Debug, Clone)]
 pub enum Instruction<'a> {
@@ -17,19 +15,20 @@ pub enum Instruction<'a> {
     },
 
     Bytes(Vec<u8>),
-    Int(i64),
-    Float(f64),
+    I32(i32),
+    I64(i64),
+    F32(f32),
+    F64(f64),
 
     // Control Flow
     If {
         then: Vec<Instruction<'a>>,
         else_: Vec<Instruction<'a>>,
     },
-    Else,
-    Loop,
+    Loop(Vec<Instruction<'a>>),
     Block,
-    Branch,
-    BranchIf,
+    Break,
+    Continue,
     Return,
     End,
     Unreachable,

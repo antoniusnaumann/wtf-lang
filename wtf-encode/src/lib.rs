@@ -181,10 +181,10 @@ impl<'a> ConvertInstruction<'a> for hir::Instruction {
             hir::Instruction::Pop => Instruction::Pop,
             hir::Instruction::Load(i) => Instruction::LocalGet(i.0 as u32),
             hir::Instruction::Store(i) => Instruction::LocalSet(i.0 as u32),
-            hir::Instruction::Int(num) => Instruction::Int(num),
-            hir::Instruction::Float(num) => Instruction::Float(num),
+            hir::Instruction::Int(num) => Instruction::I64(num),
+            hir::Instruction::Float(num) => Instruction::F64(num),
             hir::Instruction::String(string) => Instruction::Bytes(string.into_bytes()),
-            hir::Instruction::Bool(_) => todo!(),
+            hir::Instruction::Bool(b) => Instruction::I32(if b { 1 } else { 0 }),
             hir::Instruction::None => Instruction::Noop,
             hir::Instruction::Enum {
                 variant,
@@ -237,15 +237,15 @@ impl<'a> ConvertInstruction<'a> for hir::Instruction {
             }
             hir::Instruction::IndexAccess => todo!(),
             hir::Instruction::Return => Instruction::Return,
-            hir::Instruction::Break => todo!(),
-            hir::Instruction::Continue => todo!(),
+            hir::Instruction::Break => Instruction::Break,
+            hir::Instruction::Continue => Instruction::Continue,
             hir::Instruction::Throw => todo!(),
             hir::Instruction::If { then, else_ } => Instruction::If {
                 then: then.convert(lookup, locals),
                 else_: else_.convert(lookup, locals),
             },
             hir::Instruction::Match { arms } => todo!(),
-            hir::Instruction::Loop(_) => todo!(),
+            hir::Instruction::Loop(block) => Instruction::Loop(block.convert(lookup, locals)),
             hir::Instruction::Unreachable => Instruction::Unreachable,
         }
     }

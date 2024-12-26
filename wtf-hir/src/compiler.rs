@@ -382,13 +382,13 @@ impl<'a> FunctionCompiler<'a> {
                 self.stack.push(Type::Never);
             }
             Instruction::Break => {
-                todo!("divert")
+                self.stack.push(Type::Never);
             }
             Instruction::Continue => {
-                todo!("divert")
+                self.stack.push(Type::Never);
             }
             Instruction::Throw => {
-                todo!("divert")
+                self.stack.push(Type::Never);
             }
             Instruction::If { then, else_ } => {
                 let condition = self.stack.pop().unwrap();
@@ -401,7 +401,10 @@ impl<'a> FunctionCompiler<'a> {
             Instruction::Match { arms } => {
                 let condition = self.stack.pop().unwrap();
             }
-            Instruction::Loop(block) => todo!(),
+            Instruction::Loop(_block) => {
+                // TODO: loops with result
+                self.stack.push(Type::None)
+            }
             Instruction::Unreachable => self.stack.push(Type::Never),
         }
     }
@@ -492,7 +495,7 @@ impl<'a> FunctionCompiler<'a> {
             ast::Statement::MatchStatement(_) => todo!(),
             ast::Statement::WhileStatement(while_statement) => {
                 let mut inner_body = Block::new();
-                self.compile_expression(&while_statement.condition, block);
+                self.compile_expression(&while_statement.condition, &mut inner_body);
                 let totally_inner_body = self.compile_block(&while_statement.body);
                 self.push(
                     Instruction::If {

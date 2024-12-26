@@ -299,7 +299,10 @@ impl ComponentBuilder {
         );
 
         for instruction in &function.instructions {
-            for lowered_instruction in self.lower_instruction(instruction, &locals) {
+            let mut nesting_deph = Vec::new();
+            for lowered_instruction in
+                self.lower_instruction(instruction, &locals, &mut nesting_deph)
+            {
                 if additional_instructions.len() > 0
                     && matches!(lowered_instruction, WasmInstruction::Return)
                 {
@@ -539,6 +542,7 @@ impl ComponentBuilder {
         &'a self,
         instruction: &'a Instruction,
         locals: &[Local],
+        nesting_depth: &mut Vec<BranchLabel>,
     ) -> Vec<WasmInstruction<'a>> {
         match instruction {
             // Locals
@@ -578,30 +582,94 @@ impl ComponentBuilder {
                     WasmInstruction::I32Const(length as i32),
                 ]
             }
-            Instruction::Int(num) => vec![WasmInstruction::I64Const(*num)],
-            Instruction::Float(num) => vec![WasmInstruction::F64Const(*num)],
+            Instruction::I32(num) => vec![WasmInstruction::I32Const(*num)],
+            Instruction::I64(num) => vec![WasmInstruction::I64Const(*num)],
+            Instruction::F32(num) => vec![WasmInstruction::F32Const(*num)],
+            Instruction::F64(num) => vec![WasmInstruction::F64Const(*num)],
             Instruction::Call(ident) => vec![self.lower_call(ident)],
 
             // Control Flow
             Instruction::End => vec![WasmInstruction::End],
-            Instruction::If { then, else_ } => iter::once(WasmInstruction::If(BlockType::Empty))
+            Instruction::If { then, else_ } => {
+                nesting_depth.push(BranchLabel::If);
+                let lowered = iter::once(WasmInstruction::If(BlockType::Empty))
+                    .chain(
+                        then.iter()
+                            .flat_map(|inst| self.lower_instruction(inst, locals, nesting_depth))
+                            .collect::<Vec<_>>(),
+                    )
+                    .chain(iter::once(WasmInstruction::Else))
+                    .chain(
+                        else_
+                            .iter()
+                            .flat_map(|inst| self.lower_instruction(inst, locals, nesting_depth)),
+                    )
+                    .chain(iter::once(WasmInstruction::End))
+                    .collect();
+                nesting_depth.pop();
+
+                lowered
+            }
+            Instruction::Loop(block) => {
+                nesting_depth.push(BranchLabel::Loop);
+                nesting_depth.push(BranchLabel::LoopBlock);
+                let lowered = [
+                    WasmInstruction::Loop(BlockType::Empty),
+                    WasmInstruction::Block(BlockType::Empty),
+                ]
+                .into_iter()
                 .chain(
-                    then.iter()
-                        .flat_map(|inst| self.lower_instruction(inst, locals)),
+                    block
+                        .into_iter()
+                        .flat_map(|inst| self.lower_instruction(inst, locals, nesting_depth)),
                 )
-                .chain(iter::once(WasmInstruction::Else))
                 .chain(
-                    else_
-                        .iter()
-                        .flat_map(|inst| self.lower_instruction(inst, locals)),
+                    [
+                        // This index counts inside out, so it should always branch to the loop
+                        WasmInstruction::Br(1),
+                        WasmInstruction::End,
+                        WasmInstruction::End,
+                    ]
+                    .into_iter(),
                 )
-                .chain(iter::once(WasmInstruction::End))
-                .collect(),
-            Instruction::Else => vec![WasmInstruction::Else],
-            Instruction::Loop => vec![WasmInstruction::Loop(todo!())],
+                .collect();
+                nesting_depth.pop();
+                nesting_depth.pop();
+
+                lowered
+            }
             Instruction::Block => vec![WasmInstruction::Block(todo!())],
-            Instruction::Branch => vec![WasmInstruction::Br(todo!())],
-            Instruction::BranchIf => vec![WasmInstruction::BrIf(todo!())],
+            // This implicitly builds onto the knowledge that we always encode loops as loop + block and (to break out of the loop) we need to break out of the block that unconditionally branches to the loop otherwise
+            // TODO: count loop depth to handle nested loops
+            Instruction::Break => {
+                let Some(index) = nesting_depth
+                    .iter()
+                    .rev()
+                    .enumerate()
+                    .find_map(|(i, label)| match label {
+                        BranchLabel::LoopBlock => Some(i),
+                        _ => None,
+                    })
+                else {
+                    panic!("Break called outside of loop")
+                };
+                vec![WasmInstruction::Br(index as u32)]
+            }
+            // TODO: count loop depth to handle nested loops
+            Instruction::Continue => {
+                let Some(index) = nesting_depth
+                    .iter()
+                    .rev()
+                    .enumerate()
+                    .find_map(|(i, label)| match label {
+                        BranchLabel::Loop => Some(i),
+                        _ => None,
+                    })
+                else {
+                    panic!("Continue called outside of loop")
+                };
+                vec![WasmInstruction::Br(index as u32)]
+            }
             Instruction::Return => {
                 // TODO: Put return values in register if string is returned
                 vec![WasmInstruction::Return]
@@ -894,4 +962,13 @@ impl CanonicalLowering for PrimitiveValType {
             PrimitiveValType::String => vec![ValType::I32, ValType::I32],
         }
     }
+}
+
+// Type of branch label
+enum BranchLabel {
+    Block,
+    If,
+    Loop,
+    // Special block that the compiler inserts to allow breaking out of loops
+    LoopBlock,
 }
