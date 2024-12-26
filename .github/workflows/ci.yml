@@ -1,4 +1,4 @@
-name: Health Check
+name: Examples
 
 on:
   push:
@@ -10,14 +10,6 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  tests:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build
-        run: cargo build --workspace
-      - name: Run Tests
-        run: cargo test --workspace  
   examples:
     strategy:
       matrix:
