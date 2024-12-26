@@ -12,6 +12,7 @@ env:
 jobs:
   examples:
     strategy:
+      fail-fast: false
       matrix:
         example:
           [
