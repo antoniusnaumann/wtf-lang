@@ -13,6 +13,7 @@ pub enum Declaration {
     Enum(EnumDeclaration),
     Variant(VariantDeclaration),
     Export(ExportDeclaration),
+    Test(TestDeclaration),
 }
 
 impl Declaration {
@@ -24,6 +25,7 @@ impl Declaration {
             Declaration::Enum(e) => &e.name,
             Declaration::Variant(v) => &v.name,
             Declaration::Export(e) => e.item.name(),
+            Declaration::Test(t) => &t.name,
         }
     }
 }
@@ -77,6 +79,12 @@ pub struct VariantCase {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExportDeclaration {
     pub item: Box<Declaration>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TestDeclaration {
+    pub name: String,
+    pub body: Block,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

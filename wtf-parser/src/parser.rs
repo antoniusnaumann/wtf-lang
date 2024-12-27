@@ -127,6 +127,7 @@ impl Parser {
             Token::Enum => self.parse_enum_declaration().map(Declaration::Enum),
             Token::Variant => self.parse_variant_declaration().map(Declaration::Variant),
             Token::Export => self.parse_export_declaration().map(Declaration::Export),
+            Token::Test => self.parse_test_declaration().map(Declaration::Test),
             _t => Err(self.unexpected(vec![
                 Token::Func,
                 Token::Record,
@@ -977,6 +978,18 @@ impl Parser {
         let item = self.parse_declaration()?.into();
 
         Ok(ExportDeclaration { item })
+    }
+
+    fn parse_test_declaration(&mut self) -> Result<TestDeclaration> {
+        self.expect_token(Token::Test)?;
+        let Token::StringLiteral(ref name) = self.current.token else {
+            // TODO: Allow unnamed tests
+            panic!("Tests need a string as name")
+        };
+        let name = name.clone();
+        let body = self.parse_block()?;
+
+        Ok(TestDeclaration { name, body })
     }
 
     fn parse_package_declaration(&mut self) -> Result<PackageDeclaration> {

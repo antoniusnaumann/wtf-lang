@@ -17,6 +17,7 @@ pub fn compile(ast: ast::Module) -> Module {
     // TODO: Convert into lookup of name -> export? on first pass
     let mut ast_types = HashMap::new();
     let mut ast_funs = HashMap::new();
+    let mut ast_tests = HashMap::new();
     for mut declaration in ast.declarations {
         let is_export = if let ast::Declaration::Export(ex) = declaration {
             declaration = *ex.item;
@@ -53,6 +54,9 @@ pub fn compile(ast: ast::Module) -> Module {
             ast::Declaration::Export(_) => {
                 panic!("TODO: error: double export is not permitted!")
             }
+            ast::Declaration::Test(test) => {
+                ast_tests.insert(test.name.to_string(), test);
+            }
         }
     }
 
@@ -84,9 +88,15 @@ pub fn compile(ast: ast::Module) -> Module {
         );
     }
 
+    let mut tests = HashMap::new();
+    for test in ast_tests.values() {
+        tests.insert(test.name.to_string(), test);
+    }
+
     Module {
         types,
         functions,
+        tests,
         constants,
     }
 }

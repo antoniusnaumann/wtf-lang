@@ -110,6 +110,7 @@ impl Print for Declaration {
             Declaration::Enum(v) => v.print(f, indent, c),
             Declaration::Variant(v) => v.print(f, indent, c),
             Declaration::Export(v) => v.print(f, indent, c),
+            Declaration::Test(v) => v.print(f, indent, c),
         }
     }
 }
@@ -172,6 +173,12 @@ impl Print for VariantDeclaration {
 impl Print for ExportDeclaration {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
         node!(f, indent, c, "export", self.item)
+    }
+}
+
+impl Print for TestDeclaration {
+    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
+        node!(f, indent, c, "test", self.name, self.body)
     }
 }
 

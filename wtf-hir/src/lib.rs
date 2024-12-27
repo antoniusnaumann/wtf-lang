@@ -12,6 +12,7 @@ use std::{
 pub struct Module {
     pub types: HashMap<String, Type>,
     pub functions: HashMap<String, Function>,
+    pub tests: HashMap<String, Test>,
     pub constants: HashSet<Vec<u8>>,
 }
 
