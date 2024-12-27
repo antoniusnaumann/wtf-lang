@@ -39,6 +39,10 @@ pub enum Token {
     False,
     None,
 
+    // Unit Testing
+    Test,
+    Assert,
+
     // Identifiers and Literals
     Identifier(String),
     IntegerLiteral(i64),
@@ -396,6 +400,8 @@ impl Lexer {
             "break" => Token::Break,
             "for" => Token::For,
             "while" => Token::While,
+            "test" => Token::Test,
+            "assert" => Token::Assert,
             "none" => Token::None,
             "true" => Token::True,
             "false" => Token::False,
