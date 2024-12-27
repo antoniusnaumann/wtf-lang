@@ -217,7 +217,7 @@ fn test_parse_plus_assign() -> Result<()> {
 #[test]
 fn test_parse_package_declaration() -> Result<()> {
     let input = r#"
-        package test:all_features
+        package pkg:all_features
         "#;
 
     let lexer = Lexer::new(input);
@@ -227,7 +227,7 @@ fn test_parse_package_declaration() -> Result<()> {
     let expected_ast = Module {
         package: Some(PackageDeclaration {
             path: ModulePath {
-                owner: "test".to_owned(),
+                owner: "pkg".to_owned(),
                 package: "all_features".to_owned(),
             },
             version: None,
@@ -244,7 +244,7 @@ fn test_parse_package_declaration() -> Result<()> {
 #[test]
 fn test_parse_package_declaration_versioned() -> Result<()> {
     let input = r#"
-        package test:all_features@1.0.0
+        package pkg:all_features@1.0.0
         "#;
 
     let lexer = Lexer::new(input);
@@ -254,7 +254,7 @@ fn test_parse_package_declaration_versioned() -> Result<()> {
     let expected_ast = Module {
         package: Some(PackageDeclaration {
             path: ModulePath {
-                owner: "test".to_owned(),
+                owner: "pkg".to_owned(),
                 package: "all_features".to_owned(),
             },
             version: Some(Version {
