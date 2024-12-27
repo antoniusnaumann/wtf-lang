@@ -1,12 +1,13 @@
 package wtf:example@0.1.0
 
 export func double_cap(x: s64, cap: s64) -> s64 {
-    let y = x * 2
-    if y > cap {
-       return cap
-    } else {
-       return y
-    }
+   let y = x * 2
+
+   if y > cap {
+    return cap
+   } else {
+    return y
+   }
 }
 
 // should return 0

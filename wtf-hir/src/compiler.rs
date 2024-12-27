@@ -3,7 +3,10 @@ use std::{
     ops::Deref,
 };
 
-use wtf_ast::{self as ast, BinaryOperator, Expression, TypeAnnotation};
+use wtf_ast::{
+    self as ast, ArithmeticOperator, BinaryOperator, Expression, Literal, TypeAnnotation,
+    UnaryOperator,
+};
 
 use crate::{
     builtin::WithBuiltins, visible::Visible, Block, Function, FunctionSignature, Instruction,
@@ -543,7 +546,34 @@ impl<'a> FunctionCompiler<'a> {
             } => {
                 self.push_op(left, right, *operator, block);
             }
-            ast::Expression::UnaryExpression { .. } => todo!(),
+            ast::Expression::UnaryExpression { operator, operand } => match operator {
+                UnaryOperator::Negate => {
+                    match operand.deref() {
+                        Expression::Literal(lit) => {
+                            let lit = match lit {
+                                Literal::Integer(int) => Instruction::Int(-int),
+                                Literal::Float(float) => Instruction::Float(-float),
+                                Literal::String(_) => todo!("String cannot be negated"),
+                                Literal::Boolean(_) => {
+                                    todo!("Boolean cannot be negated with '-', use '!'")
+                                }
+                                Literal::None => todo!("'None' cannot be negated"),
+                            };
+                            self.push(lit, block)
+                        }
+                        operand => self.push_op(
+                            &Expression::Literal(
+                                // TODO: use zero value from inferred expression or add an untyped zero literal
+                                Literal::Integer(0),
+                            ),
+                            operand,
+                            BinaryOperator::Arithmetic(ArithmeticOperator::Subtract),
+                            block,
+                        ),
+                    }
+                }
+                UnaryOperator::Not => todo!("xor(x, -1)"),
+            },
             ast::Expression::YeetExpression { .. } => todo!(),
             ast::Expression::FunctionCall {
                 function,

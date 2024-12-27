@@ -1,0 +1,14 @@
+package wtf:example@0.1.0
+
+func relu(num: s64) -> s64 {
+    if num < 0 {
+        return 0
+    }
+
+    return num
+}
+
+// should return 0
+export func main() -> s64 {
+    return relu(-12)
+}
