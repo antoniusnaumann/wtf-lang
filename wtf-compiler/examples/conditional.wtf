@@ -14,3 +14,13 @@ export func double_cap(x: s64, cap: s64) -> s64 {
 export func main() -> s64 {
    return double_cap(5, 11) - 10
 }
+
+test "cap value larger than cap" {
+    let val = double_cap(10, 12)
+    assert val == 12
+}
+
+test "don't cap value smaller than cap" {
+    let val = double_cap(6, 17)
+    assert val == 12
+}

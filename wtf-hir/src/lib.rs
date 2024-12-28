@@ -89,6 +89,12 @@ pub struct Function {
     pub is_export: bool,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct Test {
+    pub name: String,
+    pub body: Block,
+}
+
 #[derive(Debug, Clone, PartialEq, Copy)]
 pub struct LocalId(pub usize);
 

@@ -159,6 +159,7 @@ pub enum Statement {
     MatchStatement(MatchStatement),
     WhileStatement(WhileStatement),
     ForStatement(ForStatement),
+    Assertion(AssertStatement),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -199,6 +200,11 @@ pub struct ForStatement {
     pub variable: String,
     pub iterable: Expression,
     pub body: Block,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AssertStatement {
+    pub condition: Expression,
 }
 
 #[derive(Debug, Clone, PartialEq)]

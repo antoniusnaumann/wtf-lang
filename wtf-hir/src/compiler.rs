@@ -4,13 +4,13 @@ use std::{
 };
 
 use wtf_ast::{
-    self as ast, ArithmeticOperator, BinaryOperator, Expression, Literal, TypeAnnotation,
-    UnaryOperator,
+    self as ast, ArithmeticOperator, BinaryOperator, Expression, Literal, TestDeclaration,
+    TypeAnnotation, UnaryOperator,
 };
 
 use crate::{
     builtin::WithBuiltins, visible::Visible, Block, Function, FunctionSignature, Instruction,
-    LocalId, Module, PrimitiveType, ResourceType, Type,
+    LocalId, Module, PrimitiveType, ResourceType, Test, Type,
 };
 
 pub fn compile(ast: ast::Module) -> Module {
@@ -89,8 +89,11 @@ pub fn compile(ast: ast::Module) -> Module {
     }
 
     let mut tests = HashMap::new();
-    for test in ast_tests.values() {
-        tests.insert(test.name.to_string(), test);
+    for test in ast_tests.into_values() {
+        tests.insert(
+            test.name.to_string(),
+            compile_test(test, &signatures, &mut constants),
+        );
     }
 
     Module {
@@ -268,6 +271,19 @@ fn compile_signature(
         param_types,
         return_type,
         is_export,
+    }
+}
+
+fn compile_test(
+    test: TestDeclaration,
+    signatures: &HashMap<String, FunctionSignature>,
+    constants: &mut HashSet<Vec<u8>>,
+) -> Test {
+    let mut fn_compiler = FunctionCompiler::with_params(&[], signatures, constants);
+    let body = fn_compiler.compile_block(&test.body);
+    Test {
+        name: test.name,
+        body,
     }
 }
 
@@ -523,6 +539,7 @@ impl<'a> FunctionCompiler<'a> {
                 self.push(Instruction::Loop(inner_body), block)
             }
             ast::Statement::ForStatement(_) => todo!(),
+            wtf_ast::Statement::Assertion(_) => todo!("Compile assertion"),
         }
     }
 

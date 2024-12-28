@@ -325,6 +325,7 @@ impl Parser {
             Token::While => self.parse_while_statement().map(Statement::WhileStatement),
             Token::For => self.parse_for_statement().map(Statement::ForStatement),
             Token::Match => self.parse_match_statement().map(Statement::MatchStatement),
+            Token::Assert => self.parse_assert_statement().map(Statement::Assertion),
             _ => {
                 let expr = self.parse_expression()?;
 
@@ -478,6 +479,10 @@ impl Parser {
         self.expect_token(Token::RightBrace)?;
 
         Ok(MatchStatement { expression, arms })
+    }
+
+    fn parse_assert_statement(&mut self) -> Result<AssertStatement> {
+        todo!("Parse assertion")
     }
 
     fn parse_pattern(&mut self) -> Result<Pattern> {
@@ -982,11 +987,18 @@ impl Parser {
 
     fn parse_test_declaration(&mut self) -> Result<TestDeclaration> {
         self.expect_token(Token::Test)?;
-        let Token::StringLiteral(ref name) = self.current.token else {
-            // TODO: Allow unnamed tests
-            panic!("Tests need a string as name")
+        self.skip_newline();
+        let name = match self.current.token {
+            Token::StringLiteral(ref name) => {
+                let name = name.to_owned();
+                self.skip_newline();
+                self.advance_tokens();
+                name
+            }
+            Token::LeftBrace => String::new(),
+            _ => panic!("Test names should be a string"),
         };
-        let name = name.clone();
+        self.skip_newline();
         let body = self.parse_block()?;
 
         Ok(TestDeclaration { name, body })

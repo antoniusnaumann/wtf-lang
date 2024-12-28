@@ -246,6 +246,7 @@ impl Print for Statement {
             Statement::MatchStatement(_) => todo!(),
             Statement::WhileStatement(v) => v.print(f, indent, c),
             Statement::ForStatement(_) => todo!(),
+            Statement::Assertion(v) => todo!("Print assertion"),
         }
     }
 }
