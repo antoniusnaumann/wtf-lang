@@ -246,7 +246,7 @@ impl Print for Statement {
             Statement::MatchStatement(_) => todo!(),
             Statement::WhileStatement(v) => v.print(f, indent, c),
             Statement::ForStatement(_) => todo!(),
-            Statement::Assertion(v) => todo!("Print assertion"),
+            Statement::Assertion(v) => v.print(f, indent, c),
         }
     }
 }
@@ -282,6 +282,12 @@ impl Print for IfStatement {
 impl Print for WhileStatement {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
         node!(f, indent, c, "while", self.condition, self.body)
+    }
+}
+
+impl Print for AssertStatement {
+    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
+        node!(f, indent, c, "assert", self.condition)
     }
 }
 

@@ -482,7 +482,13 @@ impl Parser {
     }
 
     fn parse_assert_statement(&mut self) -> Result<AssertStatement> {
-        todo!("Parse assertion")
+        self.expect_token(Token::Assert)?;
+
+        let expression = self.parse_expression()?;
+
+        Ok(AssertStatement {
+            condition: expression,
+        })
     }
 
     fn parse_pattern(&mut self) -> Result<Pattern> {
