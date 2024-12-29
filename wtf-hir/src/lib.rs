@@ -92,6 +92,7 @@ pub struct Function {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Test {
     pub name: String,
+    pub id: String,
     pub locals: Vec<Type>, // include parameters
     pub body: Block,
 }

@@ -13,11 +13,14 @@ use crate::{
     LocalId, Module, PrimitiveType, ResourceType, Test, Type,
 };
 
+const INTERNAL_PREFIX: &str = "wtfinternal";
+const INTERNAL_SUFFIX: &str = "sdafbvaeiwcoiysxuv";
+
 pub fn compile(ast: ast::Module) -> Module {
     // TODO: Convert into lookup of name -> export? on first pass
     let mut ast_types = HashMap::new();
     let mut ast_funs = HashMap::new();
-    let mut ast_tests = HashMap::new();
+    let mut ast_tests = Vec::new();
     for mut declaration in ast.declarations {
         let is_export = if let ast::Declaration::Export(ex) = declaration {
             declaration = *ex.item;
@@ -55,7 +58,7 @@ pub fn compile(ast: ast::Module) -> Module {
                 panic!("TODO: error: double export is not permitted!")
             }
             ast::Declaration::Test(test) => {
-                ast_tests.insert(test.name.to_string(), test);
+                ast_tests.push(test);
             }
         }
     }
@@ -89,8 +92,8 @@ pub fn compile(ast: ast::Module) -> Module {
     }
 
     let mut tests = Vec::new();
-    for test in ast_tests.into_values() {
-        tests.push(compile_test(test, &signatures, &mut constants));
+    for (idx, test) in ast_tests.into_iter().enumerate() {
+        tests.push(compile_test(idx, test, &signatures, &mut constants));
     }
 
     Module {
@@ -272,14 +275,32 @@ fn compile_signature(
 }
 
 fn compile_test(
+    idx: usize,
     test: TestDeclaration,
     signatures: &HashMap<String, FunctionSignature>,
     constants: &mut HashSet<Vec<u8>>,
 ) -> Test {
     let mut fn_compiler = FunctionCompiler::with_params(&[], signatures, constants);
     let body = fn_compiler.compile_block(&test.body);
+
+    const CHARS: [char; 26] = [
+        'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r',
+        's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+    ];
+
+    let mut str = String::new();
+    let mut idx = idx + 1;
+    while idx > 0 {
+        idx -= 1;
+        let rem = idx % 26;
+        str.push(CHARS[rem]);
+        idx -= rem;
+        idx /= 26;
+    }
+    let id = format!("{INTERNAL_PREFIX}-test-{str}-{INTERNAL_SUFFIX}",);
     Test {
         name: test.name,
+        id,
         body,
         locals: fn_compiler.locals,
     }

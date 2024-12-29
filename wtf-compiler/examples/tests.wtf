@@ -1,0 +1,491 @@
+package wtf:example@0.1.0
+
+// should return 0
+export func main() -> s64 {
+   return 0
+}
+
+test "1 == 1" {
+    assert 1 == 1
+}
+
+test "locals in test" {
+    let local = 6
+    assert 6 / 2 == 3
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}
+
+test {
+    assert true
+}

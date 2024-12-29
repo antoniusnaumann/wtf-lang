@@ -1,6 +1,6 @@
 use std::{collections::HashSet, fmt::Debug, iter};
 
-use wtf_hir as hir;
+use wtf_hir::{self as hir, Test};
 use wtf_wasm::{
     ComponentBuilder, Function, Instance, Instruction, PrimitiveType, Signature, Type,
     TypeDeclaration, TypeRef,
@@ -61,10 +61,16 @@ impl<'a> Convert<'a> for hir::Module {
 
     fn convert(self, lookup: &mut TypeLookup) -> Self::Output {
         let types = self.types.into_iter().map(|t| t.convert(lookup)).collect();
+        let tests = self
+            .tests
+            .into_iter()
+            .map(|t| t.convert(lookup))
+            .collect::<Vec<_>>();
         let functions = self
             .functions
             .into_iter()
             .map(|t| t.convert(lookup))
+            .chain(tests)
             .collect();
 
         Instance {
@@ -126,21 +132,8 @@ impl<'a> Convert<'a> for (String, hir::Function) {
             })
             .collect();
         let result = func.return_type.convert(lookup);
-        let locals = func
-            .locals
-            .into_iter()
-            .map(|ty| {
-                ty.convert(lookup)
-                    .expect("Type of local must be defined before use")
-            })
-            .collect::<Vec<_>>();
-        let instructions: Vec<Instruction> = func
-            .body
-            .instructions
-            .into_iter()
-            .map(|exp| exp.convert(lookup, &locals))
-            .chain(iter::once(Instruction::End))
-            .collect();
+        let locals = convert_locals(func.locals, lookup);
+        let instructions = convert_body(func.body, lookup, &locals);
         let func = Function {
             signature: Signature {
                 params,
@@ -154,6 +147,48 @@ impl<'a> Convert<'a> for (String, hir::Function) {
 
         func
     }
+}
+
+impl<'a> Convert<'a> for Test {
+    type Output = Function<'a>;
+
+    fn convert(self, lookup: &mut TypeLookup) -> Self::Output {
+        let locals = convert_locals(self.locals, lookup);
+        let instructions = convert_body(self.body, lookup, &locals);
+
+        Function {
+            signature: Signature {
+                params: vec![],
+                result: None,
+                name: self.id,
+                export: true,
+            },
+            locals,
+            instructions,
+        }
+    }
+}
+
+fn convert_locals(locals: Vec<hir::Type>, lookup: &mut TypeLookup) -> Vec<TypeRef> {
+    locals
+        .into_iter()
+        .map(|ty| {
+            ty.convert(lookup)
+                .expect("Type of local must be defined before use")
+        })
+        .collect()
+}
+
+fn convert_body<'a>(
+    body: hir::Block,
+    lookup: &mut TypeLookup,
+    locals: &[TypeRef],
+) -> Vec<Instruction<'a>> {
+    body.instructions
+        .into_iter()
+        .map(|exp| exp.convert(lookup, &locals))
+        .chain(iter::once(Instruction::End))
+        .collect()
 }
 
 trait ConvertInstruction<'a> {

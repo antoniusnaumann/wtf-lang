@@ -71,6 +71,10 @@ impl Compiler {
 
         // Remove tests if we are not running the test command
         if !matches!(self.mode, Mode::Test) {
+            if self.verbose {
+                println!("Removing tests...");
+                println!();
+            }
             ast.declarations.retain(|decl| match decl {
                 wtf_ast::Declaration::Test(_) => false,
                 _ => true,
@@ -122,7 +126,9 @@ impl Compiler {
                     MainOutput::ExitCode(status) => Err(status),
                 }
             }
-            Mode::Test => todo!(),
+            Mode::Test => {
+                todo!()
+            }
         }
     }
 
