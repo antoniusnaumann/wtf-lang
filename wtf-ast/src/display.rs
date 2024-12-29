@@ -318,7 +318,29 @@ impl Print for Expression {
                 method,
                 arguments,
                 safe,
-            } => todo!(),
+            } => {
+                if *safe {
+                    node!(
+                        f,
+                        indent,
+                        c,
+                        "safecall",
+                        method,
+                        Receiver(receiver),
+                        Args(arguments)
+                    )
+                } else {
+                    node!(
+                        f,
+                        indent,
+                        c,
+                        "call",
+                        method,
+                        Receiver(receiver),
+                        Args(arguments)
+                    )
+                }
+            }
             Expression::FieldAccess {
                 object,
                 field,
@@ -343,6 +365,13 @@ struct Args<'a>(&'a [Expression]);
 impl Print for Args<'_> {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
         node!(f, indent, c, "args", self.0)
+    }
+}
+
+struct Receiver<'a>(&'a Expression);
+impl Print for Receiver<'_> {
+    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
+        node!(f, indent, c, "receiver", self.0)
     }
 }
 
