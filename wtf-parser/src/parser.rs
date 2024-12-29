@@ -999,9 +999,9 @@ impl Parser {
                 let name = name.to_owned();
                 self.skip_newline();
                 self.advance_tokens();
-                name
+                Some(name)
             }
-            Token::LeftBrace => String::new(),
+            Token::LeftBrace => None,
             _ => panic!("Test names should be a string"),
         };
         self.skip_newline();

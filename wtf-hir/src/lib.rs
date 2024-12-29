@@ -91,7 +91,7 @@ pub struct Function {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Test {
-    pub name: String,
+    pub name: Option<String>,
     pub id: String,
     pub locals: Vec<Type>, // include parameters
     pub body: Block,
@@ -282,7 +282,10 @@ impl Display for Module {
                     write!(f, " {i}: {ty}")?;
                 }
                 write!(f, "\n")?;
-                write!(f, "test \"{}\" ", test.name)?;
+                match &test.name {
+                    Some(name) => write!(f, "test \"{name}\" ")?,
+                    None => write!(f, "test ")?,
+                }
                 test.body.fmt(f, 2)?;
                 write!(f, "\n\n")?;
             }

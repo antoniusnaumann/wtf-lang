@@ -1,5 +1,6 @@
-use std::{env, fmt::Display, fs, ops::Deref};
+use std::{env, fmt::Display, fs, num::NonZeroUsize, ops::Deref};
 
+use wtf_hir::Test;
 use wtf_parser::parser::Parser;
 
 enum Mode {
@@ -40,6 +41,18 @@ fn main() -> Result<(), i64> {
 enum MainOutput {
     ExitCode(i64),
     Message(String),
+}
+
+#[derive(Debug)]
+enum TestError {
+    WasmRuntime(wasmtime::Error),
+    TestFail(NonZeroUsize),
+}
+
+impl From<wasmtime::Error> for TestError {
+    fn from(value: wasmtime::Error) -> Self {
+        Self::WasmRuntime(value)
+    }
 }
 
 impl Display for MainOutput {
@@ -88,6 +101,7 @@ impl Compiler {
             println!("===== HIR =====");
         }
         let hir = wtf_hir::compile(ast);
+        let tests = hir.tests.clone();
         if self.verbose {
             println!("{hir}");
 
@@ -107,8 +121,6 @@ impl Compiler {
                 if self.verbose {
                     println!();
                     println!("===== OUT =====");
-
-                    println!();
                 }
                 let result = self.run(&wasm).unwrap();
 
@@ -127,8 +139,68 @@ impl Compiler {
                 }
             }
             Mode::Test => {
-                todo!()
+                if self.verbose {
+                    println!();
+                    println!("===== OUT =====");
+                }
+
+                self.run_tests(&wasm, &tests).map_err(|_| 22)
+            } // TODO: find out which error code to return here
+        }
+    }
+
+    fn run_tests(&self, wasm: &[u8], tests: &[Test]) -> Result<(), TestError> {
+        use wasmtime::{
+            component::{Component, Linker},
+            Config, Engine, Store,
+        };
+
+        let mut config = Config::new();
+        config.wasm_component_model(true);
+
+        let engine = Engine::new(&config)?;
+        let mut store = Store::new(&engine, {});
+        let linker = Linker::new(&engine);
+        let component = Component::from_binary(&engine, wasm)?;
+
+        let mut fail = 0;
+        let mut pass = 0;
+
+        for test in tests {
+            let instance = linker.instantiate(&mut store, &component)?;
+            let func = instance
+                .get_func(&mut store, &test.id)
+                .expect("test function did not exist");
+            let name = test
+                .name
+                .as_ref()
+                .map(|n| format!("\"{n}\""))
+                .unwrap_or_else(|| "<test>".to_owned());
+
+            match func.call(&mut store, &[], &mut []) {
+                Ok(_) => {
+                    pass += 1;
+                    println!("PASS -- {name}")
+                }
+                Err(e) => {
+                    fail += 1;
+                    println!("FAIL -- {name}");
+                    if self.verbose {
+                        println!("{e}");
+                    }
+                }
             }
+        }
+
+        println!();
+        println!("ran {} tests:", tests.len());
+        println!("{pass} passed, {fail} failed");
+
+        if let Ok(fail) = NonZeroUsize::try_from(fail) {
+            println!();
+            Err(TestError::TestFail(fail))
+        } else {
+            Ok(())
         }
     }
 

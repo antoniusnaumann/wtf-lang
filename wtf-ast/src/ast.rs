@@ -25,8 +25,14 @@ impl Declaration {
             Declaration::Enum(e) => &e.name,
             Declaration::Variant(v) => &v.name,
             Declaration::Export(e) => e.item.name(),
-            Declaration::Test(t) => &t.name,
+            Declaration::Test(t) => t.name(),
         }
+    }
+}
+
+impl TestDeclaration {
+    pub fn name(&self) -> &str {
+        self.name.as_ref().map(String::as_str).unwrap_or("<test>")
     }
 }
 
@@ -83,7 +89,7 @@ pub struct ExportDeclaration {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TestDeclaration {
-    pub name: String,
+    pub name: Option<String>,
     pub body: Block,
 }
 
