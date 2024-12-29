@@ -334,7 +334,7 @@ impl Print for Expression {
             Expression::Record { name, members } => {
                 node!(f, indent, c, "record", name, members)
             }
-            Expression::ListLiteral(_) => todo!(),
+            Expression::ListLiteral(elements) => node!(f, indent, c, "list", elements),
         }
     }
 }

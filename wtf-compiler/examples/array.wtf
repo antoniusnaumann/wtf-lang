@@ -1,0 +1,8 @@
+package wtf:example@0.1.0
+
+// should return
+export func main() {
+    let array = [12, 17, 38, 55]
+
+    return array.len() - 4
+}
