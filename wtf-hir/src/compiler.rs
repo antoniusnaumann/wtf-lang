@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    iter,
     ops::Deref,
 };
 
@@ -642,13 +643,31 @@ impl<'a> FunctionCompiler<'a> {
             } => {
                 self.push_fn(function, arguments, block);
             }
-            ast::Expression::MethodCall { .. } => todo!(),
+            ast::Expression::MethodCall {
+                receiver,
+                method,
+                arguments,
+                safe,
+            } => {
+                // TODO: Check if receiver is a resource first and insert a dynamic method call in this case
+                if *safe {
+                    todo!("Safe calls");
+                }
+                self.push_fn(
+                    &Expression::Identifier(method.clone()),
+                    iter::once(receiver.deref()).chain(arguments),
+                    block,
+                );
+            }
             ast::Expression::FieldAccess {
                 object,
                 field,
                 // TODO: Desugar safe calls to if condition
                 safe,
             } => {
+                if *safe {
+                    todo!("Safe calls");
+                }
                 let mut inner = object;
                 let mut fields = vec![field];
                 // Find out if this is a chain of member fields on a local value
@@ -709,7 +728,13 @@ impl<'a> FunctionCompiler<'a> {
         }
     }
 
-    fn push_fn(&mut self, function: &Expression, arguments: &[Expression], block: &mut Block) {
+    fn push_fn<'ex>(
+        &mut self,
+        function: &Expression,
+        arguments: impl IntoIterator<Item = &'ex Expression>,
+        block: &mut Block,
+    ) {
+        let arguments: Vec<_> = arguments.into_iter().collect();
         fn mangle(ty: &Type) -> std::borrow::Cow<str> {
             match ty {
                 Type::Never => panic!("Never as an arg is not allowed"),
@@ -742,7 +767,7 @@ impl<'a> FunctionCompiler<'a> {
         }
 
         let mut arg_types = vec![];
-        for arg in arguments {
+        for arg in &arguments {
             self.compile_expression(arg, block);
             arg_types.push(self.stack.last().unwrap().clone());
         }
