@@ -539,7 +539,22 @@ impl<'a> FunctionCompiler<'a> {
                 self.push(Instruction::Loop(inner_body), block)
             }
             ast::Statement::ForStatement(_) => todo!(),
-            wtf_ast::Statement::Assertion(_) => todo!("Compile assertion"),
+            wtf_ast::Statement::Assertion(assert_statement) => {
+                self.compile_expression(&assert_statement.condition, block);
+                self.push(
+                    Instruction::If {
+                        then: Block {
+                            ty: Type::None,
+                            instructions: vec![],
+                        },
+                        else_: Block {
+                            instructions: vec![Instruction::Unreachable],
+                            ty: Type::Never,
+                        },
+                    },
+                    block,
+                );
+            }
         }
     }
 
