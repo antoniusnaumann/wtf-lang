@@ -88,12 +88,9 @@ pub fn compile(ast: ast::Module) -> Module {
         );
     }
 
-    let mut tests = HashMap::new();
+    let mut tests = Vec::new();
     for test in ast_tests.into_values() {
-        tests.insert(
-            test.name.to_string(),
-            compile_test(test, &signatures, &mut constants),
-        );
+        tests.push(compile_test(test, &signatures, &mut constants));
     }
 
     Module {
@@ -284,6 +281,7 @@ fn compile_test(
     Test {
         name: test.name,
         body,
+        locals: fn_compiler.locals,
     }
 }
 

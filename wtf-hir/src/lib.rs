@@ -12,7 +12,7 @@ use std::{
 pub struct Module {
     pub types: HashMap<String, Type>,
     pub functions: HashMap<String, Function>,
-    pub tests: HashMap<String, Test>,
+    pub tests: Vec<Test>,
     pub constants: HashSet<Vec<u8>>,
 }
 
@@ -92,6 +92,7 @@ pub struct Function {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Test {
     pub name: String,
+    pub locals: Vec<Type>, // include parameters
     pub body: Block,
 }
 
@@ -270,6 +271,20 @@ impl Display for Module {
             write!(f, " -> {} ", function.return_type)?;
             function.body.fmt(f, 2)?;
             write!(f, "\n\n")?;
+        }
+
+        if !self.tests.is_empty() {
+            writeln!(f, "Tests:")?;
+            for test in &self.tests {
+                write!(f, "Locals:")?;
+                for (i, ty) in test.locals.iter().enumerate() {
+                    write!(f, " {i}: {ty}")?;
+                }
+                write!(f, "\n")?;
+                write!(f, "test \"{}\" ", test.name)?;
+                test.body.fmt(f, 2)?;
+                write!(f, "\n\n")?;
+            }
         }
         Ok(())
     }

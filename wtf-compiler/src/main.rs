@@ -2,12 +2,20 @@ use std::{env, fmt::Display, fs, ops::Deref};
 
 use wtf_parser::parser::Parser;
 
+enum Mode {
+    Build,
+    Run,
+    Test,
+}
+
 fn main() -> Result<(), i64> {
-    let mut args: Vec<String> = env::args().collect();
+    let args: Vec<_> = env::args().collect();
+    let mut args: Vec<_> = args.iter().map(|arg| arg.as_str()).collect();
+
     let verbose = {
         if let Some(pos) = args
             .iter()
-            .position(|arg| arg == "--verbose" || arg == "-v")
+            .position(|&arg| arg == "--verbose" || arg == "-v")
         {
             args.remove(pos);
             true
@@ -15,16 +23,17 @@ fn main() -> Result<(), i64> {
             false
         }
     };
-    let is_run = args.len() > 2 && &args[1] == "run";
-    let file_path = if is_run { &args[2] } else { &args[1] };
-
-    let input = fs::read_to_string(file_path).unwrap();
-    let compiler = Compiler {
-        verbose,
-        run: is_run,
+    let (mode, file_path) = match args.as_slice() {
+        [.., "run", file] => (Mode::Run, file),
+        [.., "test", file] => (Mode::Test, file),
+        [file] => (Mode::Build, file),
+        other => panic!("Illegal arguments: {:#?}", other),
     };
 
-    compiler.compile(input)
+    let input = fs::read_to_string(file_path).unwrap();
+    let compiler = Compiler { verbose, mode };
+
+    compiler.execute(input)
 }
 
 #[derive(Debug)]
@@ -44,11 +53,11 @@ impl Display for MainOutput {
 
 struct Compiler {
     verbose: bool,
-    run: bool,
+    mode: Mode,
 }
 
 impl Compiler {
-    fn compile(&self, input: String) -> Result<(), i64> {
+    fn execute(&self, input: String) -> Result<(), i64> {
         if self.verbose {
             println!("WTF!");
         }
@@ -58,7 +67,15 @@ impl Compiler {
             println!();
             println!("===== AST =====");
         }
-        let ast = parser.parse_module().expect("No AST.");
+        let mut ast = parser.parse_module().expect("No AST.");
+
+        // Remove tests if we are not running the test command
+        if !matches!(self.mode, Mode::Test) {
+            ast.declarations.retain(|decl| match decl {
+                wtf_ast::Declaration::Test(_) => false,
+                _ => true,
+            })
+        }
 
         if self.verbose {
             println!("{ast}");
@@ -80,30 +97,32 @@ impl Compiler {
 
         fs::write("output.wasm", &wasm).unwrap();
 
-        if self.run {
-            if self.verbose {
-                println!();
-                println!("===== OUT =====");
+        match self.mode {
+            Mode::Build => Ok(()),
+            Mode::Run => {
+                if self.verbose {
+                    println!();
+                    println!("===== OUT =====");
 
-                println!();
-            }
-            let result = self.run(&wasm).unwrap();
-
-            if self.verbose {
-                println!("'main': {}", result);
-            }
-
-            match result {
-                MainOutput::ExitCode(0) => Ok(()),
-                MainOutput::Message(msg) => {
-                    println!("{}", msg);
-
-                    Ok(())
+                    println!();
                 }
-                MainOutput::ExitCode(status) => Err(status),
+                let result = self.run(&wasm).unwrap();
+
+                if self.verbose {
+                    println!("'main': {}", result);
+                }
+
+                match result {
+                    MainOutput::ExitCode(0) => Ok(()),
+                    MainOutput::Message(msg) => {
+                        println!("{}", msg);
+
+                        Ok(())
+                    }
+                    MainOutput::ExitCode(status) => Err(status),
+                }
             }
-        } else {
-            Ok(())
+            Mode::Test => todo!(),
         }
     }
 
