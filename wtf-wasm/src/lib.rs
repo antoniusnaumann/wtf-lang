@@ -617,11 +617,11 @@ impl ComponentBuilder {
 
             Instruction::Store { number, ty } => {
                 let lower = self.lower(ty);
-                let number = number * lower.len();
                 let length = lower.iter().fold(0, |acc, e| acc + e.byte_length()) * number;
+                let stack_number = number * lower.len();
 
                 // TODO: store elements before returning the pointer
-                let instructions = (0..number).map(|_| WasmInstruction::Drop);
+                let instructions = (0..stack_number).map(|_| WasmInstruction::Drop);
                 let pointer = [
                     // TODO: call alloc to find out offset
                     WasmInstruction::I32Const(3000 as i32),
