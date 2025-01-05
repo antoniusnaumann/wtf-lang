@@ -1,8 +1,21 @@
 package wtf:example@0.1.0
 
 // should return
-export func main() {
+export func main() -> s64 {
     let array = [12, 17, 38, 55]
 
-    return array.len() - 4
+    return s64(array.len()) - 4
+}
+
+test "empty array has len zero" {
+    let array = []
+    assert s64(array.len()) == 0
+}
+
+test "s64 array has correct len" {
+    let array = [1, 2, 3, 4]
+    assert s64(array.len()) == 4
+
+    let array = [51, 33, -7, 5, 32, 17, 99]
+    assert s64(array.len()) == 7
 }

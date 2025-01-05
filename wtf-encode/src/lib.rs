@@ -29,7 +29,6 @@ impl TypeLookup {
 #[derive(Debug, Default)]
 pub struct Encoder {
     // Lookup of all internal type definitions to their index
-    types: TypeLookup,
     builder: ComponentBuilder,
 }
 
@@ -39,7 +38,7 @@ impl Encoder {
     }
 
     pub fn encode(mut self, module: hir::Module) -> Encoder {
-        let instance = module.convert(&mut self.types);
+        let instance = module.convert();
         self.builder.encode_instance(instance);
 
         self
@@ -50,33 +49,43 @@ impl Encoder {
     }
 }
 
+trait ConvertModule<'a> {
+    type Output;
+
+    fn convert(self) -> Self::Output;
+}
+
 trait Convert<'a> {
     type Output;
 
     fn convert(self, lookup: &mut TypeLookup) -> Self::Output;
 }
 
-impl<'a> Convert<'a> for hir::Module {
+impl<'a> ConvertModule<'a> for hir::Module {
     type Output = Instance<'a>;
 
-    fn convert(self, lookup: &mut TypeLookup) -> Self::Output {
-        let types = self.types.into_iter().map(|t| t.convert(lookup)).collect();
+    fn convert(self) -> Self::Output {
+        let mut lookup = TypeLookup::default();
+        for ty in self.types {
+            ty.convert(&mut lookup);
+        }
         let tests = self
             .tests
             .into_iter()
-            .map(|t| t.convert(lookup))
+            .map(|t| t.convert(&mut lookup))
             .collect::<Vec<_>>();
         let functions = self
             .functions
             .into_iter()
-            .map(|t| t.convert(lookup))
+            .map(|t| t.convert(&mut lookup))
             .chain(tests)
             .collect();
 
         Instance {
             name: "todo".to_owned(),
             functions,
-            types,
+            // TODO: Avoid cloning here
+            types: lookup.0,
             constants: self.constants,
         }
     }
@@ -90,6 +99,7 @@ impl Convert<'_> for (String, hir::Type) {
         let ty = match ty {
             hir::Type::Never => todo!(),
             hir::Type::None => todo!(),
+            hir::Type::Blank => todo!(),
             hir::Type::List(_) => todo!(),
             hir::Type::Option(_) => todo!(),
             hir::Type::Result { ok, err } => todo!(),
@@ -226,7 +236,10 @@ impl<'a> ConvertInstruction<'a> for hir::Instruction {
                 num_payloads,
             } => todo!(),
             hir::Instruction::Record(_) => Instruction::Noop,
-            hir::Instruction::List(_) => todo!(),
+            hir::Instruction::List { len, ty } => {
+                let ty = ty.convert(lookup).expect("List elements must have a type");
+                Instruction::Store { number: len, ty }
+            }
             hir::Instruction::Call {
                 function,
                 num_arguments,
@@ -338,6 +351,7 @@ impl Convert<'_> for hir::Type {
             hir::Type::Builtin(ty) => Some(TypeRef::Primitive(ty.convert(lookup))),
             hir::Type::None => None,
             hir::Type::Never => todo!("Disallow 'Never' for exported functions"),
+            hir::Type::Blank => todo!("'Blank' not allowed here"),
         }
     }
 }

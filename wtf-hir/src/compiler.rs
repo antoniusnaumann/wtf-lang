@@ -377,12 +377,18 @@ impl<'a> FunctionCompiler<'a> {
                 }
                 self.stack.push(Type::Record(fields));
             }
-            Instruction::List(num_items) => {
+            Instruction::List { len, ty: _ } => {
                 let mut items = vec![];
-                for _ in 0..*num_items {
+                for _ in 0..*len {
                     items.push(self.stack.pop().unwrap());
                 }
-                self.stack.push(Type::List(Box::new(items[0].clone()))); // TODO: ensure items have same type
+                if items.len() > 0 {
+                    self.stack.push(Type::List(Box::new(items[0].clone()))); // TODO: ensure items have same type
+                } else {
+                    // TODO: Figure out type from later usage for empty lists
+                    self.stack
+                        .push(Type::List(Box::new(Type::Builtin(PrimitiveType::Bool))))
+                }
             }
             Instruction::Call {
                 function,
@@ -719,11 +725,17 @@ impl<'a> FunctionCompiler<'a> {
                 self.push(Instruction::Record(fields), block);
             }
             ast::Expression::ListLiteral(items) => {
-                let num_items = items.len();
                 for item in items {
                     self.compile_expression(item, block);
                 }
-                self.push(Instruction::List(num_items), block);
+                self.push(
+                    Instruction::List {
+                        len: items.len(),
+                        // TODO: @marcel type checker should insert the correct item type here
+                        ty: Type::Builtin(PrimitiveType::S64),
+                    },
+                    block,
+                );
             }
         }
     }
@@ -738,7 +750,8 @@ impl<'a> FunctionCompiler<'a> {
         fn mangle(ty: &Type) -> std::borrow::Cow<str> {
             match ty {
                 Type::Never => panic!("Never as an arg is not allowed"),
-                Type::None => panic!("None as an arg ist not allowed"),
+                Type::None => panic!("None as an arg is not allowed"),
+                Type::Blank => panic!("Blank as an arg is not allowed"),
                 Type::List(elem) => format!("list___{}", mangle(elem)).into(),
                 Type::Option(inner) => format!("option___{}", mangle(inner)).into(),
                 Type::Result { ok, err } => {
@@ -781,8 +794,12 @@ impl<'a> FunctionCompiler<'a> {
                 if self.signatures.contains_key(mangled.deref()) {
                     mangled.into()
                 } else {
-                    dbg!(&self.signatures.keys());
-                    panic!("Function '{name}' does not exist");
+                    let mut sorted: Vec<_> = self.signatures.keys().collect();
+                    sorted.sort();
+                    panic!(
+                        "Function '{name}' (or '{mangled}') does not exist. \n\n{:#?}",
+                        sorted
+                    );
                 }
             }
             _ => panic!("You can only call names."),

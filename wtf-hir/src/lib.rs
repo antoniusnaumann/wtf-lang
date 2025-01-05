@@ -20,6 +20,7 @@ pub struct Module {
 pub enum Type {
     Never, // will never be constructed, used as the type of return/break/...
     None,
+    Blank, // for builtin generic types where the type does not matter, e.g. list.len()
     List(Box<Type>),
     Option(Box<Type>),
     Result { ok: Box<Type>, err: Box<Type> },
@@ -140,7 +141,10 @@ pub enum Instruction {
     },
     // TODO: @marcel: we assume from here on that this is already in declaration field order
     Record(Vec<String>),
-    List(usize),
+    List {
+        len: usize,
+        ty: Type,
+    },
     Call {
         function: String,
         num_arguments: usize,
@@ -299,6 +303,7 @@ impl Display for Type {
         match self {
             Type::Never => write!(f, "never")?,
             Type::None => write!(f, "none")?,
+            Type::Blank => write!(f, "blank")?,
             Type::Builtin(builtin) => write!(f, "{}", builtin)?,
             Type::List(items) => write!(f, "[{}]", items)?,
             Type::Option(payload) => write!(f, "({payload})?")?,
@@ -432,8 +437,8 @@ impl Instruction {
                     write!(f, " {}", field)?;
                 }
             }
-            Instruction::List(num_items) => {
-                write!(f, "list with {} items", num_items)?;
+            Instruction::List { len, ty } => {
+                write!(f, "list with {} items of {}", len, ty)?;
             }
             Instruction::Call {
                 function,

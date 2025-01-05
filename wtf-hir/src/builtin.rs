@@ -50,6 +50,8 @@ impl WithBuiltins for HashMap<String, FunctionSignature> {
             conv(Ty::S64, Ty::F64),
             conv(Ty::S32, Ty::F32),
             conv(Ty::S32, Ty::F64),
+            conv(Ty::S64, Ty::U32),
+            conv(Ty::S64, Ty::S32),
         ];
 
         num_types
@@ -68,8 +70,50 @@ impl WithBuiltins for HashMap<String, FunctionSignature> {
                 &[Type::Builtin(Ty::String)],
                 Type::None,
             )))
+            .chain(collection_operations())
             .collect()
     }
+}
+
+fn collection_operations() -> Vec<(String, FunctionSignature)> {
+    let collection_types = [
+        (Type::List(Box::new(Type::Blank)), "list"),
+        (Type::Builtin(PrimitiveType::String), "string"),
+    ];
+
+    use PrimitiveType as Ty;
+    let primitive_types = [
+        Ty::S8,
+        Ty::S16,
+        Ty::S32,
+        Ty::S64,
+        Ty::U8,
+        Ty::U16,
+        Ty::U32,
+        Ty::U64,
+        Ty::F32,
+        Ty::F64,
+        Ty::Bool,
+        Ty::Char,
+        Ty::String,
+    ];
+
+    let collection_operations = [("len", Type::Builtin(PrimitiveType::U32))];
+
+    collection_types
+        .into_iter()
+        .flat_map(|(ty, s)| {
+            collection_operations
+                .iter()
+                .flat_map(|(op, ret)| {
+                    primitive_types
+                        .iter()
+                        .map(|elem| fun(format!("{op}__{s}___{elem}"), &[ty.clone()], ret.clone()))
+                        .collect::<Vec<_>>()
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect()
 }
 
 fn conv(target: PrimitiveType, arg: PrimitiveType) -> (String, FunctionSignature) {

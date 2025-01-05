@@ -1,4 +1,4 @@
-use wasm_encoder::Instruction as WasmInstruction;
+use wasm_encoder::{ComponentValType, Instruction as WasmInstruction};
 
 /// High level instruction that can handle high-level types
 #[derive(Debug, Clone)]
@@ -12,6 +12,11 @@ pub enum Instruction<'a> {
         id: u32,
         /// Index of the field
         member: Vec<u32>,
+    },
+
+    Store {
+        number: usize,
+        ty: ComponentValType,
     },
 
     Bytes(Vec<u8>),

@@ -81,7 +81,7 @@ pub struct Local {
 pub struct Instance<'a> {
     pub name: String,
     pub functions: Vec<Function<'a>>,
-    pub types: Vec<TypeDeclaration>,
+    pub types: Vec<Type>,
     pub constants: HashSet<Vec<u8>>,
 }
 
@@ -106,15 +106,19 @@ pub struct ComponentBuilder {
     component_count: u32,
     component_lookup: HashMap<String, u32>,
     component_types: Vec<(Type, Vec<ValType>)>,
-    type_declarations: Vec<TypeDeclaration>,
+    type_declarations: Vec<Type>,
     inner: wasm_encoder::ComponentBuilder,
     constants: HashMap<Vec<u8>, ConstantPosition>,
     data_ptr: u32,
     constant_ptr: u32,
 
-    realloc_index: u32,
+    builtin_func_index: u32,
     has_instance: bool,
 }
+
+// offsets for builtin function relative to realloc_index
+const FUNC_REALLOC: u32 = 0;
+const FUNC_LEN: u32 = 1;
 
 // Probably embed https://docs.rs/wasm-encoder/latest/wasm_encoder/struct.ComponentBuilder.html and use the lower_func method from there
 impl ComponentBuilder {
@@ -138,6 +142,9 @@ impl ComponentBuilder {
         // 64bit alignment
         self.constant_ptr = offset;
         self.data_ptr = offset + offset % 64;
+
+        // builtin functions are listed after instance functions
+        self.builtin_func_index = instance.functions.len() as u32;
 
         let mut exports = Vec::new();
 
@@ -322,7 +329,16 @@ impl ComponentBuilder {
     }
 
     pub fn finish(mut self) -> Vec<u8> {
+        self.globals.global(
+            GlobalType {
+                val_type: ValType::I32,
+                mutable: true,
+                shared: false,
+            },
+            &ConstExpr::i32_const(0),
+        );
         self.realloc();
+        self.register_builtin_functions();
         let (memory, data) = self.mem();
         self.exports.export("memory", ExportKind::Memory, 0);
         let mut module = Module::new();
@@ -391,7 +407,7 @@ impl ComponentBuilder {
                 type_idx,
                 vec![
                     CanonicalOption::Memory(0),
-                    CanonicalOption::Realloc(self.realloc_index),
+                    CanonicalOption::Realloc(self.builtin_func_index + FUNC_REALLOC),
                 ],
             );
             if function.export {
@@ -403,9 +419,9 @@ impl ComponentBuilder {
         for (idx, ty) in self.type_declarations.iter().enumerate() {
             continue;
             // TODO: This does not work currently
-            if ty.export {
-                exports.push((&ty.name, idx, ComponentExportKind::Type));
-            }
+            // if ty.export {
+            //    exports.push((&ty.name, idx, ComponentExportKind::Type));
+            // }
         }
 
         for (name, idx, kind) in exports {
@@ -534,8 +550,32 @@ impl ComponentBuilder {
         }
 
         self.codes.function(&realloc_func);
-        self.realloc_index = self.function_count;
         self.function_count += 1;
+    }
+
+    // TODO: should this live somewhere else?
+    fn register_builtin_functions(&mut self) {
+        let mut func_len = wasm_encoder::Function::new([]);
+        const LEN_BYTE: u32 = 0;
+        // const PTR_BYTE: u32 = 1;
+        const SIZE_BYTE: u32 = 2;
+        func_len.instruction(&WasmInstruction::LocalGet(LEN_BYTE));
+        func_len.instruction(&WasmInstruction::LocalGet(SIZE_BYTE));
+        func_len.instruction(&WasmInstruction::I32DivU);
+        func_len.instruction(&WasmInstruction::End);
+
+        let builtins = [(
+            func_len,
+            vec![ValType::I32, ValType::I32, ValType::I32],
+            vec![ValType::I32],
+        )];
+        for (func, params, result) in builtins {
+            self.types.ty().function(params, result);
+            self.codes.function(&func);
+            self.signatures.function(self.function_count);
+
+            self.function_count += 1;
+        }
     }
 
     fn lower_instruction<'a>(
@@ -567,12 +607,28 @@ impl ComponentBuilder {
                     }
                     TypeRef::Type(ty) => &self.type_declarations[ty as usize],
                 };
-                let Type::Record { fields } = &ty.ty else {
+                let Type::Record { fields } = &ty else {
                     panic!("ERROR: field access on non-records not allowed")
                 };
                 let lower = lower_local(&locals[id]);
 
                 vec![WasmInstruction::LocalGet(lower[member[0] as usize].0)]
+            }
+
+            Instruction::Store { number, ty } => {
+                let lower = self.lower(ty);
+                let number = number * lower.len();
+                let length = lower.iter().fold(0, |acc, e| acc + e.byte_length()) * number;
+
+                // TODO: store elements before returning the pointer
+                let instructions = (0..number).map(|_| WasmInstruction::Drop);
+                let pointer = [
+                    // TODO: call alloc to find out offset
+                    WasmInstruction::I32Const(3000 as i32),
+                    WasmInstruction::I32Const(length as i32),
+                ];
+
+                instructions.chain(pointer).collect()
             }
 
             Instruction::Bytes(bytes) => {
@@ -586,7 +642,7 @@ impl ComponentBuilder {
             Instruction::I64(num) => vec![WasmInstruction::I64Const(*num)],
             Instruction::F32(num) => vec![WasmInstruction::F32Const(*num)],
             Instruction::F64(num) => vec![WasmInstruction::F64Const(*num)],
-            Instruction::Call(ident) => vec![self.lower_call(ident)],
+            Instruction::Call(ident) => self.lower_call(ident),
 
             // Control Flow
             Instruction::End => vec![WasmInstruction::End],
@@ -682,101 +738,120 @@ impl ComponentBuilder {
         }
     }
 
-    fn lower_call(&self, ident: &str) -> WasmInstruction {
+    fn lower_call(&self, ident: &str) -> Vec<WasmInstruction> {
         match ident {
             // Arithmetic Operators
-            "add__s32_s32" | "add__u32_u32" => WasmInstruction::I32Add,
-            "add__s64_s64" | "add__u64_u64" => WasmInstruction::I64Add,
-            "add__f32_f32" => WasmInstruction::F32Add,
-            "add__f64_f64" => WasmInstruction::F64Add,
+            "add__s32_s32" | "add__u32_u32" => vec![WasmInstruction::I32Add],
+            "add__s64_s64" | "add__u64_u64" => vec![WasmInstruction::I64Add],
+            "add__f32_f32" => vec![WasmInstruction::F32Add],
+            "add__f64_f64" => vec![WasmInstruction::F64Add],
 
-            "sub__s32_s32" | "sub__u32_u32" => WasmInstruction::I32Sub,
-            "sub__s64_s64" | "sub__u64_u64" => WasmInstruction::I64Sub,
-            "sub__f32_f32" => WasmInstruction::F32Sub,
-            "sub__f64_f64" => WasmInstruction::F64Sub,
+            "sub__s32_s32" | "sub__u32_u32" => vec![WasmInstruction::I32Sub],
+            "sub__s64_s64" | "sub__u64_u64" => vec![WasmInstruction::I64Sub],
+            "sub__f32_f32" => vec![WasmInstruction::F32Sub],
+            "sub__f64_f64" => vec![WasmInstruction::F64Sub],
 
-            "negate__f32" => WasmInstruction::F32Neg,
-            "negate__f64" => WasmInstruction::F64Neg,
+            "negate__f32" => vec![WasmInstruction::F32Neg],
+            "negate__f64" => vec![WasmInstruction::F64Neg],
 
-            "mul__s32_s32" | "mul__u32_u32" => WasmInstruction::I32Mul,
-            "mul__s64_s64" | "mul__u64_u64" => WasmInstruction::I64Mul,
-            "mul__f32_f32" => WasmInstruction::F32Mul,
-            "mul__f64_f64" => WasmInstruction::F64Mul,
+            "mul__s32_s32" | "mul__u32_u32" => vec![WasmInstruction::I32Mul],
+            "mul__s64_s64" | "mul__u64_u64" => vec![WasmInstruction::I64Mul],
+            "mul__f32_f32" => vec![WasmInstruction::F32Mul],
+            "mul__f64_f64" => vec![WasmInstruction::F64Mul],
 
-            "div__u32_u32" => WasmInstruction::I32DivU,
-            "div__u64_u64" => WasmInstruction::I64DivU,
-            "div__s32_s32" => WasmInstruction::I32DivS,
-            "div__s64_s64" => WasmInstruction::I64DivS,
-            "div__f32_f32" => WasmInstruction::F32Div,
-            "div__f64_f64" => WasmInstruction::F64Div,
+            "div__u32_u32" => vec![WasmInstruction::I32DivU],
+            "div__u64_u64" => vec![WasmInstruction::I64DivU],
+            "div__s32_s32" => vec![WasmInstruction::I32DivS],
+            "div__s64_s64" => vec![WasmInstruction::I64DivS],
+            "div__f32_f32" => vec![WasmInstruction::F32Div],
+            "div__f64_f64" => vec![WasmInstruction::F64Div],
 
             // Comparison Operators
-            "eq__u32_u32" | "eq__s32_s32" => WasmInstruction::I32Eq,
-            "eq__u64_u64" | "eq__s64_s64" => WasmInstruction::I64Eq,
-            "eq__f32" => WasmInstruction::F32Eq,
-            "eq__f64" => WasmInstruction::F64Eq,
+            "eq__u32_u32" | "eq__s32_s32" => vec![WasmInstruction::I32Eq],
+            "eq__u64_u64" | "eq__s64_s64" => vec![WasmInstruction::I64Eq],
+            "eq__f32" => vec![WasmInstruction::F32Eq],
+            "eq__f64" => vec![WasmInstruction::F64Eq],
 
-            "ne__u32_u32" | "ne__s32_s32" => WasmInstruction::I32Ne,
-            "ne__u64_u64" | "ne__s64_s64" => WasmInstruction::I64Ne,
-            "ne__f32" => WasmInstruction::F32Ne,
-            "ne__f64" => WasmInstruction::F64Ne,
+            "ne__u32_u32" | "ne__s32_s32" => vec![WasmInstruction::I32Ne],
+            "ne__u64_u64" | "ne__s64_s64" => vec![WasmInstruction::I64Ne],
+            "ne__f32" => vec![WasmInstruction::F32Ne],
+            "ne__f64" => vec![WasmInstruction::F64Ne],
 
-            "greater_than__u32_u32" => WasmInstruction::I32GtU,
-            "greater_than__u64_u64" => WasmInstruction::I64GtU,
-            "greater_than__s32_s32" => WasmInstruction::I32GtS,
-            "greater_than__s64_s64" => WasmInstruction::I64GtS,
-            "greater_than__f32_f32" => WasmInstruction::F32Gt,
-            "greater_than__f64_f64" => WasmInstruction::F64Gt,
+            "greater_than__u32_u32" => vec![WasmInstruction::I32GtU],
+            "greater_than__u64_u64" => vec![WasmInstruction::I64GtU],
+            "greater_than__s32_s32" => vec![WasmInstruction::I32GtS],
+            "greater_than__s64_s64" => vec![WasmInstruction::I64GtS],
+            "greater_than__f32_f32" => vec![WasmInstruction::F32Gt],
+            "greater_than__f64_f64" => vec![WasmInstruction::F64Gt],
 
-            "less_than__u32_u32" => WasmInstruction::I32LtU,
-            "less_than__u64_u64" => WasmInstruction::I64LtU,
-            "less_than__s32_s32" => WasmInstruction::I32LtS,
-            "less_than__s64_s64" => WasmInstruction::I64LtS,
-            "less_than__f32_f32" => WasmInstruction::F32Lt,
-            "less_than__f64_f64" => WasmInstruction::F64Lt,
+            "less_than__u32_u32" => vec![WasmInstruction::I32LtU],
+            "less_than__u64_u64" => vec![WasmInstruction::I64LtU],
+            "less_than__s32_s32" => vec![WasmInstruction::I32LtS],
+            "less_than__s64_s64" => vec![WasmInstruction::I64LtS],
+            "less_than__f32_f32" => vec![WasmInstruction::F32Lt],
+            "less_than__f64_f64" => vec![WasmInstruction::F64Lt],
 
-            "greater_eq__u32_u32" => WasmInstruction::I32GeU,
-            "greater_eq__u64_u64" => WasmInstruction::I64GeU,
-            "greater_eq__s32_s32" => WasmInstruction::I32GeS,
-            "greater_eq__s64_s64" => WasmInstruction::I64GeS,
-            "greater_eq__f32_f32" => WasmInstruction::F32Ge,
-            "greater_eq__f64_f64" => WasmInstruction::F64Ge,
+            "greater_eq__u32_u32" => vec![WasmInstruction::I32GeU],
+            "greater_eq__u64_u64" => vec![WasmInstruction::I64GeU],
+            "greater_eq__s32_s32" => vec![WasmInstruction::I32GeS],
+            "greater_eq__s64_s64" => vec![WasmInstruction::I64GeS],
+            "greater_eq__f32_f32" => vec![WasmInstruction::F32Ge],
+            "greater_eq__f64_f64" => vec![WasmInstruction::F64Ge],
 
-            "less_eq__u32_u32" => WasmInstruction::I32LeU,
-            "less_eq__u64_u64" => WasmInstruction::I64LeU,
-            "less_eq__s32_s32" => WasmInstruction::I32LeS,
-            "less_eq__s64_s64" => WasmInstruction::I64LeS,
-            "less_eq__f32_f32" => WasmInstruction::F32Le,
-            "less_eq__f64_f64" => WasmInstruction::F64Le,
+            "less_eq__u32_u32" => vec![WasmInstruction::I32LeU],
+            "less_eq__u64_u64" => vec![WasmInstruction::I64LeU],
+            "less_eq__s32_s32" => vec![WasmInstruction::I32LeS],
+            "less_eq__s64_s64" => vec![WasmInstruction::I64LeS],
+            "less_eq__f32_f32" => vec![WasmInstruction::F32Le],
+            "less_eq__f64_f64" => vec![WasmInstruction::F64Le],
 
-            "min__f32_f32" => WasmInstruction::F32Min,
-            "min__f64_f64" => WasmInstruction::F64Min,
+            "min__f32_f32" => vec![WasmInstruction::F32Min],
+            "min__f64_f64" => vec![WasmInstruction::F64Min],
 
-            "max__f32_f32" => WasmInstruction::F32Max,
-            "max__f64_f64" => WasmInstruction::F64Max,
+            "max__f32_f32" => vec![WasmInstruction::F32Max],
+            "max__f64_f64" => vec![WasmInstruction::F64Max],
 
             // Unary float operations
-            "floor__f64" => WasmInstruction::F64Floor,
-            "floor__f32" => WasmInstruction::F32Floor,
+            "floor__f64" => vec![WasmInstruction::F64Floor],
+            "floor__f32" => vec![WasmInstruction::F32Floor],
 
-            "ceil__f64" => WasmInstruction::F64Ceil,
-            "ceil__f32" => WasmInstruction::F32Ceil,
+            "ceil__f64" => vec![WasmInstruction::F64Ceil],
+            "ceil__f32" => vec![WasmInstruction::F32Ceil],
 
-            "abs__f32" => WasmInstruction::F32Abs,
-            "abs__f64" => WasmInstruction::F64Abs,
+            "abs__f32" => vec![WasmInstruction::F32Abs],
+            "abs__f64" => vec![WasmInstruction::F64Abs],
 
             // Conversions
-            "s32__f32" => WasmInstruction::I32TruncF32S,
-            "s64__f32" => WasmInstruction::I64TruncF32S,
-            "u32__f32" => WasmInstruction::I32TruncF32U,
-            "u64__f32" => WasmInstruction::I64TruncF32U,
+            "s32__f32" => vec![WasmInstruction::I32TruncF32S],
+            "s64__f32" => vec![WasmInstruction::I64TruncF32S],
+            "u32__f32" => vec![WasmInstruction::I32TruncF32U],
+            "u64__f32" => vec![WasmInstruction::I64TruncF32U],
 
-            "s32__f64" => WasmInstruction::I32TruncF64S,
-            "s64__f64" => WasmInstruction::I64TruncF64S,
-            "u32__f64" => WasmInstruction::I32TruncF64U,
-            "u64__f64" => WasmInstruction::I64TruncF64U,
+            "s32__f64" => vec![WasmInstruction::I32TruncF64S],
+            "s64__f64" => vec![WasmInstruction::I64TruncF64S],
+            "u32__f64" => vec![WasmInstruction::I32TruncF64U],
+            "u64__f64" => vec![WasmInstruction::I64TruncF64U],
 
-            // Regular function call
+            "s64__u32" => vec![WasmInstruction::I64ExtendI32U],
+            "s64__s32" => vec![WasmInstruction::I64ExtendI32S],
+
+            // TODO: Implement strlen by counting UTF8 unicode runes
+            "len__string" => {
+                todo!("Implement 'len' for strings")
+            }
+
+            ident if ident.starts_with("len__list") => {
+                let element = ident
+                    .strip_prefix("len__list___")
+                    .expect("len__list function name should include a type hint");
+                let ty = PrimitiveValType::try_parse(element)
+                    .expect("Can only call len function on lists of primitive types for now");
+                vec![
+                    WasmInstruction::I32Const(ty.byte_length() as i32),
+                    WasmInstruction::Call(self.builtin_func_index + FUNC_LEN),
+                ]
+            }
+
             ident => {
                 let ident = ident.replace("_", "-");
 
@@ -793,7 +868,7 @@ impl ComponentBuilder {
                         )
                     });
 
-                WasmInstruction::Call(index as u32)
+                vec![WasmInstruction::Call(index as u32)]
             }
         }
     }
@@ -818,7 +893,7 @@ impl ComponentBuilder {
     }
 }
 
-fn lower_types(types: &[TypeDeclaration]) -> Vec<(Type, Vec<ValType>)> {
+fn lower_types(types: &[Type]) -> Vec<(Type, Vec<ValType>)> {
     let mut result: Vec<Option<Vec<ValType>>> = types.iter().map(|_| None).collect();
 
     for (index, ty) in types.iter().enumerate() {
@@ -827,8 +902,8 @@ fn lower_types(types: &[TypeDeclaration]) -> Vec<(Type, Vec<ValType>)> {
         }
 
         result[index] = Some(lower_type_update(
-            &ty.ty,
-            &types.iter().map(|decl| decl.ty.clone()).collect::<Vec<_>>(),
+            &ty,
+            &types.iter().map(|ty| ty.clone()).collect::<Vec<_>>(),
             &mut result,
         ));
     }
@@ -837,7 +912,7 @@ fn lower_types(types: &[TypeDeclaration]) -> Vec<(Type, Vec<ValType>)> {
 
     types
         .into_iter()
-        .map(|decl| decl.ty.clone())
+        .map(|ty| ty.clone())
         .zip(mapping)
         .collect()
 }
@@ -960,6 +1035,61 @@ impl CanonicalLowering for PrimitiveValType {
             PrimitiveValType::F32 => vec![ValType::F32],
             PrimitiveValType::F64 => vec![ValType::F64],
             PrimitiveValType::String => vec![ValType::I32, ValType::I32],
+        }
+    }
+}
+
+trait ByteLength {
+    fn byte_length(&self) -> usize;
+}
+
+impl ByteLength for ValType {
+    fn byte_length(&self) -> usize {
+        match self {
+            ValType::I32 | ValType::F32 => 4,
+            ValType::I64 | ValType::F64 => 8,
+            ValType::V128 => todo!("Byte length for V128"),
+            ValType::Ref(_) => todo!("Byte length for ref types"),
+        }
+    }
+}
+
+impl ByteLength for PrimitiveValType {
+    fn byte_length(&self) -> usize {
+        self.lower().iter().fold(0, |acc, e| acc + e.byte_length())
+    }
+}
+
+trait ParsableType
+where
+    Self: Sized,
+{
+    fn try_parse(s: &str) -> Option<Self>;
+}
+
+impl ParsableType for PrimitiveValType {
+    fn try_parse(s: &str) -> Option<Self> {
+        use PrimitiveValType as T;
+        match s {
+            "s8" => Some(T::S8),
+            "s16" => Some(T::S16),
+            "s32" => Some(T::S32),
+            "s64" => Some(T::S64),
+
+            "u8" => Some(T::U8),
+            "u16" => Some(T::U16),
+            "u32" => Some(T::U32),
+            "u64" => Some(T::U64),
+
+            "f32" => Some(T::F32),
+            "f64" => Some(T::F64),
+
+            "bool" => Some(T::Bool),
+
+            "string" => Some(T::String),
+            "char" => Some(T::Char),
+
+            _ => None,
         }
     }
 }
