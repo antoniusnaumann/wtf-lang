@@ -2,6 +2,9 @@ package wtf:example@0.1.0
 
 // should return
 export func main() -> s64 {
+    let array = ["Hello World!"]
+    return s64(array.len()) 
+
     let array = [12, 17, 38, 55]
 
     return s64(array.len()) - 4
@@ -18,4 +21,12 @@ test "s64 array has correct len" {
 
     let array = [51, 33, -7, 5, 32, 17, 99]
     assert s64(array.len()) == 7
+}
+
+test "string array has correct len" {
+    let array = ["Hello World!"]
+    assert s64(array.len()) == 1
+
+    // let array = ["Hello", "World!"]
+    // assert s64(array.len()) == 2
 }

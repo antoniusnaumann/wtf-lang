@@ -728,11 +728,30 @@ impl<'a> FunctionCompiler<'a> {
                 for item in items {
                     self.compile_expression(item, block);
                 }
+                // TODO: @marcel type checker should insert the correct item type here
+                // TODO: This is currently a very cheap literal-only way of doing it
+                let mut item_type = PrimitiveType::S64;
+                for item in items {
+                    match item {
+                        Expression::Literal(lit) => {
+                            item_type = match lit {
+                                Literal::Integer(_) => PrimitiveType::S64,
+                                Literal::Float(_) => PrimitiveType::F64,
+                                Literal::String(_) => PrimitiveType::String,
+                                Literal::Boolean(_) => PrimitiveType::Bool,
+                                Literal::None => {
+                                    todo!("Infer optional from presence of none literal in array")
+                                }
+                            };
+                            break;
+                        }
+                        _ => continue,
+                    }
+                }
                 self.push(
                     Instruction::List {
                         len: items.len(),
-                        // TODO: @marcel type checker should insert the correct item type here
-                        ty: Type::Builtin(PrimitiveType::S64),
+                        ty: Type::Builtin(item_type),
                     },
                     block,
                 );
