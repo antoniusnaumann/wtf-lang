@@ -1,0 +1,11 @@
+package wtf:example@0.1.0
+
+test "UFCS returns the same value as function call" {
+    let value = 42.3
+    assert value.s64() == s64(value)
+}
+
+test "UFCS is chainable" {
+    let array = [12, 17, 38, 55]
+    assert array.len().s64() == s64(len(array))
+}
