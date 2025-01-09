@@ -120,6 +120,11 @@ pub struct ComponentBuilder {
 const FUNC_REALLOC: u32 = 0;
 const FUNC_LEN: u32 = 1;
 
+const FUNC_INSERT_OFFSET_I32: u32 = 2;
+const FUNC_INSERT_OFFSET_I64: u32 = 3;
+const FUNC_INSERT_OFFSET_F32: u32 = 4;
+const FUNC_INSERT_OFFSET_F64: u32 = 5;
+
 // Probably embed https://docs.rs/wasm-encoder/latest/wasm_encoder/struct.ComponentBuilder.html and use the lower_func method from there
 impl ComponentBuilder {
     pub fn new() -> ComponentBuilder {
@@ -556,19 +561,52 @@ impl ComponentBuilder {
     // TODO: should this live somewhere else?
     fn register_builtin_functions(&mut self) {
         let mut func_len = wasm_encoder::Function::new([]);
-        const LEN_BYTE: u32 = 0;
-        // const PTR_BYTE: u32 = 1;
-        const SIZE_BYTE: u32 = 2;
-        func_len.instruction(&WasmInstruction::LocalGet(LEN_BYTE));
-        func_len.instruction(&WasmInstruction::LocalGet(SIZE_BYTE));
-        func_len.instruction(&WasmInstruction::I32DivU);
-        func_len.instruction(&WasmInstruction::End);
+        {
+            const LEN_ARG: u32 = 0;
+            // const PTR_BYTE: u32 = 1;
+            const SIZE_ARG: u32 = 2;
+            func_len.instruction(&WasmInstruction::LocalGet(LEN_ARG));
+            func_len.instruction(&WasmInstruction::LocalGet(SIZE_ARG));
+            func_len.instruction(&WasmInstruction::I32DivU);
+            func_len.instruction(&WasmInstruction::End);
+        }
 
-        let builtins = [(
-            func_len,
-            vec![ValType::I32, ValType::I32, ValType::I32],
-            vec![ValType::I32],
-        )];
+        let mut func_offset = wasm_encoder::Function::new([]);
+        {
+            const VAL_ARG: u32 = 0;
+            const OFFSET_ARG: u32 = 1;
+            func_offset.instruction(&WasmInstruction::LocalGet(OFFSET_ARG));
+            func_offset.instruction(&WasmInstruction::LocalGet(VAL_ARG));
+            func_offset.instruction(&WasmInstruction::End);
+        }
+
+        let builtins = [
+            (
+                func_len,
+                vec![ValType::I32, ValType::I32, ValType::I32],
+                vec![ValType::I32],
+            ),
+            (
+                func_offset.clone(),
+                vec![ValType::I32, ValType::I32],
+                vec![ValType::I32, ValType::I32],
+            ),
+            (
+                func_offset.clone(),
+                vec![ValType::I64, ValType::I32],
+                vec![ValType::I32, ValType::I64],
+            ),
+            (
+                func_offset.clone(),
+                vec![ValType::F32, ValType::I32],
+                vec![ValType::I32, ValType::F32],
+            ),
+            (
+                func_offset.clone(),
+                vec![ValType::F64, ValType::I32],
+                vec![ValType::I32, ValType::F64],
+            ),
+        ];
         for (func, params, result) in builtins {
             self.types.ty().function(params, result);
             self.codes.function(&func);
@@ -617,14 +655,58 @@ impl ComponentBuilder {
 
             Instruction::Store { number, ty } => {
                 let lower = self.lower(ty);
-                let length = lower.iter().fold(0, |acc, e| acc + e.byte_length()) * number;
-                let stack_number = number * lower.len();
+                let element_length = lower.iter().fold(0, |acc, e| acc + e.byte_length());
+                let length = element_length * number;
 
-                // TODO: store elements before returning the pointer
-                let instructions = (0..stack_number).map(|_| WasmInstruction::Drop);
+                // TODO: call alloc to find out offset
+                let offset: u32 = 3000;
+                let mem_arg = MemArg {
+                    offset: offset as u64,
+                    align: 0,
+                    memory_index: 0,
+                };
+
+                let instructions = (0..*number).flat_map(|index| {
+                    let mut item_offset = index * element_length;
+                    lower.iter().flat_map(move |elem| {
+                        let inst = match elem {
+                            ValType::I32 => [
+                                WasmInstruction::I32Const(item_offset as i32),
+                                WasmInstruction::Call(
+                                    self.builtin_func_index + FUNC_INSERT_OFFSET_I32,
+                                ),
+                                WasmInstruction::I32Store(mem_arg),
+                            ],
+                            ValType::I64 => [
+                                WasmInstruction::I32Const(item_offset as i32),
+                                WasmInstruction::Call(
+                                    self.builtin_func_index + FUNC_INSERT_OFFSET_I64,
+                                ),
+                                WasmInstruction::I64Store(mem_arg),
+                            ],
+                            ValType::F32 => [
+                                WasmInstruction::I32Const(item_offset as i32),
+                                WasmInstruction::Call(
+                                    self.builtin_func_index + FUNC_INSERT_OFFSET_F32,
+                                ),
+                                WasmInstruction::F32Store(mem_arg),
+                            ],
+                            ValType::F64 => [
+                                WasmInstruction::I32Const(item_offset as i32),
+                                WasmInstruction::Call(
+                                    self.builtin_func_index + FUNC_INSERT_OFFSET_F64,
+                                ),
+                                WasmInstruction::F64Store(mem_arg),
+                            ],
+                            ValType::V128 => todo!("Store V128"),
+                            ValType::Ref(ref_type) => todo!("Store ref type: {:#?}", ref_type),
+                        };
+                        item_offset += elem.byte_length();
+                        inst
+                    })
+                });
                 let pointer = [
-                    // TODO: call alloc to find out offset
-                    WasmInstruction::I32Const(3000 as i32),
+                    WasmInstruction::I32Const(offset as i32),
                     WasmInstruction::I32Const(length as i32),
                 ];
 
