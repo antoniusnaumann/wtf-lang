@@ -20,6 +20,10 @@ pub enum Instruction<'a> {
     },
 
     Bytes(Vec<u8>),
+    IndexAccess {
+        ty: ComponentValType,
+    },
+
     I32(i32),
     I64(i64),
     F32(f32),

@@ -426,11 +426,14 @@ impl<'a> FunctionCompiler<'a> {
                     panic!("Field access on non-record.");
                 }
             }
-            Instruction::IndexAccess => {
-                if let Type::List(list) = self.stack.pop().unwrap() {
-                    self.stack.push(*list);
+            Instruction::IndexAccess { ty } => {
+                let _index = self.stack.pop().unwrap();
+                // TODO: type-check index
+                if let Type::List(element) = self.stack.pop().unwrap() {
+                    // TODO: validate that types match?
+                    self.stack.push(*element);
                 } else {
-                    panic!("Index access of non-list.");
+                    panic!("Index access of non-list!");
                 }
             }
             Instruction::Return => {
@@ -714,7 +717,13 @@ impl<'a> FunctionCompiler<'a> {
             ast::Expression::IndexAccess { collection, index } => {
                 self.compile_expression(&collection, block);
                 self.compile_expression(index, block);
-                self.push(Instruction::IndexAccess, block);
+                // TODO: get type from collection
+                self.push(
+                    Instruction::IndexAccess {
+                        ty: Type::Builtin(PrimitiveType::S64),
+                    },
+                    block,
+                );
             }
             ast::Expression::Record { name, members } => {
                 let mut fields = vec![];

@@ -720,6 +720,29 @@ impl ComponentBuilder {
                     WasmInstruction::I32Const(length as i32),
                 ]
             }
+            Instruction::IndexAccess { ty } => {
+                let lower = self.lower(ty);
+                let element_length = lower.iter().fold(0, |acc, e| acc + e.byte_length());
+
+                // TODO: how to load other stuff than primitives
+                let load_instructions = match lower.as_slice() {
+                    &[ValType::I64] => vec![WasmInstruction::I64Load(MemArg {
+                        offset: 0,
+                        align: 0,
+                        memory_index: 0,
+                    })],
+                    _ => todo!("implement index access for more types"),
+                };
+
+                [
+                    vec![
+                        WasmInstruction::I32Const(element_length as i32),
+                        WasmInstruction::I32Mul,
+                    ],
+                    load_instructions,
+                ]
+                .concat()
+            }
             Instruction::I32(num) => vec![WasmInstruction::I32Const(*num)],
             Instruction::I64(num) => vec![WasmInstruction::I64Const(*num)],
             Instruction::F32(num) => vec![WasmInstruction::F32Const(*num)],

@@ -27,3 +27,8 @@ test "string array has correct len" {
     let array = ["Hello", "World!"]
     assert s64(array.len()) == 2
 }
+
+test "array index access works" {
+    let array = [51, 33, -7, 5, 32, 17, 99]
+    assert array[1] == 33
+}

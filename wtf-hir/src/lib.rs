@@ -153,7 +153,9 @@ pub enum Instruction {
     FieldAccess(String),
     // Optimized field access for locals
     MemberChain(LocalId, Vec<String>),
-    IndexAccess,
+    IndexAccess {
+        ty: Type,
+    },
     Unreachable,
     Return,
     Break,
@@ -450,7 +452,7 @@ impl Instruction {
             Instruction::MemberChain(id, fields) => {
                 write!(f, "access {} on {}", fields.join("."), id)?;
             }
-            Instruction::IndexAccess => write!(f, "index access")?,
+            Instruction::IndexAccess { ty: _ } => write!(f, "index access")?,
             Instruction::Load(local) => write!(f, "load from {local}")?,
             Instruction::Store(local) => write!(f, "store to {local}")?,
             Instruction::Return => write!(f, "return")?,

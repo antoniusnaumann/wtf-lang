@@ -352,7 +352,9 @@ impl Print for Expression {
                     node!(f, indent, c, "access", object, field)
                 }
             }
-            Expression::IndexAccess { collection, index } => todo!(),
+            Expression::IndexAccess { collection, index } => {
+                node!(f, indent, c, "indexaccess", collection, index)
+            }
             Expression::Record { name, members } => {
                 node!(f, indent, c, "record", name, members)
             }

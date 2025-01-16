@@ -283,7 +283,11 @@ impl<'a> ConvertInstruction<'a> for hir::Instruction {
             hir::Instruction::FieldAccess(field) => {
                 todo!("look at type here and figure out what to pop?")
             }
-            hir::Instruction::IndexAccess => todo!(),
+            hir::Instruction::IndexAccess { ty } => {
+                let ty = ty.convert(lookup).expect("List elements must have a type");
+
+                Instruction::IndexAccess { ty }
+            }
             hir::Instruction::Return => Instruction::Return,
             hir::Instruction::Break => Instruction::Break,
             hir::Instruction::Continue => Instruction::Continue,
