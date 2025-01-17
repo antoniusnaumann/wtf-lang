@@ -734,7 +734,7 @@ impl<'a> FunctionCompiler<'a> {
                 self.push(Instruction::Record(fields), block);
             }
             ast::Expression::ListLiteral(items) => {
-                for item in items {
+                for item in items.iter().rev() {
                     self.compile_expression(item, block);
                 }
                 // TODO: @marcel type checker should insert the correct item type here

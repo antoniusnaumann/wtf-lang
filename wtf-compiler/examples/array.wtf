@@ -1,10 +1,9 @@
 package wtf:example@0.1.0
 
-// should return
+// should return 0
 export func main() -> s64 {
-    let array = [12, 17, 38, 55]
-
-    return s64(array.len() - 4)
+    let array = [12, 17, 38, 5, 15]
+    return s64(array.len() - array[3])
 }
 
 test "empty array has len zero" {
@@ -30,5 +29,11 @@ test "string array has correct len" {
 
 test "array index access works" {
     let array = [51, 33, -7, 5, 32, 17, 99]
+    assert array[0] == 51
     assert array[1] == 33
+    assert array[2] == -7
+    assert array[3] == 5
+    assert array[4] == 32
+    assert array[5] == 17
+    assert array[6] == 99
 }
