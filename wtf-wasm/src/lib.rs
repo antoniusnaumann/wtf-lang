@@ -725,12 +725,14 @@ impl ComponentBuilder {
                 let element_length = lower.iter().fold(0, |acc, e| acc + e.byte_length());
 
                 // TODO: how to load other stuff than primitives
+                let mem_arg = MemArg {
+                    offset: 0,
+                    align: 0,
+                    memory_index: 0,
+                };
                 let load_instructions = match lower.as_slice() {
-                    &[ValType::I64] => vec![WasmInstruction::I64Load(MemArg {
-                        offset: 0,
-                        align: 0,
-                        memory_index: 0,
-                    })],
+                    &[ValType::I64] => vec![WasmInstruction::I64Load(mem_arg)],
+                    &[ValType::I32] => vec![WasmInstruction::I32Load(mem_arg)],
                     _ => todo!("implement index access for more types"),
                 };
 

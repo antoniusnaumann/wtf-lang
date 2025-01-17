@@ -4,28 +4,28 @@ package wtf:example@0.1.0
 export func main() -> s64 {
     let array = [12, 17, 38, 55]
 
-    return s64(array.len()) - 4
+    return s64(array.len() - 4)
 }
 
 test "empty array has len zero" {
     let array = []
-    assert s64(array.len()) == 0
+    assert array.len() == 0
 }
 
 test "s64 array has correct len" {
     let array = [1, 2, 3, 4]
-    assert s64(array.len()) == 4
+    assert array.len() == 4
 
     let array = [51, 33, -7, 5, 32, 17, 99]
-    assert s64(array.len()) == 7
+    assert array.len() == 7
 }
 
 test "string array has correct len" {
     let array = ["Hello World!"]
-    assert s64(array.len()) == 1
+    assert array.len() == 1
 
     let array = ["Hello", "World!"]
-    assert s64(array.len()) == 2
+    assert array.len() == 2
 }
 
 test "array index access works" {

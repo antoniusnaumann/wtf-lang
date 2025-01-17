@@ -1,6 +1,6 @@
 package wtf:example@0.1.0
 
-export func double_cap(x: s64, cap: s64) -> s64 {
+export func double_cap(x: s32, cap: s32) -> s32 {
    let y = x * 2
     
    if y > cap {
@@ -13,7 +13,7 @@ export func double_cap(x: s64, cap: s64) -> s64 {
 
 // should return 0
 export func main() -> s64 {
-   return double_cap(5, 11) - 10
+   return s64(double_cap(5, 11) - 10)
 }
 
 test "cap value larger than cap" {

@@ -226,8 +226,8 @@ impl<'a> ConvertInstruction<'a> for hir::Instruction {
             hir::Instruction::Pop => Instruction::Pop,
             hir::Instruction::Load(i) => Instruction::LocalGet(i.0 as u32),
             hir::Instruction::Store(i) => Instruction::LocalSet(i.0 as u32),
-            hir::Instruction::Int(num) => Instruction::I64(num),
-            hir::Instruction::Float(num) => Instruction::F64(num),
+            hir::Instruction::Int(num) => Instruction::I32(num as i32), // TODO typecheck: different instructions for different int sizes
+            hir::Instruction::Float(num) => Instruction::F32(num as f32), // TODO: typecheck: different instructions for different float sizes
             hir::Instruction::String(string) => Instruction::Bytes(string.into_bytes()),
             hir::Instruction::Bool(b) => Instruction::I32(if b { 1 } else { 0 }),
             hir::Instruction::None => Instruction::Noop,

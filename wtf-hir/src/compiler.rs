@@ -353,8 +353,8 @@ impl<'a> FunctionCompiler<'a> {
             Instruction::Store(local_id) => {
                 self.stack.pop(); // TODO: ensure types match
             }
-            Instruction::Int(_) => self.stack.push(Type::Builtin(PrimitiveType::S64)),
-            Instruction::Float(_) => self.stack.push(Type::Builtin(PrimitiveType::F64)),
+            Instruction::Int(_) => self.stack.push(Type::Builtin(PrimitiveType::S32)),
+            Instruction::Float(_) => self.stack.push(Type::Builtin(PrimitiveType::F32)),
             Instruction::Bool(_) => self.stack.push(Type::Builtin(PrimitiveType::Bool)),
             Instruction::String(_) => self.stack.push(Type::Builtin(PrimitiveType::String)),
             Instruction::None => self.stack.push(Type::None),
@@ -720,7 +720,7 @@ impl<'a> FunctionCompiler<'a> {
                 // TODO: get type from collection
                 self.push(
                     Instruction::IndexAccess {
-                        ty: Type::Builtin(PrimitiveType::S64),
+                        ty: Type::Builtin(PrimitiveType::S32),
                     },
                     block,
                 );
@@ -739,13 +739,13 @@ impl<'a> FunctionCompiler<'a> {
                 }
                 // TODO: @marcel type checker should insert the correct item type here
                 // TODO: This is currently a very cheap literal-only way of doing it
-                let mut item_type = PrimitiveType::S64;
+                let mut item_type = PrimitiveType::S32;
                 for item in items {
                     match item {
                         Expression::Literal(lit) => {
                             item_type = match lit {
-                                Literal::Integer(_) => PrimitiveType::S64,
-                                Literal::Float(_) => PrimitiveType::F64,
+                                Literal::Integer(_) => PrimitiveType::S32,
+                                Literal::Float(_) => PrimitiveType::F32,
                                 Literal::String(_) => PrimitiveType::String,
                                 Literal::Boolean(_) => PrimitiveType::Bool,
                                 Literal::None => {
@@ -865,7 +865,7 @@ impl<'a> FunctionCompiler<'a> {
             BinaryOperator::NullCoalesce => todo!(),
         };
         // TODO: Append argument types from inferred expression types
-        let typed_name = format!("{name}__s64_s64");
+        let typed_name = format!("{name}__s32_s32");
         let ident = Expression::Identifier(typed_name.into());
 
         // TODO: Avoid cloning

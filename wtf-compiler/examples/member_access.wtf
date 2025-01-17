@@ -1,15 +1,15 @@
 package wtf:example@0.1.0
 
 record point {
-    x: s64 
-    y: s64
+    x: s32 
+    y: s32
 }
 
-func manhattan(p: point) -> s64 {
+func manhattan(p: point) -> s32 {
     return p.x + p.y
 }
 
 // should return 0
 export func main() -> s64 {
-    return manhattan({ x: 10, y: 5 }) - 15
+    return s64(manhattan({ x: 10, y: 5 }) - 15)
 }
