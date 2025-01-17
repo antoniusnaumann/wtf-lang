@@ -740,6 +740,11 @@ impl ComponentBuilder {
                     vec![
                         WasmInstruction::I32Const(element_length as i32),
                         WasmInstruction::I32Mul,
+                        WasmInstruction::I32Add,
+                        // TODO: check array bounds
+                        WasmInstruction::Call(self.builtin_func_index + FUNC_INSERT_OFFSET_I32),
+                        // drop array length
+                        WasmInstruction::Drop,
                     ],
                     load_instructions,
                 ]
