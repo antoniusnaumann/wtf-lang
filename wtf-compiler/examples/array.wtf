@@ -9,7 +9,6 @@ export func main() -> s64 {
 test "empty array has len zero" {
     let array = []
     assert array.len() == 0
-    assert false
 }
 
 test "s64 array has correct len" {
@@ -52,3 +51,9 @@ test "array index access works after re-assignment" {
     assert array[6] == 99
 }
 
+test "multiple arrays do not overwrite each other" {
+    let first = [5, 16, 42, 3]
+    let second = [7, 17, 21]
+
+    assert first[2] == 42
+}

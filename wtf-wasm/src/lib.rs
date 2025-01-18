@@ -307,6 +307,8 @@ impl ComponentBuilder {
         let mut func = wasm_encoder::Function::new_with_locals_types(
             lower_locals(locals.iter().skip(function.signature.params.len()))
                 .map(|(_, ty)| ty)
+                // add i32 buffers for stack juggling
+                .chain([ValType::I32])
                 .collect::<Vec<_>>(),
         );
 
@@ -660,41 +662,58 @@ impl ComponentBuilder {
                 let element_length = lower.iter().fold(0, |acc, e| acc + e.byte_length());
                 let length = element_length * number;
 
-                // TODO: call alloc to find out offset
-                let offset: u32 = 3000;
                 let mem_arg = MemArg {
-                    offset: offset as u64,
+                    offset: 0,
                     align: 0,
                     memory_index: 0,
                 };
 
+                debug_assert!(
+                    locals.len() > 0,
+                    "Expected two buffer local but function had no locals!"
+                );
+                let list_offset_buffer = (locals.len() - 1) as u32;
+
+                let allocation = [
+                    // old ptr
+                    WasmInstruction::I32Const(0),
+                    // old len
+                    WasmInstruction::I32Const(0),
+                    // alignment TODO: check if this is what we want here
+                    WasmInstruction::I32Const(8),
+                    // new len
+                    WasmInstruction::I32Const(length as i32),
+                    WasmInstruction::Call(self.builtin_func_index + FUNC_REALLOC),
+                    WasmInstruction::LocalSet(list_offset_buffer),
+                ];
                 let instructions = (0..*number).flat_map(|index| {
                     let mut item_offset = index * element_length;
                     lower.iter().flat_map(move |elem| {
-                        let inst = match elem {
+                        let inst = [
+                            WasmInstruction::LocalGet(list_offset_buffer),
+                            WasmInstruction::I32Const(item_offset as i32),
+                            WasmInstruction::I32Add,
+                        ];
+                        let store = match elem {
                             ValType::I32 => [
-                                WasmInstruction::I32Const(item_offset as i32),
                                 WasmInstruction::Call(
                                     self.builtin_func_index + FUNC_INSERT_OFFSET_I32,
                                 ),
                                 WasmInstruction::I32Store(mem_arg),
                             ],
                             ValType::I64 => [
-                                WasmInstruction::I32Const(item_offset as i32),
                                 WasmInstruction::Call(
                                     self.builtin_func_index + FUNC_INSERT_OFFSET_I64,
                                 ),
                                 WasmInstruction::I64Store(mem_arg),
                             ],
                             ValType::F32 => [
-                                WasmInstruction::I32Const(item_offset as i32),
                                 WasmInstruction::Call(
                                     self.builtin_func_index + FUNC_INSERT_OFFSET_F32,
                                 ),
                                 WasmInstruction::F32Store(mem_arg),
                             ],
                             ValType::F64 => [
-                                WasmInstruction::I32Const(item_offset as i32),
                                 WasmInstruction::Call(
                                     self.builtin_func_index + FUNC_INSERT_OFFSET_F64,
                                 ),
@@ -704,16 +723,20 @@ impl ComponentBuilder {
                             ValType::Ref(ref_type) => todo!("Store ref type: {:#?}", ref_type),
                         };
                         item_offset += elem.byte_length();
-                        inst
+                        inst.into_iter().chain(store)
                     })
                 });
                 let pointer = [
                     // reversed due to stack machine
                     WasmInstruction::I32Const(length as i32),
-                    WasmInstruction::I32Const(offset as i32),
+                    WasmInstruction::LocalGet(list_offset_buffer),
                 ];
 
-                instructions.chain(pointer).collect()
+                allocation
+                    .into_iter()
+                    .chain(instructions)
+                    .chain(pointer)
+                    .collect()
             }
 
             Instruction::Bytes(bytes) => {
