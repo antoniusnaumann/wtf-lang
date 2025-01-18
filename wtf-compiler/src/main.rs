@@ -27,7 +27,7 @@ fn main() -> Result<(), i64> {
     let (mode, file_path) = match args.as_slice() {
         [.., "run", file] => (Mode::Run, file),
         [.., "test", file] => (Mode::Test, file),
-        [file] => (Mode::Build, file),
+        [.., "build", file] => (Mode::Build, file),
         other => panic!("Illegal arguments: {:#?}", other),
     };
 
