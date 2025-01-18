@@ -9,6 +9,7 @@ export func main() -> s64 {
 test "empty array has len zero" {
     let array = []
     assert array.len() == 0
+    assert false
 }
 
 test "s64 array has correct len" {

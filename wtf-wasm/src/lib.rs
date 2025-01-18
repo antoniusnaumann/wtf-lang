@@ -627,10 +627,12 @@ impl ComponentBuilder {
             Instruction::LocalSet(idx) => lower_local(&locals[*idx as usize])
                 .iter()
                 .map(|(i, _ty)| WasmInstruction::LocalSet(*i))
+                // .rev()
                 .collect(),
             Instruction::LocalGet(idx) => lower_local(&locals[*idx as usize])
                 .iter()
                 .map(|(i, _ty)| WasmInstruction::LocalGet(*i))
+                .rev()
                 .collect(),
 
             Instruction::LocalGetMember { id, member } => {
@@ -716,8 +718,9 @@ impl ComponentBuilder {
             Instruction::Bytes(bytes) => {
                 let ConstantPosition { offset, length } = self.constants[bytes];
                 vec![
-                    WasmInstruction::I32Const(offset as i32),
+                    // reversed due to stack machine
                     WasmInstruction::I32Const(length as i32),
+                    WasmInstruction::I32Const(offset as i32),
                 ]
             }
             Instruction::IndexAccess { ty } => {
