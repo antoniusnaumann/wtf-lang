@@ -708,8 +708,9 @@ impl ComponentBuilder {
                     })
                 });
                 let pointer = [
-                    WasmInstruction::I32Const(offset as i32),
+                    // reversed due to stack machine
                     WasmInstruction::I32Const(length as i32),
+                    WasmInstruction::I32Const(offset as i32),
                 ];
 
                 instructions.chain(pointer).collect()

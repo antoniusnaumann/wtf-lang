@@ -29,7 +29,8 @@ test "string array has correct len" {
 }
 
 test "array index access works" {
-    let array = [51, 33, -7, 5, 32, 17, 99]
+    let myarray = [51, 33, -7, 5, 32, 17, 99]
+    let array = myarray
     assert array[0] == 51
     assert array[1] == 33
     assert array[2] == -7
@@ -38,3 +39,16 @@ test "array index access works" {
     assert array[5] == 17
     assert array[6] == 99
 }
+
+test "array index access works after re-assignment" {
+    let myarray = [51, 33, -7, 5, 32, 17, 99]
+    let array = myarray
+    assert array[0] == 51
+    assert array[1] == 33
+    assert array[2] == -7
+    assert array[3] == 5
+    assert array[4] == 32
+    assert array[5] == 17
+    assert array[6] == 99
+}
+
