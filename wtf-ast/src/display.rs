@@ -66,6 +66,12 @@ impl Print for String {
     }
 }
 
+impl Print for str {
+    fn print(&self, f: &mut std::fmt::Formatter<'_>, _indent: usize, _c: char) -> std::fmt::Result {
+        write!(f, " \"{self}\"")
+    }
+}
+
 impl Print for [String] {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
         let strings = self.join(" ");
@@ -158,9 +164,33 @@ impl Print for ResourceDeclaration {
     }
 }
 
+struct Case<'a>(&'a str);
+
 impl Print for EnumDeclaration {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
-        todo!()
+        node!(
+            f,
+            indent,
+            c,
+            "enum",
+            self.name,
+            self.cases.iter().map(|s| Case(s)).collect::<Vec<_>>()
+        )
+    }
+}
+
+impl Print for [Case<'_>] {
+    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
+        for case in self {
+            case.print(f, indent, c)?;
+        }
+        Ok(())
+    }
+}
+
+impl Print for Case<'_> {
+    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
+        node!(f, indent, c, "case", self.0)
     }
 }
 

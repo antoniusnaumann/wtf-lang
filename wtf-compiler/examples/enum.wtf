@@ -1,0 +1,19 @@
+package wtf:example@0.1.0
+
+enum direction {
+    north
+    east
+    south
+    west
+}
+
+// should return 0
+export func main() -> s64 {
+    let dir = .north
+
+    if dir == .north {
+        return 0
+    }
+
+    return 42
+}
