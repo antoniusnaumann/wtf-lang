@@ -2,6 +2,6 @@ package wtf:example@0.1.0
 
 // should return "Hello World!"
 export func main() -> string {
-    let hello_world = "Hello World!"
+    let hello_world: string = "Hello World!"
     return hello_world
 }

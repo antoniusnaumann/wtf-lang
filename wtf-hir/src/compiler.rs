@@ -88,13 +88,20 @@ pub fn compile(ast: ast::Module) -> Module {
     for (fun, is_export) in ast_funs.values() {
         functions.insert(
             fun.name.to_string(),
-            compile_fun(fun, *is_export, &ast_types, &signatures, &mut constants),
+            compile_fun(
+                fun,
+                *is_export,
+                &ast_types,
+                &types,
+                &signatures,
+                &mut constants,
+            ),
         );
     }
 
     let mut tests = Vec::new();
     for (idx, test) in ast_tests.into_iter().enumerate() {
-        tests.push(compile_test(idx, test, &signatures, &mut constants));
+        tests.push(compile_test(idx, test, &signatures, &types, &mut constants));
     }
 
     Module {
@@ -222,6 +229,7 @@ fn compile_fun(
     declaration: &ast::FunctionDeclaration,
     is_export: bool,
     ast_types: &HashMap<String, (ast::Declaration, bool)>,
+    types: &HashMap<String, Type>,
     signatures: &HashMap<String, FunctionSignature>,
     constants: &mut HashSet<Vec<u8>>,
 ) -> Function {
@@ -241,7 +249,7 @@ fn compile_fun(
         .map(|type_| compile_type_annotation(&type_, ast_types))
         .unwrap_or(Type::None);
 
-    let mut fn_compiler = FunctionCompiler::with_params(&parameters, signatures, constants);
+    let mut fn_compiler = FunctionCompiler::with_params(&parameters, signatures, types, constants);
 
     let body = fn_compiler.compile_block(&declaration.body);
     Function {
@@ -279,9 +287,10 @@ fn compile_test(
     idx: usize,
     test: TestDeclaration,
     signatures: &HashMap<String, FunctionSignature>,
+    types: &HashMap<String, Type>,
     constants: &mut HashSet<Vec<u8>>,
 ) -> Test {
-    let mut fn_compiler = FunctionCompiler::with_params(&[], signatures, constants);
+    let mut fn_compiler = FunctionCompiler::with_params(&[], signatures, types, constants);
     let body = fn_compiler.compile_block(&test.body);
 
     const CHARS: [char; 26] = [
@@ -313,6 +322,7 @@ struct FunctionCompiler<'a> {
     locals: Vec<Type>,
 
     signatures: &'a HashMap<String, FunctionSignature>,
+    types: &'a HashMap<String, Type>,
     constants: &'a mut HashSet<Vec<u8>>,
 }
 
@@ -320,6 +330,7 @@ impl<'a> FunctionCompiler<'a> {
     fn with_params(
         parameters: &[(String, Type)],
         signatures: &'a HashMap<String, FunctionSignature>,
+        types: &'a HashMap<String, Type>,
         constants: &'a mut HashSet<Vec<u8>>,
     ) -> Self {
         let param_types: Vec<_> = parameters.iter().map(|(_, ty)| ty.clone()).collect();
@@ -333,6 +344,7 @@ impl<'a> FunctionCompiler<'a> {
             stack: param_types.clone(),
             locals: param_types,
             signatures,
+            types,
             constants,
         }
     }
@@ -489,6 +501,7 @@ impl<'a> FunctionCompiler<'a> {
             ast::Statement::VariableDeclaration(variable_declaration) => {
                 // TODO: allow uninitialized variables
                 self.compile_expression(variable_declaration.value.as_ref().unwrap(), block);
+                // TODO: check if type matches annotated type (if exists)
                 let type_ = self.stack.last().unwrap().clone();
                 let local = LocalId(self.locals.len());
                 self.locals.push(type_);

@@ -4,11 +4,13 @@ pub struct Visible {
     bindings: Vec<Binding>,
 }
 // TODO: add mutability
+// TODO: make this an enum to register enums and variants here as well here
 struct Binding {
     mutable: bool,
     name: String,
     id: LocalId,
 }
+
 struct Scope {
     num_bindings: usize,
 }
