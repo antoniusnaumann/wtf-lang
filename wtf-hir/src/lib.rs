@@ -136,7 +136,10 @@ pub enum Instruction {
     Bool(bool),
     None,
     Enum {
-        variant: String,
+        case: String,
+    },
+    Variant {
+        case: String,
         num_payloads: usize,
     },
     // TODO: @marcel: we assume from here on that this is already in declaration field order
@@ -429,10 +432,10 @@ impl Instruction {
             Instruction::String(string) => write!(f, "string {:?}", string)?,
             Instruction::Bool(b) => write!(f, "bool {b}")?,
             Instruction::None => write!(f, "none")?,
-            Instruction::Enum {
-                variant,
-                num_payloads,
-            } => write!(f, "enum variant {} with {} payloads", variant, num_payloads)?,
+            Instruction::Enum { case } => write!(f, "enum case {}", case)?,
+            Instruction::Variant { case, num_payloads } => {
+                write!(f, "variant case {} with {} payloads", case, num_payloads)?
+            }
             Instruction::Record(fields) => {
                 write!(f, "record")?;
                 for field in fields {

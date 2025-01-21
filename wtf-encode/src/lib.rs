@@ -231,10 +231,8 @@ impl<'a> ConvertInstruction<'a> for hir::Instruction {
             hir::Instruction::String(string) => Instruction::Bytes(string.into_bytes()),
             hir::Instruction::Bool(b) => Instruction::I32(if b { 1 } else { 0 }),
             hir::Instruction::None => Instruction::Noop,
-            hir::Instruction::Enum {
-                variant,
-                num_payloads,
-            } => todo!(),
+            hir::Instruction::Enum { case } => todo!(),
+            hir::Instruction::Variant { case, num_payloads } => todo!(),
             hir::Instruction::Record(_) => Instruction::Noop,
             hir::Instruction::List { len, ty } => {
                 let ty = ty.convert(lookup).expect("List elements must have a type");

@@ -370,16 +370,16 @@ impl<'a> FunctionCompiler<'a> {
             Instruction::Bool(_) => self.stack.push(Type::Builtin(PrimitiveType::Bool)),
             Instruction::String(_) => self.stack.push(Type::Builtin(PrimitiveType::String)),
             Instruction::None => self.stack.push(Type::None),
-            Instruction::Enum {
-                variant,
-                num_payloads,
-            } => {
+            Instruction::Enum { case } => {
+                todo!("Handle enum");
+            }
+            Instruction::Variant { case, num_payloads } => {
                 let mut payloads = vec![];
                 for _ in 0..*num_payloads {
                     payloads.push(self.stack.pop().unwrap());
                 }
                 let mut type_ = HashMap::new();
-                type_.insert(variant.to_string(), payloads);
+                type_.insert(case.to_string(), payloads);
                 self.stack.push(Type::Variant(todo!()));
             }
             Instruction::Record(field_names) => {
@@ -705,17 +705,43 @@ impl<'a> FunctionCompiler<'a> {
                         }
                         Expression::Identifier(name) => {
                             // TODO: find ident here
-                            let local = self
-                                .visible
-                                .lookup(&name)
-                                .expect(&format!("Variable {} is not defined.", name));
-                            self.push(
-                                Instruction::MemberChain(
-                                    local,
-                                    fields.into_iter().cloned().rev().collect(),
+                            let local = self.visible.lookup(&name);
+                            match local {
+                                Some(local) => self.push(
+                                    Instruction::MemberChain(
+                                        local,
+                                        fields.into_iter().cloned().rev().collect(),
+                                    ),
+                                    block,
                                 ),
-                                block,
-                            );
+                                None => {
+                                    let Some((name, enum_or_variant)) = self
+                                        .types
+                                        .iter()
+                                        .find(|(type_name, _)| type_name.as_str() == name)
+                                    else {
+                                        println!("{:#?}", self.types);
+                                        panic!("No local, enum or variant with name: {name}")
+                                    };
+
+                                    match enum_or_variant {
+                                        Type::Enum(cases) => match fields.as_slice() {
+                                            [field] => {
+                                                let Some(case) = cases.get(*field).cloned() else {
+                                                    panic!("Enum {name} has no case {field}")
+                                                };
+
+                                                self.push(Instruction::Enum { case }, block)
+                                            }
+                                            _ => todo!("Enums cases have no associated fields."),
+                                        },
+                                        Type::Variant(cases) => {
+                                            todo!("Implement case access for variants")
+                                        }
+                                        ty => panic!("Cannot access field on non-enum type {ty}"),
+                                    }
+                                }
+                            }
                             break;
                         }
                         _ => {

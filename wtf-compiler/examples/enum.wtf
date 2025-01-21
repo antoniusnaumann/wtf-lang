@@ -9,9 +9,9 @@ enum direction {
 
 // should return 0
 export func main() -> s64 {
-    let dir = .north
+    let dir = direction.north
 
-    if dir == .north {
+    if dir == direction.north {
         return 0
     }
 
