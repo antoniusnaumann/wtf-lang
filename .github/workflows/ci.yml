@@ -16,13 +16,18 @@ jobs:
       matrix:
         example:
           [
+            "./examples/array.wtf",
+            "./examples/conditional.wtf",
+            "./examples/early_return.wtf",
+            "./examples/enum.wtf",
             "./examples/loop.wtf",
+            "./examples/member_access.wtf",
+            "./examples/numeric.wtf",
             # Include this once type-checking is implemented:
             # "./examples/record.wtf",
             "./examples/string.wtf",
-            "./examples/numeric.wtf",
-            "./examples/conditional.wtf",
-            "./examples/member_access.wtf",
+            "./examples/tests.wtf",
+            "./examples/ufcs.wtf",
           ]
     runs-on: macos-latest
     steps:
