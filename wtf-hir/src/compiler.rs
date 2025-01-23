@@ -833,7 +833,7 @@ impl<'a> FunctionCompiler<'a> {
                 }
                 Type::Record(_) => todo!(),
                 Type::Resource(_) => todo!(),
-                Type::Enum(_) => todo!(),
+                Type::Enum(_) => "u32".into(), // TODO: do we need to handle quasi-similar enums here?
                 Type::Variant(_) => todo!(),
                 Type::Tuple(_) => todo!(),
                 Type::Builtin(ty) => ty.name().into(),

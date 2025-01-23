@@ -11,11 +11,7 @@ enum direction {
 export func main() -> s64 {
     let dir = direction.north
 
-    if dir == direction.north {
-        return s64(0)
-    }
-
-    return s64(42)
+    return s64(dir)
 }
 
 test "enum comparison works" {
@@ -29,3 +25,9 @@ test "assigning enum case to variable works" {
     assert dir == direction.east
     assert dir != direction.west
 }
+
+// TODO: need type checking for this test case to work
+// test "enum case is convertible to integer" {
+//     assert u32(direction.north) == 0
+//     assert u32(direction.south) == 2
+// }
