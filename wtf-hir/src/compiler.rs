@@ -10,8 +10,8 @@ use wtf_ast::{
 };
 
 use crate::{
-    builtin::WithBuiltins, visible::Visible, Block, Function, FunctionSignature, Instruction,
-    LocalId, Module, PrimitiveType, ResourceType, Test, Type,
+    builtin::WithBuiltins, visible::Visible, Block, EnumType, Function, FunctionSignature,
+    Instruction, LocalId, Module, PrimitiveType, ResourceType, Test, Type,
 };
 
 const INTERNAL_PREFIX: &str = "wtfinternal";
@@ -158,9 +158,10 @@ fn compile_type_declaration(
             }
             Type::Resource(ResourceType { methods })
         }
-        ast::Declaration::Enum(enum_) => {
-            Type::Enum(enum_.cases.iter().map(|case| case.clone()).collect())
-        }
+        ast::Declaration::Enum(enum_) => Type::Enum(EnumType {
+            name: enum_.name.clone(),
+            cases: enum_.cases.iter().map(|case| case.clone()).collect(),
+        }),
         ast::Declaration::Variant(variants) => {
             let mut result = HashMap::new();
             for variant in &variants.cases {
@@ -370,9 +371,7 @@ impl<'a> FunctionCompiler<'a> {
             Instruction::Bool(_) => self.stack.push(Type::Builtin(PrimitiveType::Bool)),
             Instruction::String(_) => self.stack.push(Type::Builtin(PrimitiveType::String)),
             Instruction::None => self.stack.push(Type::None),
-            Instruction::Enum { case } => {
-                todo!("Handle enum");
-            }
+            Instruction::Enum { case, ty } => self.stack.push(ty.clone().into()), // TODO: Introduce ref type that holds an RC or something instead of the whole type definition
             Instruction::Variant { case, num_payloads } => {
                 let mut payloads = vec![];
                 for _ in 0..*num_payloads {
@@ -725,13 +724,21 @@ impl<'a> FunctionCompiler<'a> {
                                     };
 
                                     match enum_or_variant {
-                                        Type::Enum(cases) => match fields.as_slice() {
+                                        Type::Enum(ty) => match fields.as_slice() {
                                             [field] => {
-                                                let Some(case) = cases.get(*field).cloned() else {
+                                                let Some(case) =
+                                                    ty.cases.iter().position(|e| e == *field)
+                                                else {
                                                     panic!("Enum {name} has no case {field}")
                                                 };
 
-                                                self.push(Instruction::Enum { case }, block)
+                                                self.push(
+                                                    Instruction::Enum {
+                                                        case,
+                                                        ty: ty.clone().into(),
+                                                    },
+                                                    block,
+                                                )
                                             }
                                             _ => todo!("Enums cases have no associated fields."),
                                         },

@@ -37,7 +37,7 @@ pub enum Type {
     Variant {},
     Tuple(Vec<TypeRef>),
     Flags(Vec<String>),
-    Enum(HashSet<String>),
+    Enum(Vec<String>),
     Own(),
     Borrow(),
 }

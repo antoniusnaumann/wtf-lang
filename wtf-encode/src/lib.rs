@@ -110,7 +110,7 @@ impl Convert<'_> for (String, hir::Type) {
                     .collect(),
             },
             hir::Type::Resource(_) => todo!(),
-            hir::Type::Enum(_) => todo!(),
+            hir::Type::Enum(ty) => Type::Enum(ty.cases),
             hir::Type::Variant(_) => todo!(),
             hir::Type::Tuple(_) => todo!(),
             hir::Type::Builtin(_) => todo!(),
@@ -231,7 +231,7 @@ impl<'a> ConvertInstruction<'a> for hir::Instruction {
             hir::Instruction::String(string) => Instruction::Bytes(string.into_bytes()),
             hir::Instruction::Bool(b) => Instruction::I32(if b { 1 } else { 0 }),
             hir::Instruction::None => Instruction::Noop,
-            hir::Instruction::Enum { case } => todo!(),
+            hir::Instruction::Enum { case, ty: _ } => Instruction::I32(case as i32), // TODO: if the enum type has more fields than i32 allows, use i64
             hir::Instruction::Variant { case, num_payloads } => todo!(),
             hir::Instruction::Record(_) => Instruction::Noop,
             hir::Instruction::List { len, ty } => {
@@ -343,8 +343,8 @@ impl Convert<'_> for hir::Type {
                 Some(TypeRef::Type(ty))
             }
             hir::Type::Resource(_) => todo!(),
-            hir::Type::Enum(cases) => {
-                let ty = lookup.insert(Type::Enum(cases));
+            hir::Type::Enum(ty) => {
+                let ty = lookup.insert(Type::Enum(ty.cases));
 
                 Some(TypeRef::Type(ty))
             }

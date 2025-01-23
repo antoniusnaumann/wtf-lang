@@ -12,8 +12,20 @@ export func main() -> s64 {
     let dir = direction.north
 
     if dir == direction.north {
-        return 0
+        return s64(0)
     }
 
-    return 42
+    return s64(42)
+}
+
+test "enum comparison works" {
+    assert direction.north != direction.west
+    assert direction.north == direction.north
+}
+
+test "assigning enum case to variable works" {
+    let dir = direction.east
+
+    assert dir == direction.east
+    assert dir != direction.west
 }

@@ -26,10 +26,22 @@ pub enum Type {
     Result { ok: Box<Type>, err: Box<Type> },
     Record(HashMap<String, Type>),
     Resource(ResourceType),
-    Enum(HashSet<String>),
+    Enum(EnumType),
     Variant(HashMap<String, HashMap<String, Type>>),
     Tuple(Vec<Type>),
     Builtin(PrimitiveType),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EnumType {
+    pub cases: Vec<String>,
+    pub name: String,
+}
+
+impl From<EnumType> for Type {
+    fn from(value: EnumType) -> Self {
+        Type::Enum(value)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -136,7 +148,8 @@ pub enum Instruction {
     Bool(bool),
     None,
     Enum {
-        case: String,
+        case: usize,
+        ty: EnumType,
     },
     Variant {
         case: String,
@@ -327,15 +340,15 @@ impl Display for Type {
                 write!(f, "}}")?
             }
             Type::Resource(_) => write!(f, "...")?,
-            Type::Enum(variants) => {
+            Type::Enum(ty) => {
                 let mut first = true;
-                for variant in variants {
+                for case in &ty.cases {
                     if first {
                         first = false;
                     } else {
                         write!(f, " | ")?;
                     }
-                    write!(f, "{variant}")?;
+                    write!(f, "{case}")?;
                 }
             }
             Type::Variant(variants) => {
@@ -432,7 +445,7 @@ impl Instruction {
             Instruction::String(string) => write!(f, "string {:?}", string)?,
             Instruction::Bool(b) => write!(f, "bool {b}")?,
             Instruction::None => write!(f, "none")?,
-            Instruction::Enum { case } => write!(f, "enum case {}", case)?,
+            Instruction::Enum { case, ty: _ } => write!(f, "enum case {}", case)?,
             Instruction::Variant { case, num_payloads } => {
                 write!(f, "variant case {} with {} payloads", case, num_payloads)?
             }
