@@ -230,7 +230,7 @@ impl<'a> ConvertInstruction<'a> for hir::Instruction {
             hir::Instruction::Float(num) => Instruction::F32(num as f32), // TODO: typecheck: different instructions for different float sizes
             hir::Instruction::String(string) => Instruction::Bytes(string.into_bytes()),
             hir::Instruction::Bool(b) => Instruction::I32(if b { 1 } else { 0 }),
-            hir::Instruction::None => Instruction::Noop,
+            hir::Instruction::Void => Instruction::Noop,
             hir::Instruction::Enum { case, ty: _ } => Instruction::I32(case as i32), // TODO: if the enum type has more fields than i32 allows, use i64
             hir::Instruction::Variant { case, num_payloads } => todo!(),
             hir::Instruction::Record(_) => Instruction::Noop,

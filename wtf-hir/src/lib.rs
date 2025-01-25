@@ -146,7 +146,7 @@ pub enum Instruction {
     Float(f64),
     String(String),
     Bool(bool),
-    None,
+    Void,
     Enum {
         case: usize,
         ty: EnumType,
@@ -444,7 +444,7 @@ impl Instruction {
             Instruction::Float(float) => write!(f, "float {}", float)?,
             Instruction::String(string) => write!(f, "string {:?}", string)?,
             Instruction::Bool(b) => write!(f, "bool {b}")?,
-            Instruction::None => write!(f, "none")?,
+            Instruction::Void => write!(f, "none")?,
             Instruction::Enum { case, ty: _ } => write!(f, "enum case {}", case)?,
             Instruction::Variant { case, num_payloads } => {
                 write!(f, "variant case {} with {} payloads", case, num_payloads)?

@@ -370,7 +370,7 @@ impl<'a> FunctionCompiler<'a> {
             Instruction::Float(_) => self.stack.push(Type::Builtin(PrimitiveType::F32)),
             Instruction::Bool(_) => self.stack.push(Type::Builtin(PrimitiveType::Bool)),
             Instruction::String(_) => self.stack.push(Type::Builtin(PrimitiveType::String)),
-            Instruction::None => self.stack.push(Type::None),
+            Instruction::Void => self.stack.push(Type::None),
             Instruction::Enum { case, ty } => self.stack.push(ty.clone().into()), // TODO: Introduce ref type that holds an RC or something instead of the whole type definition
             Instruction::Variant { case, num_payloads } => {
                 let mut payloads = vec![];
@@ -488,7 +488,7 @@ impl<'a> FunctionCompiler<'a> {
             self.compile_statement(statement, &mut result);
         }
         if result.instructions.is_empty() {
-            result.instructions.push(Instruction::None);
+            result.instructions.push(Instruction::Void);
         }
         result.ty = self.stack.pop().unwrap_or(Type::None);
         self.stack = restore;
@@ -527,14 +527,14 @@ impl<'a> FunctionCompiler<'a> {
             ast::Statement::ReturnStatement(expression) => {
                 match expression {
                     Some(expression) => self.compile_expression(expression, block),
-                    None => self.push(Instruction::None, block),
+                    None => self.push(Instruction::Void, block),
                 }
                 self.push(Instruction::Return, block);
             }
             ast::Statement::BreakStatement(expression) => {
                 match expression {
                     Some(expression) => self.compile_expression(expression, block),
-                    None => self.push(Instruction::None, block),
+                    None => self.push(Instruction::Void, block),
                 };
                 self.push(Instruction::Break, block)
             }
@@ -571,7 +571,7 @@ impl<'a> FunctionCompiler<'a> {
                     Instruction::If {
                         then: totally_inner_body,
                         else_: Block {
-                            instructions: vec![Instruction::None, Instruction::Break],
+                            instructions: vec![Instruction::Void, Instruction::Break],
                             ty: Type::Never,
                         },
                     },
@@ -610,7 +610,7 @@ impl<'a> FunctionCompiler<'a> {
                         Instruction::String(string.clone())
                     }
                     ast::Literal::Boolean(bool) => Instruction::Bool(*bool),
-                    ast::Literal::None => Instruction::None,
+                    ast::Literal::None => Instruction::Void,
                 };
 
                 self.push(lit, block)
@@ -908,7 +908,7 @@ impl<'a> FunctionCompiler<'a> {
             BinaryOperator::GreaterEqual => "greater_eq",
             BinaryOperator::LessEqual => "less_eq",
             BinaryOperator::Contains => todo!(),
-            BinaryOperator::NullCoalesce => todo!(),
+            BinaryOperator::NullCoalesce => "or_else",
         };
         // TODO: Append argument types from inferred expression types
         let typed_name = format!("{name}__s32_s32");
