@@ -234,7 +234,12 @@ impl<'a> ConvertInstruction<'a> for hir::Instruction {
             hir::Instruction::Enum { case, ty: _ } => Instruction::I32(case as i32), // TODO: if the enum type has more fields than i32 allows, use i64
             hir::Instruction::Variant { case, num_payloads } => todo!(),
             hir::Instruction::Record(_) => Instruction::Noop,
-            hir::Instruction::Option { is_some, ty } => todo!("Convert optional to instructions"),
+            hir::Instruction::Option { is_some, ty } => Instruction::Optional {
+                ty: ty
+                    .convert(lookup)
+                    .expect("Inner type of optional must have a type"),
+                is_some,
+            },
             hir::Instruction::List { len, ty } => {
                 let ty = ty.convert(lookup).expect("List elements must have a type");
                 Instruction::Store { number: len, ty }

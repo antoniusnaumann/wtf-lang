@@ -28,6 +28,7 @@ impl WithBuiltins for HashMap<String, FunctionSignature> {
             Ty::F64,
         ];
         let float_types = [Ty::F32, Ty::F64];
+        // TODO: make these methods pseudo-generic / generate them on the fly when the types fulfill their requirements
         let arithmetic = ["add", "sub", "mul", "div", "min", "max"];
         let compare = [
             "eq",
@@ -70,6 +71,11 @@ impl WithBuiltins for HashMap<String, FunctionSignature> {
                 "println".to_owned(),
                 &[Type::Builtin(Ty::String)],
                 Type::Void,
+            )))
+            .chain(iter::once(fun(
+                "is_some".to_owned(),
+                &[Type::Option(Box::new(Type::Blank))],
+                Type::Blank,
             )))
             .chain(collection_operations())
             .collect()

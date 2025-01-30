@@ -914,7 +914,7 @@ impl<'a> FunctionCompiler<'a> {
             BinaryOperator::GreaterEqual => "greater_eq",
             BinaryOperator::LessEqual => "less_eq",
             BinaryOperator::Contains => todo!(),
-            BinaryOperator::NullCoalesce => "or_else",
+            BinaryOperator::NullCoalesce => todo!("lower to if expression"),
         };
         // TODO: Append argument types from inferred expression types
         let typed_name = format!("{name}"); // __s32_s32");

@@ -747,6 +747,20 @@ impl ComponentBuilder {
                     WasmInstruction::I32Const(offset as i32),
                 ]
             }
+
+            Instruction::Optional { ty, is_some } => {
+                if *is_some {
+                    todo!("Convert some() to wasm");
+                } else {
+                    let lower = self.lower(ty);
+
+                    let discriminant = iter::once(WasmInstruction::I32Const(0));
+                    let payload = lower.iter().map(|low| low.zero());
+
+                    discriminant.chain(payload).collect()
+                }
+            }
+
             Instruction::IndexAccess { ty } => {
                 let lower = self.lower(ty);
                 let element_length = lower.iter().fold(0, |acc, e| acc + e.byte_length());
@@ -979,6 +993,10 @@ impl ComponentBuilder {
             // TODO: Implement strlen by counting UTF8 unicode runes
             "len__string" => {
                 todo!("Implement 'len' for strings")
+            }
+
+            "is_some" => {
+                todo!("Implement 'is_some', maybe use a buffer local to get the variant discriminant without popping.")
             }
 
             ident if ident.starts_with("len__list") => {
@@ -1242,4 +1260,21 @@ enum BranchLabel {
     Loop,
     // Special block that the compiler inserts to allow breaking out of loops
     LoopBlock,
+}
+
+trait Zeroable {
+    fn zero(&self) -> WasmInstruction<'static>;
+}
+
+impl Zeroable for ValType {
+    fn zero(&self) -> WasmInstruction<'static> {
+        match self {
+            ValType::I32 => WasmInstruction::I32Const(000),
+            ValType::I64 => WasmInstruction::I64Const(000),
+            ValType::F32 => WasmInstruction::F32Const(0.0),
+            ValType::F64 => WasmInstruction::F64Const(0.0),
+            ValType::V128 => todo!(),
+            ValType::Ref(_ref_type) => todo!(),
+        }
+    }
 }
