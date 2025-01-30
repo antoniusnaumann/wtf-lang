@@ -248,7 +248,7 @@ fn compile_fun(
         .return_type
         .as_ref()
         .map(|type_| compile_type_annotation(&type_, ast_types))
-        .unwrap_or(Type::None);
+        .unwrap_or(Type::Void);
 
     let mut fn_compiler = FunctionCompiler::with_params(&parameters, signatures, types, constants);
 
@@ -275,7 +275,7 @@ fn compile_signature(
     let return_type = declaration
         .return_type
         .as_ref()
-        .map_or(Type::None, |ty| compile_type_annotation(&ty, ast_types));
+        .map_or(Type::Void, |ty| compile_type_annotation(&ty, ast_types));
 
     FunctionSignature {
         param_types,
@@ -370,7 +370,7 @@ impl<'a> FunctionCompiler<'a> {
             Instruction::Float(_) => self.stack.push(Type::Builtin(PrimitiveType::F32)),
             Instruction::Bool(_) => self.stack.push(Type::Builtin(PrimitiveType::Bool)),
             Instruction::String(_) => self.stack.push(Type::Builtin(PrimitiveType::String)),
-            Instruction::Void => self.stack.push(Type::None),
+            Instruction::Void => self.stack.push(Type::Void),
             Instruction::Enum { case, ty } => self.stack.push(ty.clone().into()), // TODO: Introduce ref type that holds an RC or something instead of the whole type definition
             Instruction::Variant { case, num_payloads } => {
                 let mut payloads = vec![];
@@ -388,6 +388,7 @@ impl<'a> FunctionCompiler<'a> {
                 }
                 self.stack.push(Type::Record(fields));
             }
+            Instruction::Option { is_some, ty } => self.stack.push(Type::Option(ty.clone().into())),
             Instruction::List { len, ty: _ } => {
                 let mut items = vec![];
                 for _ in 0..*len {
@@ -472,7 +473,7 @@ impl<'a> FunctionCompiler<'a> {
             }
             Instruction::Loop(_block) => {
                 // TODO: loops with result
-                self.stack.push(Type::None)
+                self.stack.push(Type::Void)
             }
             Instruction::Unreachable => self.stack.push(Type::Never),
         }
@@ -482,7 +483,7 @@ impl<'a> FunctionCompiler<'a> {
         let restore = self.stack.clone();
         let mut result = Block {
             instructions: Vec::new(),
-            ty: Type::None,
+            ty: Type::Void,
         };
         for statement in &block.statements {
             self.compile_statement(statement, &mut result);
@@ -490,7 +491,7 @@ impl<'a> FunctionCompiler<'a> {
         if result.instructions.is_empty() {
             result.instructions.push(Instruction::Void);
         }
-        result.ty = self.stack.pop().unwrap_or(Type::None);
+        result.ty = self.stack.pop().unwrap_or(Type::Void);
         self.stack = restore;
         result
     }
@@ -585,7 +586,7 @@ impl<'a> FunctionCompiler<'a> {
                 self.push(
                     Instruction::If {
                         then: Block {
-                            ty: Type::None,
+                            ty: Type::Void,
                             instructions: vec![],
                         },
                         else_: Block {
@@ -610,7 +611,11 @@ impl<'a> FunctionCompiler<'a> {
                         Instruction::String(string.clone())
                     }
                     ast::Literal::Boolean(bool) => Instruction::Bool(*bool),
-                    ast::Literal::None => Instruction::Void,
+                    ast::Literal::None => Instruction::Option {
+                        is_some: false,
+                        // TODO: Infer type here
+                        ty: Type::Builtin(PrimitiveType::S32),
+                    },
                 };
 
                 self.push(lit, block)
@@ -824,7 +829,7 @@ impl<'a> FunctionCompiler<'a> {
         fn mangle(ty: &Type) -> std::borrow::Cow<str> {
             match ty {
                 Type::Never => panic!("Never as an arg is not allowed"),
-                Type::None => panic!("None as an arg is not allowed"),
+                Type::Void => panic!("Void as an arg is not allowed"),
                 Type::Blank => panic!("Blank as an arg is not allowed"),
                 Type::List(elem) => format!("list___{}", mangle(elem)).into(),
                 Type::Option(inner) => format!("option___{}", mangle(inner)).into(),
@@ -870,6 +875,7 @@ impl<'a> FunctionCompiler<'a> {
                 } else {
                     let mut sorted: Vec<_> = self.signatures.keys().collect();
                     sorted.sort();
+                    println!("{}", self.signatures.contains_key(mangled.deref()));
                     panic!(
                         "Function '{name}' (or '{mangled}') does not exist. \n\n{:#?}",
                         sorted
@@ -911,7 +917,7 @@ impl<'a> FunctionCompiler<'a> {
             BinaryOperator::NullCoalesce => "or_else",
         };
         // TODO: Append argument types from inferred expression types
-        let typed_name = format!("{name}__s32_s32");
+        let typed_name = format!("{name}"); // __s32_s32");
         let ident = Expression::Identifier(typed_name.into());
 
         // TODO: Avoid cloning

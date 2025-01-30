@@ -3,28 +3,28 @@ package wtf:example@0.1.0
 // should return 0
 export func main() -> s64 {
     let array = [12, 17, 38, 5, 15]
-    return s64(array.len() - array[3])
+    return s64(array.len().s32() - array[3])
 }
 
 test "empty array has len zero" {
-    let array = []
-    assert array.len() == 0
+    let array: [u32] = []
+    assert array.len().s32() == 0
 }
 
 test "s64 array has correct len" {
     let array = [1, 2, 3, 4]
-    assert array.len() == 4
+    assert array.len().s32() == 4
 
     let array = [51, 33, -7, 5, 32, 17, 99]
-    assert array.len() == 7
+    assert array.len().s32() == 7
 }
 
 test "string array has correct len" {
     let array = ["Hello World!"]
-    assert array.len() == 1
+    assert array.len().s32() == 1
 
     let array = ["Hello", "World!"]
-    assert array.len() == 2
+    assert array.len().s32() == 2
 }
 
 test "array index access works" {

@@ -19,7 +19,7 @@ pub struct Module {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
     Never, // will never be constructed, used as the type of return/break/...
-    None,
+    Void,
     Blank, // for builtin generic types where the type does not matter, e.g. list.len()
     List(Box<Type>),
     Option(Box<Type>),
@@ -132,7 +132,7 @@ impl Default for Block {
     fn default() -> Self {
         Block {
             instructions: Vec::new(),
-            ty: Type::None,
+            ty: Type::Void,
         }
     }
 }
@@ -157,6 +157,10 @@ pub enum Instruction {
     },
     // TODO: @marcel: we assume from here on that this is already in declaration field order
     Record(Vec<String>),
+    Option {
+        is_some: bool,
+        ty: Type,
+    },
     List {
         len: usize,
         ty: Type,
@@ -320,7 +324,7 @@ impl Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Type::Never => write!(f, "never")?,
-            Type::None => write!(f, "none")?,
+            Type::Void => write!(f, "none")?,
             Type::Blank => write!(f, "blank")?,
             Type::Builtin(builtin) => write!(f, "{}", builtin)?,
             Type::List(items) => write!(f, "[{}]", items)?,
@@ -444,7 +448,7 @@ impl Instruction {
             Instruction::Float(float) => write!(f, "float {}", float)?,
             Instruction::String(string) => write!(f, "string {:?}", string)?,
             Instruction::Bool(b) => write!(f, "bool {b}")?,
-            Instruction::Void => write!(f, "none")?,
+            Instruction::Void => write!(f, "void")?,
             Instruction::Enum { case, ty: _ } => write!(f, "enum case {}", case)?,
             Instruction::Variant { case, num_payloads } => {
                 write!(f, "variant case {} with {} payloads", case, num_payloads)?
@@ -453,6 +457,13 @@ impl Instruction {
                 write!(f, "record")?;
                 for field in fields {
                     write!(f, " {}", field)?;
+                }
+            }
+            Instruction::Option { is_some, ty } => {
+                if *is_some {
+                    write!(f, "some({ty})")?;
+                } else {
+                    write!(f, "none")?;
                 }
             }
             Instruction::List { len, ty } => {

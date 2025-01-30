@@ -971,6 +971,8 @@ impl ComponentBuilder {
             "u32__f64" => vec![WasmInstruction::I32TruncF64U],
             "u64__f64" => vec![WasmInstruction::I64TruncF64U],
 
+            "s32__u32" => vec![],
+
             "s64__u32" => vec![WasmInstruction::I64ExtendI32U],
             "s64__s32" => vec![WasmInstruction::I64ExtendI32S],
 
