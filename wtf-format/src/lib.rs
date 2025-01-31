@@ -1,7 +1,10 @@
+use std::borrow::Cow;
+
 use wtf_ast::{
-    Block, Declaration, EnumDeclaration, ExportDeclaration, Field, FunctionDeclaration, Module,
-    ModulePath, PackageDeclaration, RecordDeclaration, ResourceDeclaration, TestDeclaration,
-    TypeAnnotation, UseDeclaration, VariantDeclaration, Version,
+    ArithmeticOperator, BinaryOperator, Block, Declaration, EnumDeclaration, ExportDeclaration,
+    Expression, Field, FunctionDeclaration, Literal, Module, ModulePath, PackageDeclaration,
+    Parameter, RecordDeclaration, ResourceDeclaration, Statement, TestDeclaration, TypeAnnotation,
+    UnaryOperator, UseDeclaration, VariantDeclaration, Version,
 };
 
 trait FormatPrint {
@@ -72,7 +75,26 @@ impl FormatPrint for Declaration {
 
 impl FormatPrint for FunctionDeclaration {
     fn format_print(&self, indent: usize) -> String {
-        todo!()
+        format!(
+            "{}func {}({}) {}",
+            "\t".repeat(indent),
+            self.name,
+            self.parameters.format_print(", ", 0),
+            self.return_type
+                .as_ref()
+                .map_or_else(String::new, |t| t.format_print(0))
+        )
+    }
+}
+
+impl FormatPrint for Parameter {
+    fn format_print(&self, indent: usize) -> String {
+        format!(
+            "{}{}: {}",
+            "\t".repeat(indent),
+            self.name,
+            self.type_annotation.format_print(0)
+        )
     }
 }
 
@@ -81,7 +103,11 @@ impl FormatPrint for RecordDeclaration {
         let fields = self.fields.format_print("\n", indent + 1);
         let newline = if fields.is_empty() { "" } else { "\n" };
 
-        format!("record {} {{{newline}{fields}{newline}}}", self.name)
+        format!(
+            "{}record {} {{{newline}{fields}{newline}}}",
+            "\t".repeat(indent),
+            self.name
+        )
     }
 }
 
@@ -163,7 +189,161 @@ impl FormatPrint for TestDeclaration {
 
 impl FormatPrint for Block {
     fn format_print(&self, indent: usize) -> String {
-        todo!()
+        let statements = self.statements.format_print("\n", indent + 1);
+        let newline = if self.statements.is_empty() { "" } else { "\n" };
+        format!("{{{newline}{statements}{newline}}}")
+    }
+}
+
+impl FormatPrint for Statement {
+    fn format_print(&self, indent: usize) -> String {
+        let stmt = match self {
+            Statement::VariableDeclaration(variable_declaration) => {
+                format!(
+                    "{} {}{}{}",
+                    if variable_declaration.mutable {
+                        "var"
+                    } else {
+                        "let"
+                    },
+                    variable_declaration.name,
+                    variable_declaration
+                        .type_annotation
+                        .as_ref()
+                        .map_or_else(String::new, |ty| format!(": {}", ty.format_print(0))),
+                    variable_declaration
+                        .value
+                        .as_ref()
+                        .map_or_else(String::new, |val| format!(" = {}", val.format_print(0)))
+                )
+            }
+            Statement::Assignment { target, value } => {
+                // TODO: check if right-hand side is binop with the first operand being the same as lhs and collapse to e.g. +=
+                format!("{} = {}", target.format_print(0), value.format_print(0))
+            }
+            Statement::ExpressionStatement(expression) => expression.format_print(0),
+            Statement::ReturnStatement(expression) => {
+                format!(
+                    "return{}",
+                    expression
+                        .as_ref()
+                        .map_or_else(String::new, |e| format!(" {}", e.format_print(0)))
+                )
+            }
+            Statement::BreakStatement(expression) => {
+                format!(
+                    "break{}",
+                    expression
+                        .as_ref()
+                        .map_or_else(String::new, |e| format!(" {}", e.format_print(0)))
+                )
+            }
+            Statement::ContinueStatement => "continue".to_owned(),
+            Statement::ThrowStatement(expression) => {
+                format!("throw {}", expression.format_print(0))
+            }
+            Statement::IfStatement(if_statement) => todo!(),
+            Statement::MatchStatement(match_statement) => todo!(),
+            Statement::WhileStatement(while_statement) => todo!(),
+            Statement::ForStatement(for_statement) => todo!(),
+            Statement::Assertion(assert_statement) => {
+                format!("assert {}", assert_statement.condition.format_print(0))
+            }
+        };
+
+        format!("{}{stmt}", "\t".repeat(indent))
+    }
+}
+
+impl FormatPrint for Expression {
+    fn format_print(&self, indent: usize) -> String {
+        let expr: Cow<str> = match self {
+            Expression::Literal(literal) => literal.format_print(0).into(),
+            Expression::Identifier(ident) => ident.into(),
+            Expression::BinaryExpression {
+                left,
+                operator,
+                right,
+            } => format!(
+                "{} {} {}",
+                left.format_print(0),
+                operator.format_print(0),
+                right.format_print(0)
+            )
+            .into(),
+            Expression::UnaryExpression { operator, operand } => {
+                format!("{}{}", operator.format_print(0), operand.format_print(0)).into()
+            }
+            Expression::YeetExpression { expression } => todo!(),
+            Expression::FunctionCall {
+                function,
+                arguments,
+            } => todo!(),
+            Expression::MethodCall {
+                receiver,
+                method,
+                arguments,
+                safe,
+            } => todo!(),
+            Expression::FieldAccess {
+                object,
+                field,
+                safe,
+            } => todo!(),
+            Expression::IndexAccess { collection, index } => todo!(),
+            Expression::Record { name, members } => todo!(),
+            Expression::ListLiteral(vec) => todo!(),
+        };
+
+        format!("{}{expr}", "\t".repeat(indent))
+    }
+}
+
+impl FormatPrint for BinaryOperator {
+    fn format_print(&self, indent: usize) -> String {
+        let op = match self {
+            BinaryOperator::Arithmetic(arithmetic_operator) => match arithmetic_operator {
+                ArithmeticOperator::Add => "+",
+                ArithmeticOperator::Subtract => "-",
+                ArithmeticOperator::Multiply => "*",
+                ArithmeticOperator::Divide => "/",
+            },
+            BinaryOperator::Equal => "==",
+            BinaryOperator::NotEqual => "!=",
+            BinaryOperator::GreaterThan => ">",
+            BinaryOperator::LessThan => "<",
+            BinaryOperator::GreaterEqual => ">=",
+            BinaryOperator::LessEqual => "<=",
+            BinaryOperator::Contains => "in",
+            BinaryOperator::NullCoalesce => "?",
+        };
+
+        format!("{}{}", "\t".repeat(indent), op)
+    }
+}
+
+impl FormatPrint for UnaryOperator {
+    fn format_print(&self, indent: usize) -> String {
+        let op = match self {
+            UnaryOperator::Negate => "-",
+            UnaryOperator::Not => "!",
+        };
+
+        format!("{}{}", "\t".repeat(indent), op)
+    }
+}
+
+impl FormatPrint for Literal {
+    fn format_print(&self, indent: usize) -> String {
+        let lit: Cow<str> = match self {
+            Literal::Integer(i) => format!("{i}").into(),
+            Literal::Float(f) => format!("{f}").into(),
+            Literal::String(s) => s.into(),
+            Literal::Boolean(b) => format!("{b}").into(),
+            Literal::None => "none".into(),
+        };
+
+        format!("{}{}", "\t".repeat(indent), lit)
     }
 }
 
