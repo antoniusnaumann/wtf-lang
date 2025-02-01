@@ -32,7 +32,7 @@ impl FormatPrint for PackageDeclaration {
         let version = self.version.format_print(0);
 
         format!(
-            "{}{path}{}",
+            "{}{path}{}{version}",
             "\t".repeat(indent),
             if version.is_empty() { "" } else { "@" }
         )
@@ -77,13 +77,14 @@ impl FormatPrint for Declaration {
 impl FormatPrint for FunctionDeclaration {
     fn format_print(&self, indent: usize) -> String {
         format!(
-            "{}func {}({}) {}",
+            "{}func {}({}) {} {}",
             "\t".repeat(indent),
             self.name,
             self.parameters.format_print(", ", 0),
             self.return_type
                 .as_ref()
-                .map_or_else(String::new, |t| t.format_print(0))
+                .map_or_else(String::new, |t| t.format_print(0)),
+            self.body.format_print(indent)
         )
     }
 }
@@ -248,7 +249,9 @@ impl FormatPrint for Statement {
             Statement::ExpressionStatement(expression) => expression.format_print(0),
             Statement::ReturnStatement(expression) => {
                 format!(
-                    "return{}",
+                    // TODO: remove the \n if the return statement is the first thing in a new scope
+                    "\n{}return{}",
+                    "\t".repeat(indent),
                     expression
                         .as_ref()
                         .map_or_else(String::new, |e| format!(" {}", e.format_print(0)))
