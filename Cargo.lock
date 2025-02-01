@@ -1447,6 +1447,7 @@ name = "wtf-format"
 version = "0.0.0"
 dependencies = [
  "wtf-ast",
+ "wtf-parser",
 ]
 
 [[package]]

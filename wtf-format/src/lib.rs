@@ -2,12 +2,13 @@ use std::borrow::Cow;
 
 use wtf_ast::{
     ArithmeticOperator, BinaryOperator, Block, Declaration, EnumDeclaration, ExportDeclaration,
-    Expression, Field, FunctionDeclaration, Literal, Module, ModulePath, PackageDeclaration,
-    Parameter, RecordDeclaration, ResourceDeclaration, Statement, TestDeclaration, TypeAnnotation,
-    UnaryOperator, UseDeclaration, VariantDeclaration, Version,
+    Expression, Field, FunctionDeclaration, IfStatement, Literal, Module, ModulePath,
+    PackageDeclaration, Parameter, RecordDeclaration, ResourceDeclaration, Statement,
+    TestDeclaration, TypeAnnotation, UnaryOperator, UseDeclaration, VariantCase,
+    VariantDeclaration, Version, WhileStatement,
 };
 
-trait FormatPrint {
+pub trait FormatPrint {
     fn format_print(&self, indent: usize) -> String;
 }
 
@@ -157,13 +158,36 @@ impl FormatPrint for EnumDeclaration {
             .collect::<Vec<_>>()
             .join("\n");
         let newline = if cases.is_empty() { "" } else { "\n" };
-        format!("enum {} {{{newline}{cases}{newline}}}", self.name)
+        format!(
+            "{}enum {} {{{newline}{cases}{newline}}}",
+            "\t".repeat(indent),
+            self.name
+        )
     }
 }
 
 impl FormatPrint for VariantDeclaration {
     fn format_print(&self, indent: usize) -> String {
-        todo!()
+        let cases = self.cases.format_print("\n", indent + 1);
+        let newline = if cases.is_empty() { "" } else { "\n" };
+        format!(
+            "{}variant {} {{{newline}{cases}{newline}}}",
+            "\t".repeat(indent),
+            self.name
+        )
+    }
+}
+
+impl FormatPrint for VariantCase {
+    fn format_print(&self, indent: usize) -> String {
+        let associated = self.associated_types.format_print(", ", 0);
+        format!(
+            "{}{}{}{associated}{}",
+            "\n".repeat(indent),
+            self.name,
+            if associated.is_empty() { "" } else { "(" },
+            if associated.is_empty() { "" } else { ")" },
+        )
     }
 }
 
@@ -242,9 +266,9 @@ impl FormatPrint for Statement {
             Statement::ThrowStatement(expression) => {
                 format!("throw {}", expression.format_print(0))
             }
-            Statement::IfStatement(if_statement) => todo!(),
+            Statement::IfStatement(if_statement) => if_statement.format_print(indent),
             Statement::MatchStatement(match_statement) => todo!(),
-            Statement::WhileStatement(while_statement) => todo!(),
+            Statement::WhileStatement(while_statement) => while_statement.format_print(indent),
             Statement::ForStatement(for_statement) => todo!(),
             Statement::Assertion(assert_statement) => {
                 format!("assert {}", assert_statement.condition.format_print(0))
@@ -252,6 +276,18 @@ impl FormatPrint for Statement {
         };
 
         format!("{}{stmt}", "\t".repeat(indent))
+    }
+}
+
+impl FormatPrint for IfStatement {
+    fn format_print(&self, indent: usize) -> String {
+        todo!()
+    }
+}
+
+impl FormatPrint for WhileStatement {
+    fn format_print(&self, indent: usize) -> String {
+        todo!()
     }
 }
 
