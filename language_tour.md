@@ -596,3 +596,45 @@ This tour introduced the core features of the WTF programming language, includin
 To further explore WTF, consider writing your own programs, experimenting with different features, and building projects that leverage its capabilities.
 
 Happy coding with WTF!
+
+## Advanced
+In order to be a simple, consistent language that plays well with the web assembly component model, WTF brings - and is lacking some - concepts that might appear unusual to programmers primarily familiar with object-oriented languages.
+
+### Interfaces / Traits
+For resources, WTF's compile-time duck typing removes the need for explicitly declared interfaces.
+
+Due to its strict separation between data types (e.g. records) and behavior types (e.g. resources), . While WTFs structural typing is very flexible in terms of allowing similar records to be passed into functions, records do not allow for runtime polymorphism. If you want to opt-in to runtime polymorphism in WTF, you can use a resource wrapper:
+
+```wtf
+ 
+```
+
+### Branded Types
+In WTF, types by default do not come with a type discriminator.  That means, because types in WTF are structurally typed (or ducktyped for resources), in order for WTF to distinguish two otherwise identical types, you have to introduce a type discriminator yourself. This can be done via a field of the zero bytes long void type, which does not incurr any runtime cost:
+
+```wtf
+record individual {
+    name: string
+}
+
+record cat {
+    cat: void
+    
+    name: string
+}
+
+record human {
+    human: void
+
+    name: string
+}
+
+func greet(individual: individual) -> string {
+    return "Hello, \(individual.name)!"
+}
+
+func purr(cat: cat) -> string {
+    return "Purr!"
+}
+```
+
