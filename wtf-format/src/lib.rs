@@ -33,7 +33,7 @@ impl FormatPrint for PackageDeclaration {
 
         format!(
             "{}{path}{}{version}",
-            "\t".repeat(indent),
+            tab(indent),
             if version.is_empty() { "" } else { "@" }
         )
     }
@@ -78,7 +78,7 @@ impl FormatPrint for FunctionDeclaration {
     fn format_print(&self, indent: usize) -> String {
         format!(
             "{}func {}({}) {} {}",
-            "\t".repeat(indent),
+            tab(indent),
             self.name,
             self.parameters.format_print(", ", 0),
             self.return_type
@@ -93,7 +93,7 @@ impl FormatPrint for Parameter {
     fn format_print(&self, indent: usize) -> String {
         format!(
             "{}{}: {}",
-            "\t".repeat(indent),
+            tab(indent),
             self.name,
             self.type_annotation.format_print(0)
         )
@@ -107,7 +107,7 @@ impl FormatPrint for RecordDeclaration {
 
         format!(
             "{}record {} {{{newline}{fields}{newline}}}",
-            "\t".repeat(indent),
+            tab(indent),
             self.name
         )
     }
@@ -117,7 +117,7 @@ impl FormatPrint for Field {
     fn format_print(&self, indent: usize) -> String {
         format!(
             "{}{}: {}",
-            "\t".repeat(indent),
+            tab(indent),
             self.name,
             self.type_annotation.format_print(0)
         )
@@ -140,7 +140,7 @@ impl FormatPrint for TypeAnnotation {
             TypeAnnotation::Tuple(_vec) => todo!(),
         };
 
-        format!("{}{ty}", "\t".repeat(indent))
+        format!("{}{ty}", tab(indent))
     }
 }
 
@@ -155,13 +155,13 @@ impl FormatPrint for EnumDeclaration {
         let cases = self
             .cases
             .iter()
-            .map(|c| format!("{}{c}", "\t".repeat(indent + 1)))
+            .map(|c| format!("{}{c}", tab(indent + 1)))
             .collect::<Vec<_>>()
             .join("\n");
         let newline = if cases.is_empty() { "" } else { "\n" };
         format!(
             "{}enum {} {{{newline}{cases}{newline}}}",
-            "\t".repeat(indent),
+            tab(indent),
             self.name
         )
     }
@@ -173,7 +173,7 @@ impl FormatPrint for VariantDeclaration {
         let newline = if cases.is_empty() { "" } else { "\n" };
         format!(
             "{}variant {} {{{newline}{cases}{newline}}}",
-            "\t".repeat(indent),
+            tab(indent),
             self.name
         )
     }
@@ -184,7 +184,7 @@ impl FormatPrint for VariantCase {
         let associated = self.associated_types.format_print(", ", 0);
         format!(
             "{}{}{}{associated}{}",
-            "\n".repeat(indent),
+            tab(indent),
             self.name,
             if associated.is_empty() { "" } else { "(" },
             if associated.is_empty() { "" } else { ")" },
@@ -196,7 +196,7 @@ impl FormatPrint for ExportDeclaration {
     fn format_print(&self, indent: usize) -> String {
         let inner = &self.item;
 
-        format!("{}export {}", "\t".repeat(indent), inner.format_print(0))
+        format!("{}export {}", tab(indent), inner.format_print(0))
     }
 }
 
@@ -206,9 +206,9 @@ impl FormatPrint for TestDeclaration {
             .name
             .as_ref()
             .map_or_else(String::new, |n| format!("\"{n}\" "));
-        let body = self.body.format_print(indent + 1);
+        let body = self.body.format_print(indent);
 
-        format!("{}test {name}{body}", "\t".repeat(indent))
+        format!("{}test {name}{body}", tab(indent))
     }
 }
 
@@ -216,7 +216,7 @@ impl FormatPrint for Block {
     fn format_print(&self, indent: usize) -> String {
         let statements = self.statements.format_print("\n", indent + 1);
         let newline = if self.statements.is_empty() { "" } else { "\n" };
-        format!("{{{newline}{statements}{newline}}}")
+        format!("{{{newline}{statements}{newline}{}}}", tab(indent))
     }
 }
 
@@ -251,7 +251,7 @@ impl FormatPrint for Statement {
                 format!(
                     // TODO: remove the \n if the return statement is the first thing in a new scope
                     "\n{}return{}",
-                    "\t".repeat(indent),
+                    tab(indent),
                     expression
                         .as_ref()
                         .map_or_else(String::new, |e| format!(" {}", e.format_print(0)))
@@ -278,19 +278,36 @@ impl FormatPrint for Statement {
             }
         };
 
-        format!("{}{stmt}", "\t".repeat(indent))
+        format!("{}{stmt}", tab(indent))
     }
 }
 
 impl FormatPrint for IfStatement {
     fn format_print(&self, indent: usize) -> String {
-        todo!()
+        if let Some(ref else_branch) = self.else_branch {
+            format!(
+                "if {} {} else {}",
+                self.condition.format_print(0),
+                self.then_branch.format_print(indent),
+                else_branch.format_print(indent),
+            )
+        } else {
+            format!(
+                "if {} {}",
+                self.condition.format_print(0),
+                self.then_branch.format_print(indent)
+            )
+        }
     }
 }
 
 impl FormatPrint for WhileStatement {
     fn format_print(&self, indent: usize) -> String {
-        todo!()
+        format!(
+            "while {} {}",
+            self.condition.format_print(0),
+            self.body.format_print(indent)
+        )
     }
 }
 
@@ -317,7 +334,12 @@ impl FormatPrint for Expression {
             Expression::FunctionCall {
                 function,
                 arguments,
-            } => todo!(),
+            } => format!(
+                "{}({})",
+                function.format_print(0),
+                arguments.format_print(", ", 0)
+            )
+            .into(),
             Expression::MethodCall {
                 receiver,
                 method,
@@ -334,7 +356,7 @@ impl FormatPrint for Expression {
             Expression::ListLiteral(vec) => todo!(),
         };
 
-        format!("{}{expr}", "\t".repeat(indent))
+        format!("{}{expr}", tab(indent))
     }
 }
 
@@ -357,7 +379,7 @@ impl FormatPrint for BinaryOperator {
             BinaryOperator::NullCoalesce => "?",
         };
 
-        format!("{}{}", "\t".repeat(indent), op)
+        format!("{}{}", tab(indent), op)
     }
 }
 
@@ -368,7 +390,7 @@ impl FormatPrint for UnaryOperator {
             UnaryOperator::Not => "!",
         };
 
-        format!("{}{}", "\t".repeat(indent), op)
+        format!("{}{}", tab(indent), op)
     }
 }
 
@@ -382,7 +404,7 @@ impl FormatPrint for Literal {
             Literal::None => "none".into(),
         };
 
-        format!("{}{}", "\t".repeat(indent), lit)
+        format!("{}{}", tab(indent), lit)
     }
 }
 
@@ -410,4 +432,8 @@ where
         self.as_ref()
             .map_or_else(String::new, |e| e.format_print(indent))
     }
+}
+
+fn tab(n: usize) -> String {
+    "\t".repeat(n)
 }
