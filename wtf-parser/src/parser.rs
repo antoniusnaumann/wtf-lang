@@ -59,8 +59,20 @@ impl Parser {
         }
     }
 
+    fn skip_linebreaks(&mut self) {
+        while self.current.token == Token::Newline || self.current.token == Token::EmptyLine {
+            self.advance_tokens();
+        }
+    }
+
     fn skip_newline(&mut self) {
         while self.current.token == Token::Newline {
+            self.advance_tokens();
+        }
+    }
+
+    fn skip_semicolons(&mut self) {
+        while self.current.token == Token::Semicolon {
             self.advance_tokens();
         }
     }
@@ -80,19 +92,19 @@ impl Parser {
     }
 
     pub fn parse_module(&mut self) -> Result<Module> {
-        self.skip_newline();
+        self.skip_linebreaks();
         let package = if self.current.token == Token::Package {
             Some(self.parse_package_declaration()?)
         } else {
             None
         };
 
-        self.skip_newline();
+        self.skip_linebreaks();
 
         let mut uses = Vec::new();
         while self.current.token == Token::Use {
             uses.push(self.parse_use_declaration()?);
-            self.skip_newline();
+            self.skip_linebreaks();
         }
 
         let mut declarations = Vec::new();
@@ -110,6 +122,8 @@ impl Parser {
                     self.advance_tokens();
                 }
             }
+
+            self.skip_linebreaks();
         }
 
         Ok(Module {
@@ -213,11 +227,11 @@ impl Parser {
         // Handle syntactic sugar for list types ('[T]') first
         if self.current.token == Token::LeftBracket {
             self.advance_tokens();
-            self.skip_newline();
+            self.skip_linebreaks();
 
             let inner = self.parse_type_annotation()?;
 
-            self.skip_newline();
+            self.skip_linebreaks();
             self.expect_token(Token::RightBracket)?;
 
             return Ok(TypeAnnotation::List(inner.into()));
@@ -296,6 +310,13 @@ impl Parser {
         let mut statements = Vec::new();
 
         while !self.has(Token::RightBrace) && !self.has(Token::Eof) {
+            if self.current.token == Token::EmptyLine {
+                statements.push(Statement::EmptyLine);
+                self.skip_linebreaks();
+
+                continue;
+            }
+
             let stmt = self.parse_statement()?;
             statements.push(stmt);
             self.skip_newline();
@@ -307,25 +328,29 @@ impl Parser {
     }
 
     fn parse_statement(&mut self) -> Result<Statement> {
-        match self.current.token {
+        let statement = match self.current.token {
             Token::Let | Token::Var => self
                 .parse_variable_declaration()
-                .map(Statement::VariableDeclaration),
-            Token::If => self.parse_if_statement().map(Statement::IfStatement),
-            Token::Return => self.parse_return_statement(),
-            Token::Throw => self.parse_throw_statement(),
+                .map(Statement::VariableDeclaration)?,
+            Token::If => self.parse_if_statement().map(Statement::IfStatement)?,
+            Token::Return => self.parse_return_statement()?,
+            Token::Throw => self.parse_throw_statement()?,
             Token::Break => {
                 self.advance_tokens();
-                Ok(Statement::BreakStatement(None)) // No value for break
+                Statement::BreakStatement(None) // No value for break
             }
             Token::Continue => {
                 self.advance_tokens();
-                Ok(Statement::ContinueStatement)
+                Statement::ContinueStatement
             }
-            Token::While => self.parse_while_statement().map(Statement::WhileStatement),
-            Token::For => self.parse_for_statement().map(Statement::ForStatement),
-            Token::Match => self.parse_match_statement().map(Statement::MatchStatement),
-            Token::Assert => self.parse_assert_statement().map(Statement::Assertion),
+            Token::While => self
+                .parse_while_statement()
+                .map(Statement::WhileStatement)?,
+            Token::For => self.parse_for_statement().map(Statement::ForStatement)?,
+            Token::Match => self
+                .parse_match_statement()
+                .map(Statement::MatchStatement)?,
+            Token::Assert => self.parse_assert_statement().map(Statement::Assertion)?,
             _ => {
                 let expr = self.parse_expression()?;
 
@@ -334,10 +359,10 @@ impl Parser {
                         // TODO: Check that target is a valid assignment target
                         self.advance_tokens();
                         let value = self.parse_expression()?;
-                        Ok(Statement::Assignment {
+                        Statement::Assignment {
                             target: expr,
                             value,
-                        })
+                        }
                     }
                     ref t @ (Token::Plus
                     | Token::Minus
@@ -359,12 +384,15 @@ impl Parser {
                             right,
                         };
 
-                        Ok(Statement::Assignment { target, value })
+                        Statement::Assignment { target, value }
                     }
-                    _ => Ok(Statement::ExpressionStatement(expr)),
+                    _ => Statement::ExpressionStatement(expr),
                 }
             }
-        }
+        };
+        self.skip_semicolons();
+
+        Ok(statement)
     }
 
     fn parse_variable_declaration(&mut self) -> Result<VariableDeclaration> {
@@ -384,10 +412,10 @@ impl Parser {
             None
         };
 
-        self.skip_newline();
+        self.skip_linebreaks();
         let value = if self.current.token == Token::Equal {
             self.advance_tokens();
-            self.skip_newline();
+            self.skip_linebreaks();
             Some(self.parse_expression()?)
         } else {
             None
@@ -620,14 +648,14 @@ impl Parser {
                 let mut elements = Vec::new();
                 loop {
                     self.advance_tokens();
-                    self.skip_newline();
+                    self.skip_linebreaks();
 
                     if self.current.token == Token::RightBracket {
                         break;
                     }
 
                     elements.push(self.parse_expression()?);
-                    self.skip_newline();
+                    self.skip_linebreaks();
 
                     if self.current.token != Token::Comma {
                         break;
@@ -653,7 +681,7 @@ impl Parser {
 
         let mut members = Vec::new();
         loop {
-            self.skip_newline();
+            self.skip_linebreaks();
             if self.current.token == Token::RightBrace {
                 break;
             }
@@ -672,7 +700,7 @@ impl Parser {
 
             members.push(FieldAssignment { name, element });
 
-            self.skip_newline();
+            self.skip_linebreaks();
             if self.current.token != Token::Comma {
                 break;
             }
@@ -820,7 +848,7 @@ impl Parser {
         }
         let token = self.current.token.clone();
         self.advance_tokens();
-        self.skip_newline();
+        self.skip_linebreaks();
 
         Some(token)
     }
@@ -829,7 +857,7 @@ impl Parser {
         self.expect_token(Token::Record)?;
         let name = self.expect_identifier()?;
         self.expect_token(Token::LeftBrace)?;
-        self.skip_newline();
+        self.skip_linebreaks();
 
         let mut fields = Vec::new();
 
@@ -847,7 +875,7 @@ impl Parser {
             }
         }
 
-        self.skip_newline();
+        self.skip_linebreaks();
         self.expect_token(Token::RightBrace)?;
 
         Ok(RecordDeclaration { name, fields })
@@ -862,7 +890,7 @@ impl Parser {
         let mut constructor = None;
         let mut methods = Vec::new();
 
-        self.skip_newline();
+        self.skip_linebreaks();
         while !self.has(Token::RightBrace) && !self.has(Token::Eof) {
             if self.has(Token::Constructor) {
                 if constructor.is_some() {
@@ -882,7 +910,7 @@ impl Parser {
                 });
                 // Optional: Handle commas or newlines between fields
             }
-            self.skip_newline();
+            self.skip_linebreaks();
         }
 
         self.expect_token(Token::RightBrace)?;
@@ -913,7 +941,7 @@ impl Parser {
         self.expect_token(Token::Enum)?;
         let name = self.expect_identifier()?;
         self.expect_token(Token::LeftBrace)?;
-        self.skip_newline();
+        self.skip_linebreaks();
 
         let mut variants = Vec::new();
 
@@ -924,10 +952,10 @@ impl Parser {
             if self.parse_delimiter().is_none() {
                 break;
             }
-            self.skip_newline();
+            self.skip_linebreaks();
         }
 
-        self.skip_newline();
+        self.skip_linebreaks();
         self.expect_token(Token::RightBrace)?;
 
         Ok(EnumDeclaration {
@@ -940,7 +968,7 @@ impl Parser {
         self.expect_token(Token::Variant)?;
         let name = self.expect_identifier()?;
         self.expect_token(Token::LeftBrace)?;
-        self.skip_newline();
+        self.skip_linebreaks();
 
         let mut cases = Vec::new();
 
@@ -950,7 +978,7 @@ impl Parser {
 
             if self.has(Token::LeftParen) {
                 self.advance_tokens();
-                self.skip_newline();
+                self.skip_linebreaks();
 
                 while !self.has(Token::RightParen) && !self.has(Token::Eof) {
                     let field_name = self.expect_identifier()?;
@@ -964,7 +992,7 @@ impl Parser {
                     if self.parse_delimiter().is_none() {
                         break;
                     }
-                    self.skip_newline();
+                    self.skip_linebreaks();
                 }
                 self.expect_token(Token::RightParen)?;
             }
@@ -978,7 +1006,7 @@ impl Parser {
             }
         }
 
-        self.skip_newline();
+        self.skip_linebreaks();
         self.expect_token(Token::RightBrace)?;
 
         Ok(VariantDeclaration { name, cases })
@@ -993,18 +1021,18 @@ impl Parser {
 
     fn parse_test_declaration(&mut self) -> Result<TestDeclaration> {
         self.expect_token(Token::Test)?;
-        self.skip_newline();
+        self.skip_linebreaks();
         let name = match self.current.token {
             Token::StringLiteral(ref name) => {
                 let name = name.to_owned();
-                self.skip_newline();
+                self.skip_linebreaks();
                 self.advance_tokens();
                 Some(name)
             }
             Token::LeftBrace => None,
             _ => panic!("Test names should be a string"),
         };
-        self.skip_newline();
+        self.skip_linebreaks();
         let body = self.parse_block()?;
 
         Ok(TestDeclaration { name, body })
@@ -1020,6 +1048,8 @@ impl Parser {
         } else {
             None
         };
+
+        self.skip_semicolons();
 
         Ok(PackageDeclaration { path, version })
     }

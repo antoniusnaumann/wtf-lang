@@ -1,15 +1,17 @@
-package wtf:example@0.1.0
+package wtf:example@0.1.0;
 
 // should return 0
 export func main() -> s64 {
-    var x = 5
+    var x = 5;
     while x < 15 {
         x += 1
     }
 
-    var y = 3 
+
+
+    var y = 3;
     while true {
-        y -= 1
+        y = y - 1
         if y < 0 {
             break
         }
@@ -24,5 +26,10 @@ export func main() -> s64 {
         y -= 10
     }
 
+    var z = x + y
     return s64(x + y * 15)
+
+
+
+    
 }

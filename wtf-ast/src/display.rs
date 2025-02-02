@@ -277,6 +277,7 @@ impl Print for Statement {
             Statement::WhileStatement(v) => v.print(f, indent, c),
             Statement::ForStatement(_) => todo!(),
             Statement::Assertion(v) => v.print(f, indent, c),
+            Statement::EmptyLine => write!(f, "\n{c:indent$}(empty)"),
         }
     }
 }

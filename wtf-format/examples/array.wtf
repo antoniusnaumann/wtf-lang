@@ -1,0 +1,62 @@
+package wtf:example@0.1.0
+
+// should return 0
+export func main() -> s64 {
+    let array = [12, 17, 38, 5, 15];
+    return s64(array.len().s32() - array[3])
+}
+
+test "empty array has len zero" {
+    let array: [u32] = [];
+    assert array.len().s32() == 0
+}
+
+test "s64 array has correct len" {
+    let array = [1, 2, 3, 4]
+    assert array.len().s32() == 4
+
+    let array = [51, 33, -7, 5, 32, 17, 99]
+    assert array.len().s32() == 7
+}
+
+test "string array has correct len" {
+    let array = ["Hello World!"]
+    assert array.len().s32() == 1
+
+    let array = ["Hello", "World!"]
+    assert array.len().s32() == 2
+}
+
+test "array index access works" {
+    let myarray = [
+         51,
+        33, -7,
+        5, 32, 17, 99]
+    let array   = myarray
+    assert array[  0  ] == 51
+    assert array[1] == 33
+    assert array[2] == -7
+    assert array[3] == 5
+    assert array[4] == 32
+    assert array[5] == 17
+    assert array[6] == 99
+}
+
+test "array index access works after re-assignment" {
+    let myarray = [51, 33, -7, 5, 32, 17, 99]
+    let array = myarray
+    assert array[0] == 51
+    assert array[1] == 33
+    assert array[2] == -7
+    assert array[3] == 5
+    assert array[4] == 32
+    assert array[5] == 17
+    assert array[6] == 99
+}
+
+test "multiple arrays do not overwrite each other" {
+    let first = [5, 16, 42, 3]
+    let second = [7, 17, 21]
+
+    assert first[2] == 42
+}

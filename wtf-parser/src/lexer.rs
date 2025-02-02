@@ -88,6 +88,7 @@ pub enum Token {
 
     // Special tokens
     Newline,
+    EmptyLine,
     Eof,
     Invalid(String),
 }
@@ -178,15 +179,25 @@ impl Lexer {
 
         let token = match self.current_char {
             Some(c) if c.is_newline() => {
+                let mut newlines = 0;
                 while let Some(c) = self.current_char {
-                    if c.is_whitespace() || c.is_newline() {
+                    if c.is_newline() {
+                        newlines += 1;
+                    }
+                    if c.is_whitespace() {
                         self.read_char();
                     } else {
                         break;
                     }
                 }
 
-                Token::Newline
+                if newlines == 1 {
+                    Token::Newline
+                } else if newlines > 1 {
+                    Token::EmptyLine
+                } else {
+                    unreachable!()
+                }
             }
             Some('/') => {
                 if self.peek_char() == Some('/') {

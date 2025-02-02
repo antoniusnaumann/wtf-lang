@@ -1,9 +1,9 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, ops::Deref};
 
 use wtf_ast::{
     ArithmeticOperator, BinaryOperator, Block, Declaration, EnumDeclaration, ExportDeclaration,
-    Expression, Field, FunctionDeclaration, IfStatement, Literal, Module, ModulePath,
-    PackageDeclaration, Parameter, RecordDeclaration, ResourceDeclaration, Statement,
+    Expression, Field, FieldAssignment, FunctionDeclaration, IfStatement, Literal, Module,
+    ModulePath, PackageDeclaration, Parameter, RecordDeclaration, ResourceDeclaration, Statement,
     TestDeclaration, TypeAnnotation, UnaryOperator, UseDeclaration, VariantCase,
     VariantDeclaration, Version, WhileStatement,
 };
@@ -32,7 +32,7 @@ impl FormatPrint for PackageDeclaration {
         let version = self.version.format_print(0);
 
         format!(
-            "{}{path}{}{version}",
+            "{}package {path}{}{version}",
             tab(indent),
             if version.is_empty() { "" } else { "@" }
         )
@@ -120,6 +120,17 @@ impl FormatPrint for Field {
             tab(indent),
             self.name,
             self.type_annotation.format_print(0)
+        )
+    }
+}
+
+impl FormatPrint for FieldAssignment {
+    fn format_print(&self, indent: usize) -> String {
+        format!(
+            "{}{}: {}",
+            tab(indent),
+            self.name,
+            self.element.format_print(0)
         )
     }
 }
@@ -243,15 +254,25 @@ impl FormatPrint for Statement {
                 )
             }
             Statement::Assignment { target, value } => {
-                // TODO: check if right-hand side is binop with the first operand being the same as lhs and collapse to e.g. +=
-                format!("{} = {}", target.format_print(0), value.format_print(0))
+                // TODO: should we even re-sort commutative operations, e.g. i = 1 + i to i += 1 ?
+                match value {
+                    Expression::BinaryExpression {
+                        left,
+                        operator,
+                        right,
+                    } if left.deref() == target => format!(
+                        "{} {}= {}",
+                        target.format_print(0),
+                        operator.format_print(0),
+                        right.format_print(0)
+                    ),
+                    _ => format!("{} = {}", target.format_print(0), value.format_print(0)),
+                }
             }
             Statement::ExpressionStatement(expression) => expression.format_print(0),
             Statement::ReturnStatement(expression) => {
                 format!(
-                    // TODO: remove the \n if the return statement is the first thing in a new scope
-                    "\n{}return{}",
-                    tab(indent),
+                    "return{}",
                     expression
                         .as_ref()
                         .map_or_else(String::new, |e| format!(" {}", e.format_print(0)))
@@ -276,6 +297,7 @@ impl FormatPrint for Statement {
             Statement::Assertion(assert_statement) => {
                 format!("assert {}", assert_statement.condition.format_print(0))
             }
+            Statement::EmptyLine => String::new(),
         };
 
         format!("{}{stmt}", tab(indent))
@@ -330,7 +352,9 @@ impl FormatPrint for Expression {
             Expression::UnaryExpression { operator, operand } => {
                 format!("{}{}", operator.format_print(0), operand.format_print(0)).into()
             }
-            Expression::YeetExpression { expression } => todo!(),
+            Expression::YeetExpression { expression } => {
+                format!("{}!", expression.format_print(0)).into()
+            }
             Expression::FunctionCall {
                 function,
                 arguments,
@@ -345,15 +369,44 @@ impl FormatPrint for Expression {
                 method,
                 arguments,
                 safe,
-            } => todo!(),
+            } =>
+            // TODO: split arguments over multiple lines if too long
+            {
+                format!(
+                    "{}{}{method}({})",
+                    receiver.format_print(0),
+                    if *safe { "?." } else { "." },
+                    arguments.format_print(", ", 0)
+                )
+                .into()
+            }
             Expression::FieldAccess {
                 object,
                 field,
                 safe,
-            } => todo!(),
-            Expression::IndexAccess { collection, index } => todo!(),
-            Expression::Record { name, members } => todo!(),
-            Expression::ListLiteral(vec) => todo!(),
+            } => format!(
+                "{}{}{field}",
+                object.format_print(0),
+                if *safe { "?." } else { "." },
+            )
+            .into(),
+            Expression::IndexAccess { collection, index } => {
+                format!("{}[{}]", collection.format_print(0), index.format_print(0)).into()
+            }
+            Expression::Record { name, members } => {
+                let name = name
+                    .as_ref()
+                    .map_or_else(|| String::new(), |n| format!("{n} "));
+                let newline = if members.is_empty() { "" } else { "\n" };
+                format!(
+                    "{name}{{{newline}{}{newline}}}",
+                    members.format_print("\n", indent + 1)
+                )
+                .into()
+            }
+            Expression::ListLiteral(elements) => {
+                format!("[{}]", elements.format_print(", ", 0)).into()
+            }
         };
 
         format!("{}{expr}", tab(indent))

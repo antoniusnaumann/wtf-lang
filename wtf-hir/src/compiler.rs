@@ -581,7 +581,7 @@ impl<'a> FunctionCompiler<'a> {
                 self.push(Instruction::Loop(inner_body), block)
             }
             ast::Statement::ForStatement(_) => todo!(),
-            wtf_ast::Statement::Assertion(assert_statement) => {
+            ast::Statement::Assertion(assert_statement) => {
                 self.compile_expression(&assert_statement.condition, block);
                 self.push(
                     Instruction::If {
@@ -597,6 +597,7 @@ impl<'a> FunctionCompiler<'a> {
                     block,
                 );
             }
+            ast::Statement::EmptyLine => {}
         }
     }
 
