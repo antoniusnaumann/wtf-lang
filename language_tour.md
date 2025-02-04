@@ -606,7 +606,33 @@ For resources, WTF's compile-time duck typing removes the need for explicitly de
 Due to its strict separation between data types (e.g. records) and behavior types (e.g. resources), . While WTFs structural typing is very flexible in terms of allowing similar records to be passed into functions, records do not allow for runtime polymorphism. If you want to opt-in to runtime polymorphism in WTF, you can use a resource wrapper:
 
 ```wtf
- 
+resource Reader {
+    func read_line() -> string
+}
+
+resource StringReader {
+    content: string
+    cursor: u32
+
+    constructor(content: string) -> StringReader {
+        // ...
+    }
+
+    func read_line() -> string {
+        // ...
+    }   
+}
+
+func reader(str: string) -> Reader {
+    return StringReader(content)
+}
+
+func main() {
+    let content = "Hello World!"
+    let reader = content.reader()
+
+    some_function_that_takes_a_reader(reader)
+}
 ```
 
 ### Branded Types
