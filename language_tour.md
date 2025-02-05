@@ -606,15 +606,15 @@ For resources, WTF's compile-time duck typing removes the need for explicitly de
 Due to its strict separation between data types (e.g. records) and behavior types (e.g. resources), . While WTFs structural typing is very flexible in terms of allowing similar records to be passed into functions, records do not allow for runtime polymorphism. If you want to opt-in to runtime polymorphism in WTF, you can use a resource wrapper:
 
 ```wtf
-resource Reader {
+resource reader {
     func read_line() -> string
 }
 
-resource StringReader {
+resource string_reader {
     content: string
     cursor: u32
 
-    constructor(content: string) -> StringReader {
+    constructor(content: string) -> string_reader {
         // ...
     }
 
@@ -623,8 +623,8 @@ resource StringReader {
     }   
 }
 
-func reader(str: string) -> Reader {
-    return StringReader(content)
+func reader(str: string) -> reader {
+    return string_reader(content)
 }
 
 func main() {
@@ -632,6 +632,34 @@ func main() {
     let reader = content.reader()
 
     some_function_that_takes_a_reader(reader)
+}
+```
+
+If your type makes sense for pure data and as an object, you also use the wrapper pattern:
+
+```wtf
+resource shape {
+    func circumference() -> f64
+    func area() -> f64
+}
+
+record rectangle {
+    a: f64
+    b: f64
+}
+
+func circumference(r: rectangle) -> { return 2 * a + 2 * b }
+func area(r: rectangle) -> { return a * b }
+
+func shape(r: rectangle) -> { rectangle_wrapper(r) }
+
+resource rectangle_wrapper {
+    inner: rectangle 
+
+    constructor(inner: rectangle) -> rectangle_wrapper { ... }
+
+    func circumference() -> f64 { inner.circumference() }
+    func area() -> f64 { inner.area() }
 }
 ```
 
