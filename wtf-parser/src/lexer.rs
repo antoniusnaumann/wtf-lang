@@ -765,7 +765,6 @@ mod tests {
     fn test_package_header() {
         let input = r#"
         package documentation:http@1.0.0;
-
         use wasi:clocks/wall-clock.{datetime}"#;
 
         let mut lexer = Lexer::new(input);

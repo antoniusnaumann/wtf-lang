@@ -18,9 +18,9 @@ pub fn main() -> std::io::Result<()> {
         let mut parser = Parser::new(&file);
         let module = parser.parse_module().expect("Invalid WTF file!");
 
-        println!("==== {} ====", path.to_string_lossy());
+        // println!("==== {} ====", path.to_string_lossy());
         println!("{}", module.format_print(0));
-        println!();
+        // println!();
     }
 
     Ok(())
