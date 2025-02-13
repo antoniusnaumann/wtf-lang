@@ -103,50 +103,51 @@ impl Compiler {
         let hir = wtf_hir::compile(ast);
         let tests = hir.tests.clone();
         if self.verbose {
-            println!("{hir}");
+            println!("{hir:#?}");
 
             println!();
             println!("===== WAT =====");
         }
-        let wasm = wtf_encode::Encoder::new().encode(hir).finish();
-        if self.verbose {
-            println!("{:?}", wasmparser::validate(&wasm).err());
-        }
+        // let wasm = wtf_encode::Encoder::new().encode(hir).finish();
+        // if self.verbose {
+        //     println!("{:?}", wasmparser::validate(&wasm).err());
+        // }
 
-        fs::write("output.wasm", &wasm).unwrap();
+        // fs::write("output.wasm", &wasm).unwrap();
 
-        match self.mode {
-            Mode::Build => Ok(()),
-            Mode::Run => {
-                if self.verbose {
-                    println!();
-                    println!("===== OUT =====");
-                }
-                let result = self.run(&wasm).unwrap();
+        // match self.mode {
+        //     Mode::Build => Ok(()),
+        //     Mode::Run => {
+        //         if self.verbose {
+        //             println!();
+        //             println!("===== OUT =====");
+        //         }
+        //         let result = self.run(&wasm).unwrap();
 
-                if self.verbose {
-                    println!("'main': {}", result);
-                }
+        //         if self.verbose {
+        //             println!("'main': {}", result);
+        //         }
 
-                match result {
-                    MainOutput::ExitCode(0) => Ok(()),
-                    MainOutput::Message(msg) => {
-                        println!("{}", msg);
+        //         match result {
+        //             MainOutput::ExitCode(0) => Ok(()),
+        //             MainOutput::Message(msg) => {
+        //                 println!("{}", msg);
 
-                        Ok(())
-                    }
-                    MainOutput::ExitCode(status) => Err(status),
-                }
-            }
-            Mode::Test => {
-                if self.verbose {
-                    println!();
-                    println!("===== OUT =====");
-                }
+        //                 Ok(())
+        //             }
+        //             MainOutput::ExitCode(status) => Err(status),
+        //         }
+        //     }
+        //     Mode::Test => {
+        //         if self.verbose {
+        //             println!();
+        //             println!("===== OUT =====");
+        //         }
 
-                self.run_tests(&wasm, &tests).map_err(|_| 22)
-            } // TODO: find out which error code to return here
-        }
+        //         self.run_tests(&wasm, &tests).map_err(|_| 22)
+        //     } // TODO: find out which error code to return here
+        // }
+        todo!("more stuff")
     }
 
     fn run_tests(&self, wasm: &[u8], tests: &[Test]) -> Result<(), TestError> {

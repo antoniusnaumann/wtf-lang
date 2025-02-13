@@ -1426,7 +1426,6 @@ dependencies = [
  "wasmparser 0.222.0",
  "wasmtime",
  "wtf-ast",
- "wtf-encode",
  "wtf-hir",
  "wtf-parser",
 ]
