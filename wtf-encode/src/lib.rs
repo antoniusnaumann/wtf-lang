@@ -98,7 +98,7 @@ impl Convert<'_> for (String, hir::Type) {
         let (name, ty) = self;
         let ty = match ty {
             hir::Type::Never => todo!(),
-            hir::Type::None => todo!(),
+            hir::Type::Void => todo!(),
             hir::Type::Blank => todo!(),
             hir::Type::List(_) => todo!(),
             hir::Type::Option(_) => todo!(),
@@ -230,10 +230,16 @@ impl<'a> ConvertInstruction<'a> for hir::Instruction {
             hir::Instruction::Float(num) => Instruction::F32(num as f32), // TODO: typecheck: different instructions for different float sizes
             hir::Instruction::String(string) => Instruction::Bytes(string.into_bytes()),
             hir::Instruction::Bool(b) => Instruction::I32(if b { 1 } else { 0 }),
-            hir::Instruction::None => Instruction::Noop,
+            hir::Instruction::Void => Instruction::Noop,
             hir::Instruction::Enum { case, ty: _ } => Instruction::I32(case as i32), // TODO: if the enum type has more fields than i32 allows, use i64
             hir::Instruction::Variant { case, num_payloads } => todo!(),
             hir::Instruction::Record(_) => Instruction::Noop,
+            hir::Instruction::Option { is_some, ty } => Instruction::Optional {
+                ty: ty
+                    .convert(lookup)
+                    .expect("Inner type of optional must have a type"),
+                is_some,
+            },
             hir::Instruction::List { len, ty } => {
                 let ty = ty.convert(lookup).expect("List elements must have a type");
                 Instruction::Store { number: len, ty }
@@ -351,7 +357,7 @@ impl Convert<'_> for hir::Type {
             hir::Type::Variant(_) => todo!(),
             hir::Type::Tuple(_) => todo!(),
             hir::Type::Builtin(ty) => Some(TypeRef::Primitive(ty.convert(lookup))),
-            hir::Type::None => None,
+            hir::Type::Void => None,
             hir::Type::Never => todo!("Disallow 'Never' for exported functions"),
             hir::Type::Blank => todo!("'Blank' not allowed here"),
         }

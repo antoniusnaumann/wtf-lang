@@ -25,4 +25,4 @@ members = [
   "wtf-parser",
   "wtf-hir",
   "wtf-wasm"
-]
+, "wtf-format"]

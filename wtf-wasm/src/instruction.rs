@@ -24,6 +24,11 @@ pub enum Instruction<'a> {
         ty: ComponentValType,
     },
 
+    Optional {
+        ty: ComponentValType,
+        is_some: bool,
+    },
+
     I32(i32),
     I64(i64),
     F32(f32),

@@ -1,0 +1,9 @@
+package wtf:example@0.1.0
+
+// should return 0
+export func main() -> s64 {
+    var result: s32? = none
+    result = 0
+
+    return s64(result ? 42)
+}

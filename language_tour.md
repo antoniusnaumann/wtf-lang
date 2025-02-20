@@ -596,3 +596,99 @@ This tour introduced the core features of the WTF programming language, includin
 To further explore WTF, consider writing your own programs, experimenting with different features, and building projects that leverage its capabilities.
 
 Happy coding with WTF!
+
+## Advanced
+In order to be a simple, consistent language that plays well with the web assembly component model, WTF brings - and is lacking some - concepts that might appear unusual to programmers primarily familiar with object-oriented languages.
+
+### Interfaces / Traits
+For resources, WTF's compile-time duck typing removes the need for explicitly declared interfaces.
+
+Due to its strict separation between data types (e.g. records) and behavior types (e.g. resources), . While WTFs structural typing is very flexible in terms of allowing similar records to be passed into functions, records do not allow for runtime polymorphism. If you want to opt-in to runtime polymorphism in WTF, you can use a resource wrapper:
+
+```wtf
+resource reader {
+    func read_line() -> string
+}
+
+resource string_reader {
+    content: string
+    cursor: u32
+
+    constructor(content: string) -> string_reader {
+        // ...
+    }
+
+    func read_line() -> string {
+        // ...
+    }   
+}
+
+func reader(str: string) -> reader {
+    return string_reader(content)
+}
+
+func main() {
+    let content = "Hello World!"
+    let reader = content.reader()
+
+    some_function_that_takes_a_reader(reader)
+}
+```
+
+If your type makes sense for pure data and as an object, you also use the wrapper pattern:
+
+```wtf
+resource shape {
+    func circumference() -> f64
+    func area() -> f64
+}
+
+record rectangle {
+    a: f64
+    b: f64
+}
+
+func circumference(r: rectangle) -> { return 2 * a + 2 * b }
+func area(r: rectangle) -> { return a * b }
+
+func shape(r: rectangle) -> { rectangle_wrapper(r) }
+
+resource rectangle_wrapper {
+    inner: rectangle 
+
+    constructor(inner: rectangle) -> rectangle_wrapper { ... }
+
+    func circumference() -> f64 { inner.circumference() }
+    func area() -> f64 { inner.area() }
+}
+```
+
+### Branded Types
+In WTF, types by default do not come with a type discriminator.  That means, because types in WTF are structurally typed (or ducktyped for resources), in order for WTF to distinguish two otherwise identical types, you have to introduce a type discriminator yourself. This can be done via a field of the zero bytes long void type, which does not incurr any runtime cost:
+
+```wtf
+record individual {
+    name: string
+}
+
+record cat {
+    cat: void
+    
+    name: string
+}
+
+record human {
+    human: void
+
+    name: string
+}
+
+func greet(individual: individual) -> string {
+    return "Hello, \(individual.name)!"
+}
+
+func purr(cat: cat) -> string {
+    return "Purr!"
+}
+```
+

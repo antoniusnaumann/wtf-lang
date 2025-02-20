@@ -166,6 +166,7 @@ pub enum Statement {
     WhileStatement(WhileStatement),
     ForStatement(ForStatement),
     Assertion(AssertStatement),
+    EmptyLine,
 }
 
 #[derive(Debug, Clone, PartialEq)]
