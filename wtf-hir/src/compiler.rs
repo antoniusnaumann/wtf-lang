@@ -693,8 +693,7 @@ fn compile_expression(
             };
             let mut args = vec![];
             for arg in arguments {
-                let arg = compile_expression(arg, fun, body, visible);
-                args.push(body.push(arg));
+                args.push(compile_expression(arg, fun, body, visible));
             }
             body.push(fun.create_expr(Expression::call(function, args, Type::None)))
         }
