@@ -487,6 +487,7 @@ fn compile_statement(
     visible: &mut Visible,
 ) {
     match statement {
+        ast::Statement::EmptyLine => {}
         ast::Statement::VariableDeclaration(variable_declaration) => {
             // TODO: allow uninitialized variables
             let initial_value = compile_expression(
