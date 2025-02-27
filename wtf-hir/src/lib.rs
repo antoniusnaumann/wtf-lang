@@ -233,25 +233,25 @@ impl FunctionBody {
 
 impl Display for Module {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Type:")?;
         for (name, ty) in &self.types {
             writeln!(f, "{name} = {ty}")?;
-            write!(f, "\n")?;
         }
-        writeln!(f, "Functions:")?;
         for (name, function) in &self.functions {
-            write!(f, "Locals:")?;
-            for (i, ty) in function.body.vars.iter().enumerate() {
-                write!(f, " {}: {ty}", VarId(i))?;
-            }
-            write!(f, "\n")?;
             write!(f, "fun {}", name)?;
             for Parameter { name, ty } in &function.parameters {
                 write!(f, " {}: {}", name, ty)?;
             }
-            write!(f, " -> {} ", function.return_type)?;
+            writeln!(f, " -> {} {{", function.return_type)?;
+            for (i, ty) in function.body.vars.iter().enumerate() {
+                write!(f, "  {}: {ty}", VarId(i))?;
+                if let Some(param) = function.parameters.get(i) {
+                    write!(f, " (param {})", param.name)?;
+                }
+                writeln!(f, "")?;
+            }
+            write!(f, "  ")?;
             function.body.fmt(f)?;
-            write!(f, "\n\n")?;
+            write!(f, "\n}}\n")?;
         }
 
         if !self.tests.is_empty() {
@@ -288,7 +288,7 @@ impl Display for VarId {
 
 impl Display for FunctionBody {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.body.fmt(f, 0, self)
+        self.body.fmt(f, 1, self)
     }
 }
 
@@ -302,14 +302,15 @@ impl Body {
         let ws = "  ";
         writeln!(f, "{{")?;
         for id in &self.ids {
-            for _ in 0..indentation {
+            for _ in 0..(indentation + 1) {
                 write!(f, "{ws}")?;
             }
             let expression = &fun.expressions[id.0];
             write!(f, "{}: {} = ", id, expression.ty)?;
-            expression.fmt(f, indentation + 2, fun)?;
+            expression.fmt(f, indentation + 1, fun)?;
+            writeln!(f, "")?;
         }
-        for _ in 0..indentation - 2 {
+        for _ in 0..indentation {
             write!(f, "{ws}")?;
         }
         write!(f, "}}")?;
@@ -368,7 +369,7 @@ impl Expression {
             } => {
                 write!(f, "call {function} with arguments:")?;
                 for arg in arguments {
-                    write!(f, "{}", arg)?;
+                    write!(f, " {}", arg)?;
                 }
             }
             ExpressionKind::Member { of, name } => write!(f, "{of}.{name}")?,
@@ -382,7 +383,7 @@ impl Expression {
                 then,
                 else_,
             } => {
-                write!(f, "if {condition}")?;
+                write!(f, "if {condition} ")?;
                 then.fmt(f, indentation, fun)?;
                 write!(f, " else ")?;
                 else_.fmt(f, indentation, fun)?;
