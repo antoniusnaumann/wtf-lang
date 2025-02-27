@@ -795,7 +795,10 @@ impl Parser {
             Token::True => Literal::Boolean(true),
             Token::False => Literal::Boolean(false),
             Token::None => Literal::None,
-            _ => todo!("TODO: Add parser error that can list expected AST nodes!"),
+            _ => panic!(
+                "Tried to parser literal, but found: {:?}!",
+                self.current.token
+            ),
         };
         self.advance_tokens();
 
