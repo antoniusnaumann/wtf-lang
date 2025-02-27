@@ -103,7 +103,7 @@ impl Compiler {
         let hir = wtf_hir::compile(ast);
         let tests = hir.tests.clone();
         if self.verbose {
-            println!("{hir:#?}");
+            println!("{hir}");
 
             println!();
             println!("===== WAT =====");
