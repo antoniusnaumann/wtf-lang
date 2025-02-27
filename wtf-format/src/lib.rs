@@ -3,9 +3,9 @@ use std::{borrow::Cow, ops::Deref};
 use wtf_ast::{
     ArithmeticOperator, BinaryOperator, Block, Declaration, EnumDeclaration, ExportDeclaration,
     Expression, Field, FieldAssignment, FunctionDeclaration, IfStatement, Literal, Module,
-    ModulePath, PackageDeclaration, Parameter, RecordDeclaration, ResourceDeclaration, Statement,
-    TestDeclaration, TypeAnnotation, UnaryOperator, UseDeclaration, VariantCase,
-    VariantDeclaration, Version, WhileStatement,
+    ModulePath, OverloadDeclaration, PackageDeclaration, Parameter, RecordDeclaration,
+    ResourceDeclaration, Statement, TestDeclaration, TypeAnnotation, UnaryOperator, UseDeclaration,
+    VariantCase, VariantDeclaration, Version, WhileStatement,
 };
 
 pub trait FormatPrint {
@@ -64,6 +64,7 @@ impl FormatPrint for Declaration {
     fn format_print(&self, indent: usize) -> String {
         match self {
             Declaration::Function(decl) => decl.format_print(indent),
+            Declaration::Overload(decl) => decl.format_print(indent),
             Declaration::Record(decl) => decl.format_print(indent),
             Declaration::Resource(decl) => decl.format_print(indent),
             Declaration::Enum(decl) => decl.format_print(indent),
@@ -96,6 +97,18 @@ impl FormatPrint for Parameter {
             tab(indent),
             self.name,
             self.type_annotation.format_print(0)
+        )
+    }
+}
+
+impl FormatPrint for OverloadDeclaration {
+    fn format_print(&self, indent: usize) -> String {
+        let newline = if self.overloads.is_empty() { "" } else { "\n" };
+        format!(
+            "{}{} {{{newline}{}{newline}}}",
+            tab(indent),
+            self.name,
+            self.overloads.format_print("\n", indent),
         )
     }
 }
@@ -484,6 +497,12 @@ where
     fn format_print(&self, indent: usize) -> String {
         self.as_ref()
             .map_or_else(String::new, |e| e.format_print(indent))
+    }
+}
+
+impl FormatPrint for String {
+    fn format_print(&self, indent: usize) -> String {
+        self.to_owned()
     }
 }
 

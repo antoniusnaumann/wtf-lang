@@ -136,6 +136,7 @@ impl Parser {
     fn parse_declaration(&mut self) -> Result<Declaration> {
         match &self.current.token {
             Token::Func => self.parse_function_declaration().map(Declaration::Function),
+            Token::Overload => self.parse_overload_declaration().map(Declaration::Overload),
             Token::Record => self.parse_record_declaration().map(Declaration::Record),
             Token::Resource => self.parse_resource_declaration().map(Declaration::Resource),
             Token::Enum => self.parse_enum_declaration().map(Declaration::Enum),
@@ -181,6 +182,27 @@ impl Parser {
             return_type,
             body,
         })
+    }
+
+    fn parse_overload_declaration(&mut self) -> Result<OverloadDeclaration> {
+        self.expect_token(Token::Overload)?;
+
+        let name = self.expect_identifier()?;
+
+        self.expect_token(Token::LeftBrace)?;
+
+        let mut overloads = Vec::new();
+        while !self.has(Token::RightBrace) && !self.has(Token::Eof) {
+            let name = self.expect_identifier()?;
+            overloads.push(name);
+            if self.has(Token::Comma) {
+                self.advance_tokens();
+            }
+        }
+
+        self.expect_token(Token::RightBrace)?;
+
+        Ok(OverloadDeclaration { name, overloads })
     }
 
     fn parse_parameters(&mut self) -> Result<Vec<Parameter>> {

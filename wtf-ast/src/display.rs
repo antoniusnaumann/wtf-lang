@@ -111,6 +111,7 @@ impl Print for Declaration {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
         match self {
             Declaration::Function(v) => v.print(f, indent, c),
+            Declaration::Overload(v) => v.print(f, indent, c),
             Declaration::Record(v) => v.print(f, indent, c),
             Declaration::Resource(v) => v.print(f, indent, c),
             Declaration::Enum(v) => v.print(f, indent, c),
@@ -133,6 +134,12 @@ impl Print for FunctionDeclaration {
             self.return_type,
             self.body
         )
+    }
+}
+
+impl Print for OverloadDeclaration {
+    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
+        node!(f, indent, c, "overload", self.name, self.overloads)
     }
 }
 

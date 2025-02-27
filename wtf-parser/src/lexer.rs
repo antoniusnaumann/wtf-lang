@@ -4,6 +4,7 @@ use std::{borrow::Cow, rc::Rc};
 pub enum Token {
     // Definition
     Func,
+    Overload,
     Constructor,
     Record,
     Resource,

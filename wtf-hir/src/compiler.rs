@@ -34,6 +34,9 @@ pub fn compile(ast: ast::Module) -> Module {
             ast::Declaration::Function(fun) => {
                 ast_funs.insert(fun.name.to_string(), (fun, is_export));
             }
+            ast::Declaration::Overload(overload) => {
+                todo!("Insert overloads in AST")
+            }
             ast::Declaration::Record(rec) => {
                 ast_types.insert(
                     rec.name.to_string(),
