@@ -145,6 +145,7 @@ impl Parser {
             Token::Test => self.parse_test_declaration().map(Declaration::Test),
             _t => Err(self.unexpected(vec![
                 Token::Func,
+                Token::Overload,
                 Token::Record,
                 Token::Resource,
                 Token::Enum,
@@ -186,17 +187,22 @@ impl Parser {
 
     fn parse_overload_declaration(&mut self) -> Result<OverloadDeclaration> {
         self.expect_token(Token::Overload)?;
+        self.skip_linebreaks();
 
         let name = self.expect_identifier()?;
+        self.skip_linebreaks();
 
         self.expect_token(Token::LeftBrace)?;
+        self.skip_linebreaks();
 
         let mut overloads = Vec::new();
         while !self.has(Token::RightBrace) && !self.has(Token::Eof) {
             let name = self.expect_identifier()?;
             overloads.push(name);
-            if self.has(Token::Comma) {
+            self.skip_linebreaks();
+            while self.has(Token::Comma) {
                 self.advance_tokens();
+                self.skip_linebreaks();
             }
         }
 

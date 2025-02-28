@@ -392,6 +392,7 @@ impl Lexer {
     fn lookup_identifier(&self, ident: String) -> Token {
         match ident.as_str() {
             "func" => Token::Func,
+            "overload" => Token::Overload,
             "constructor" => Token::Constructor,
             "record" => Token::Record,
             "resource" => Token::Resource,

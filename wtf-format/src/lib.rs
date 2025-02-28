@@ -105,10 +105,10 @@ impl FormatPrint for OverloadDeclaration {
     fn format_print(&self, indent: usize) -> String {
         let newline = if self.overloads.is_empty() { "" } else { "\n" };
         format!(
-            "{}{} {{{newline}{}{newline}}}",
+            "{}overload {} {{{newline}{}{newline}}}",
             tab(indent),
             self.name,
-            self.overloads.format_print("\n", indent),
+            self.overloads.format_print("\n", indent + 1),
         )
     }
 }
@@ -502,7 +502,7 @@ where
 
 impl FormatPrint for String {
     fn format_print(&self, indent: usize) -> String {
-        self.to_owned()
+        format!("{}{}", tab(indent), self)
     }
 }
 
