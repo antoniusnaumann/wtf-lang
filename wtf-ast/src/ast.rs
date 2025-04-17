@@ -295,6 +295,7 @@ pub enum Literal {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryOperator {
     Arithmetic(ArithmeticOperator),
+    Logic(LogicOperator),
     Equal,        // '=='
     NotEqual,     // '!='
     GreaterThan,  // '>'
@@ -309,6 +310,18 @@ impl From<ArithmeticOperator> for BinaryOperator {
     fn from(value: ArithmeticOperator) -> Self {
         BinaryOperator::Arithmetic(value)
     }
+}
+
+impl From<LogicOperator> for BinaryOperator {
+    fn from(value: LogicOperator) -> Self {
+        BinaryOperator::Logic(value)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LogicOperator {
+    And,
+    Or,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

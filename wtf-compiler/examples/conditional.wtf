@@ -25,3 +25,9 @@ test "don't cap value smaller than cap" {
     let val = double_cap(6, 17)
     assert val == 12
 }
+
+test "logic operators work" {
+    let val = 12
+    let other = 13
+    assert val == 12 and other == 13 
+}

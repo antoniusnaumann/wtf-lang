@@ -2,8 +2,8 @@ use std::{borrow::Cow, ops::Deref};
 
 use wtf_ast::{
     ArithmeticOperator, BinaryOperator, Block, Declaration, EnumDeclaration, ExportDeclaration,
-    Expression, Field, FieldAssignment, FunctionDeclaration, IfStatement, Literal, Module,
-    ModulePath, OverloadDeclaration, PackageDeclaration, Parameter, RecordDeclaration,
+    Expression, Field, FieldAssignment, FunctionDeclaration, IfStatement, Literal, LogicOperator,
+    Module, ModulePath, OverloadDeclaration, PackageDeclaration, Parameter, RecordDeclaration,
     ResourceDeclaration, Statement, TestDeclaration, TypeAnnotation, UnaryOperator, UseDeclaration,
     VariantCase, VariantDeclaration, Version, WhileStatement,
 };
@@ -429,6 +429,10 @@ impl FormatPrint for Expression {
 impl FormatPrint for BinaryOperator {
     fn format_print(&self, indent: usize) -> String {
         let op = match self {
+            BinaryOperator::Logic(logic_operator) => match logic_operator {
+                LogicOperator::And => "and",
+                LogicOperator::Or => "or",
+            },
             BinaryOperator::Arithmetic(arithmetic_operator) => match arithmetic_operator {
                 ArithmeticOperator::Add => "+",
                 ArithmeticOperator::Subtract => "-",

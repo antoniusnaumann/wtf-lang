@@ -440,6 +440,10 @@ impl Print for Literal {
 impl Print for BinaryOperator {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
         let op = match self {
+            BinaryOperator::Logic(inner) => match inner {
+                LogicOperator::And => "and",
+                LogicOperator::Or => "or",
+            },
             BinaryOperator::Arithmetic(inner) => match inner {
                 ArithmeticOperator::Add => "+",
                 ArithmeticOperator::Subtract => "-",

@@ -856,16 +856,20 @@ impl Parser {
     fn get_precedence(&self) -> Option<u8> {
         match self.current_token_as_binary_operator()? {
             BinaryOperator::Arithmetic(op) => match op {
-                ArithmeticOperator::Multiply | ArithmeticOperator::Divide => Some(7),
-                ArithmeticOperator::Add | ArithmeticOperator::Subtract => Some(6),
+                ArithmeticOperator::Multiply | ArithmeticOperator::Divide => Some(10),
+                ArithmeticOperator::Add | ArithmeticOperator::Subtract => Some(9),
             },
             BinaryOperator::GreaterThan
             | BinaryOperator::LessThan
             | BinaryOperator::GreaterEqual
-            | BinaryOperator::LessEqual => Some(4),
-            BinaryOperator::Equal | BinaryOperator::NotEqual => Some(3),
-            BinaryOperator::Contains => Some(2),
-            BinaryOperator::NullCoalesce => Some(1),
+            | BinaryOperator::LessEqual => Some(8),
+            BinaryOperator::Equal | BinaryOperator::NotEqual => Some(7),
+            BinaryOperator::Contains => Some(6),
+            BinaryOperator::NullCoalesce => Some(5),
+            BinaryOperator::Logic(op) => match op {
+                LogicOperator::And => Some(4),
+                LogicOperator::Or => Some(3),
+            },
         }
     }
 
@@ -1181,6 +1185,8 @@ impl TokenExt for Token {
             Token::LessEqual => Some(BinaryOperator::LessEqual),
             Token::Contains => Some(BinaryOperator::Contains),
             Token::QuestionMark => Some(BinaryOperator::NullCoalesce),
+            Token::And => Some(LogicOperator::And.into()),
+            Token::Or => Some(LogicOperator::Or.into()),
             _ => None,
         }
     }

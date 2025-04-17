@@ -73,6 +73,10 @@ pub enum Token {
     // Remove,    // --
     Contains, // in
 
+    And, // and
+    Or,  // or
+    Not, // not
+
     // Punctuation
     LeftParen,    // (
     RightParen,   // )
@@ -418,6 +422,9 @@ impl Lexer {
             "none" => Token::None,
             "true" => Token::True,
             "false" => Token::False,
+            "and" => Token::And,
+            "or" => Token::Or,
+            "not" => Token::Not,
             _ => Token::Identifier(ident),
         }
     }

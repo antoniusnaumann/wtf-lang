@@ -905,6 +905,11 @@ impl<'a> FunctionCompiler<'a> {
         block: &mut Block,
     ) {
         let name = match op {
+            BinaryOperator::Logic(op) => match op {
+                // TODO: handling this as a function does not allow short-circuiting
+                ast::LogicOperator::And => "and",
+                ast::LogicOperator::Or => "or",
+            },
             BinaryOperator::Arithmetic(op) => match op {
                 ast::ArithmeticOperator::Add => "add",
                 ast::ArithmeticOperator::Subtract => "sub",

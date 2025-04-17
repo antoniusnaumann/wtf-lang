@@ -38,6 +38,10 @@ impl WithBuiltins for HashMap<String, FunctionSignature> {
             "less_than",
             "ne",
         ];
+        let logical_operations = [
+            bin_op("and", Ty::Bool, Ty::Bool),
+            bin_op("or", Ty::Bool, Ty::Bool),
+        ];
         let float_instructions = ["ceil", "floor", "trunc", "sqrt"];
         let float_operations = float_types.into_iter().flat_map(|ty| {
             float_instructions
@@ -66,6 +70,7 @@ impl WithBuiltins for HashMap<String, FunctionSignature> {
                     .collect::<Vec<_>>()
             })
             .chain(float_operations)
+            .chain(logical_operations)
             .chain(conversions)
             .chain(iter::once(fun(
                 "println".to_owned(),
