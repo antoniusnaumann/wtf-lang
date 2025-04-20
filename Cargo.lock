@@ -1443,6 +1443,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "wtf-error"
+version = "0.0.0"
+dependencies = [
+ "wtf-tokens",
+]
+
+[[package]]
 name = "wtf-format"
 version = "0.0.0"
 dependencies = [
@@ -1462,7 +1469,13 @@ name = "wtf-parser"
 version = "0.0.0"
 dependencies = [
  "wtf-ast",
+ "wtf-error",
+ "wtf-tokens",
 ]
+
+[[package]]
+name = "wtf-tokens"
+version = "0.0.0"
 
 [[package]]
 name = "wtf-wasm"

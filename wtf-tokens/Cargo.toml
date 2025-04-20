@@ -1,0 +1,8 @@
+[package]
+name = "wtf-tokens"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
