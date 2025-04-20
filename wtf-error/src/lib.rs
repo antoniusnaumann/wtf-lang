@@ -1,13 +1,13 @@
 use wtf_tokens::{Span, Token};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Error {
     // pub source: PathBuf,
     pub span: Span,
     pub kind: ErrorKind,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ErrorKind {
     /// Identifier is not in scope
     UnknownIdentifier,

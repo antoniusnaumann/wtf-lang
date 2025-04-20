@@ -100,6 +100,10 @@ impl Parser {
         }
     }
 
+    pub fn errors(&self) -> &[Error] {
+        &self.errors
+    }
+
     fn has(&self, expected: Token) -> bool {
         matches!(&self.current, SpannedToken { token, .. } if *token == expected)
     }
@@ -874,7 +878,15 @@ impl Parser {
             Token::True => Literal::Boolean(true),
             Token::False => Literal::Boolean(false),
             Token::None => Literal::None,
-            _ => todo!("TODO: Add parser error that can list expected AST nodes!"),
+            _ => {
+                return Err(self.unexpected(vec![
+                    Token::IntegerLiteral(0),
+                    Token::FloatLiteral(0.0),
+                    Token::StringLiteral("".to_owned()),
+                    Token::True,
+                    Token::False,
+                ]))
+            }
         };
         self.advance_tokens();
 
