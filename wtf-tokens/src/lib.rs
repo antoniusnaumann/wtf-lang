@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, fmt::Display};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
@@ -96,6 +96,84 @@ pub enum Token {
     EmptyLine,
     Eof,
     Invalid(String),
+}
+
+impl Token {
+    /// Useful where only the category of the token is relevant but the payload does not matter
+    ///
+    /// e.g., when printing a list of expected tokens
+    pub fn category_name(&self) -> &'static str {
+        match self {
+            Token::Func => "'func'",
+            Token::Overload => "'overload'",
+            Token::Constructor => "'constructor'",
+            Token::Record => "'record'",
+            Token::Resource => "'resource'",
+            Token::Enum => "'enum'",
+            Token::Variant => "'variant'",
+            Token::Let => "'let'",
+            Token::Var => "'var'",
+            Token::If => "'if'",
+            Token::Else => "'else'",
+            Token::Match => "'match'",
+            Token::For => "'for'",
+            Token::While => "'while'",
+            Token::Return => "'return'",
+            Token::Throw => "'throw'",
+            Token::Break => "'break'",
+            Token::Continue => "'continue'",
+            Token::Use => "'use'",
+            Token::Export => "'export'",
+            Token::Package => "'package'",
+            Token::True => "'true'",
+            Token::False => "'false'",
+            Token::None => "'none'",
+            Token::Test => "'test'",
+            Token::Assert => "'assert'",
+            Token::Identifier(_) => "an identifier",
+            Token::IntegerLiteral(_) => "an integer",
+            Token::FloatLiteral(_) => "a float",
+            Token::StringLiteral(_) => "a string",
+            Token::VersionLiteral(_) => "a package version",
+            Token::Plus => "'+'",
+            Token::Minus => "'-'",
+            Token::Asterisk => "'*'",
+            Token::Slash => "'/'",
+            Token::Equal => "'='",
+            Token::DoubleEqual => "'=='",
+            Token::NotEqual => "'!='",
+            Token::GreaterThan => "'>'",
+            Token::LessThan => "'<'",
+            Token::GreaterEqual => "'>='",
+            Token::LessEqual => "'<='",
+            Token::Arrow => "'->'",
+            Token::DoubleArrow => "'=>'",
+            Token::QuestionMark => "'?'",
+            Token::SafeCall => "'?.'",
+            Token::Bang => "'!'",
+            Token::Concat => "'++'",
+            Token::Contains => "'in'",
+            Token::And => "'and'",
+            Token::Or => "'or'",
+            Token::Not => "'not'",
+            Token::LeftParen => "'('",
+            Token::RightParen => "')'",
+            Token::LeftBrace => "'{'",
+            Token::RightBrace => "'}'",
+            Token::LeftBracket => "'['",
+            Token::RightBracket => "']'",
+            Token::Comma => "','",
+            Token::Semicolon => "';'",
+            Token::Colon => "':'",
+            Token::Dot => "'.'",
+            Token::DoubleColon => "'::'",
+            Token::At => "'@'",
+            Token::Newline => "'\\n'",
+            Token::EmptyLine => "an empty line",
+            Token::Eof => "end of file",
+            Token::Invalid(_) => "an invalid token",
+        }
+    }
 }
 
 impl Token {

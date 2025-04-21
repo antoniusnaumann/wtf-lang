@@ -104,6 +104,10 @@ impl Parser {
         &self.errors
     }
 
+    pub fn chars(&self) -> &[char] {
+        self.lexer.chars()
+    }
+
     fn has(&self, expected: Token) -> bool {
         matches!(&self.current, SpannedToken { token, .. } if *token == expected)
     }

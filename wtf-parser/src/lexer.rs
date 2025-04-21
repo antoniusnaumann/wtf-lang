@@ -1,17 +1,15 @@
-use std::rc::Rc;
-
 pub use wtf_tokens::{Span, SpannedToken, Token};
 
 #[derive(Debug, Clone)]
 pub struct Lexer {
-    input: Rc<[char]>,
+    input: Box<[char]>,
     position: usize,
     current_char: Option<char>,
 }
 
 impl Lexer {
     pub fn new(input: &str) -> Self {
-        let input: Rc<[char]> = input.chars().collect();
+        let input: Box<[char]> = input.chars().collect();
         let current_char = if input.is_empty() {
             None
         } else {
@@ -23,6 +21,10 @@ impl Lexer {
             position: 0,
             current_char,
         }
+    }
+
+    pub fn chars(&self) -> &[char] {
+        &self.input
     }
 
     fn read_char(&mut self) {

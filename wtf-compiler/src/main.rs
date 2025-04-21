@@ -82,6 +82,15 @@ impl Compiler {
         }
         let mut ast = parser.parse_module().expect("No AST.");
 
+        for error in parser.errors() {
+            println!("{}", error.with_source(parser.chars()));
+        }
+
+        if !parser.errors().is_empty() {
+            println!("Parser finished with errors");
+            return Err(-1);
+        }
+
         // Remove tests if we are not running the test command
         if !matches!(self.mode, Mode::Test) {
             if self.verbose {
