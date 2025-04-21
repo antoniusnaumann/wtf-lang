@@ -83,7 +83,7 @@ impl Compiler {
         let mut ast = parser.parse_module().expect("No AST.");
 
         for error in parser.errors() {
-            println!("{}", error.with_source(parser.chars()));
+            println!("{}\n", error.with_source(parser.chars()));
         }
 
         if !parser.errors().is_empty() {

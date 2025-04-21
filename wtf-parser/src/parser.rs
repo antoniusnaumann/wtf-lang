@@ -54,9 +54,10 @@ impl Parser {
 
     /// Produces an appropriate parser error for an unexpected token
     fn unexpected(&self, expected: Vec<Token>) -> Error {
+        let found = self.current.token.clone();
         Error {
             span: self.current.span,
-            kind: ErrorKind::UnexpectedToken { expected },
+            kind: ErrorKind::UnexpectedToken { found, expected },
         }
     }
 
@@ -889,7 +890,7 @@ impl Parser {
                     Token::StringLiteral("".to_owned()),
                     Token::True,
                     Token::False,
-                ]))
+                ]));
             }
         };
         self.advance_tokens();

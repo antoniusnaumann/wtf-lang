@@ -7,7 +7,7 @@ export func main() -> s64 {
         x += 1
     }
 
-    - 
+    * 
     
     var y = 3 
     while true {

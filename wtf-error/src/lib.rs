@@ -13,37 +13,44 @@ pub enum ErrorKind {
     UnknownIdentifier,
 
     /// Expected one of 'expected', got 'found'
-    UnexpectedToken { expected: Vec<Token> },
+    UnexpectedToken { found: Token, expected: Vec<Token> },
 
     /// Expected one of 'expected', got 'found'
     ///
     /// 'found' can be an identifier that the user confused for a keyword
-    UnexpectedKeyword { expected: Vec<Token> },
+    UnexpectedKeyword { found: Token, expected: Vec<Token> },
 }
 
 impl Error {
     pub fn with_source(&self, source: &[char]) -> String {
         // TODO: Add line and column number
-        let position_hint = format!("At ({}, {})", self.span.start, self.span.end);
-        let span_snippet: String = source[self.span.start..self.span.end].iter().collect();
+        let position_hint = format!("at ({}, {})", self.span.start, self.span.end);
+        let span_snippet = source[self.span.start..self.span.end]
+            .iter()
+            .collect::<String>()
+            .trim()
+            .to_owned();
         // TODO: Give line for context
         match &self.kind {
             ErrorKind::UnknownIdentifier => {
-                format!("{position_hint}\n\tUnknown Identifier '{span_snippet}'")
+                format!("Unknown Identifier '{span_snippet}' {position_hint}")
             }
-            ErrorKind::UnexpectedToken { expected } => {
+            ErrorKind::UnexpectedToken { found, expected } => {
                 let tokens = if expected.len() == 1 {
                     expected[0].category_name()
                 } else {
-                    &expected[0..expected.len()]
-                        .iter()
-                        .map(|t| t.category_name())
-                        .collect::<Vec<_>>()
-                        .join(", ")
+                    &format!(
+                        "one of: [{}]",
+                        &expected[0..expected.len()]
+                            .iter()
+                            .map(|t| t.category_name())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
                 };
-                format!("{position_hint}\n\tExpected {tokens} but found '{span_snippet}'")
+                format!("Expected {tokens} but found '{found}' {position_hint}")
             }
-            ErrorKind::UnexpectedKeyword { expected } => todo!(),
+            ErrorKind::UnexpectedKeyword { found, expected } => todo!(),
         }
     }
 }
