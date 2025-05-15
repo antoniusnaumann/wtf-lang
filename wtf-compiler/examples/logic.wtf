@@ -5,9 +5,9 @@ export func main() -> s64 {
     let val = 1
 
     if val == 0 or val != 1 {
-        return 0
+        return s64(1)
     } else {
-        return 1
+        return s64(0)
     }
 }
 
@@ -25,4 +25,5 @@ test "precedence between 'or' & 'and' works" {
     let x = 4
     let y = 5
     assert x == 17 and y == 5 or x == 4
+    assert x == 4 or y == 5 and x == 17
 }

@@ -543,7 +543,9 @@ impl Parser {
 
         self.expect_token(Token::Contains)?;
 
+        self.allow_left_brace = false;
         let iterable = self.parse_expression()?;
+        self.allow_left_brace = true;
 
         let body = self.parse_block()?;
 

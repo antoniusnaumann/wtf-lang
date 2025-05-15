@@ -583,7 +583,33 @@ impl<'a> FunctionCompiler<'a> {
                 );
                 self.push(Instruction::Loop(inner_body), block)
             }
-            ast::Statement::ForStatement(_) => todo!(),
+            ast::Statement::ForStatement(for_statement) => {
+                let mut inner_body = Block::new();
+                self.compile_expression(
+                    &Expression::FunctionCall {
+                        function: Expression::Identifier("next".into()).into(),
+                        arguments: vec![for_statement.iterable.clone()],
+                    },
+                    &mut inner_body,
+                );
+                self.push(
+                    Instruction::Store(LocalId(todo!("create local for for loop"))),
+                    &mut inner_body,
+                );
+                // TODO: check if next is not none and unwrap it in then branch
+                let totally_inner_body = self.compile_block(&for_statement.body);
+                self.push(
+                    Instruction::If {
+                        then: totally_inner_body,
+                        else_: Block {
+                            instructions: vec![Instruction::Void, Instruction::Break],
+                            ty: Type::Never,
+                        },
+                    },
+                    &mut inner_body,
+                );
+                self.push(Instruction::Loop(inner_body), block)
+            }
             ast::Statement::Assertion(assert_statement) => {
                 self.compile_expression(&assert_statement.condition, block);
                 self.push(

@@ -999,6 +999,14 @@ impl ComponentBuilder {
                 todo!("Implement 'is_some', maybe use a buffer local to get the variant discriminant without popping.")
             }
 
+            "and__bool_bool" => {
+                vec![WasmInstruction::I32And]
+            }
+
+            "or__bool_bool" => {
+                vec![WasmInstruction::I32Or]
+            }
+
             ident if ident.starts_with("len__list") => {
                 let element = ident
                     .strip_prefix("len__list___")

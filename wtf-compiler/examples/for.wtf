@@ -1,0 +1,12 @@
+package wtf:example@0.1.0
+
+func main() -> s64 {
+    let arr = [1, 2, 0]
+    var result = 42
+
+    for i in arr {
+        result = i
+    }
+
+    return s64(result)
+}
