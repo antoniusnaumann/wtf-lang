@@ -1,0 +1,8 @@
+[package]
+name = "wtf-mir"
+authors = ["Marcel Garus"]
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+wtf-hir = { path = "../wtf-hir" }

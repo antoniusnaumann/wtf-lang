@@ -163,8 +163,8 @@ impl Expression {
     fn string(string: String) -> Expression {
         ExpressionKind::String(string).typed(Type::String)
     }
-    fn bool(_: bool) -> Expression {
-        todo!("bool")
+    fn bool(value: bool) -> Expression {
+        ExpressionKind::Bool(value).typed(Type::Bool)
     }
     fn variant(case: String, payloads: HashMap<String, Id>, ty: Type) -> Expression {
         ExpressionKind::Variant { case, payloads }.typed(ty)

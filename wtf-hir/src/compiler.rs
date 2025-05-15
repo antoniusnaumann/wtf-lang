@@ -137,6 +137,11 @@ pub fn compile(ast: ast::Module) -> Module {
         );
     }
 
+    for (name, signature) in &signatures {
+        println!("{name}");
+        println!("{:#?}", signature);
+    }
+
     let mut functions = HashMap::new();
     for (fun, is_export) in ast_funs.values() {
         functions.insert(

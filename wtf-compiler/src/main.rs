@@ -106,8 +106,18 @@ impl Compiler {
             println!("{hir}");
 
             println!();
-            println!("===== WAT =====");
+            println!("===== MIR =====");
         }
+
+        // let mir = wtf_mir::compile(hir);
+        // if self.verbose {
+        //     println!("{mir}");
+
+        //     println!();
+        //     println!("===== WAT =====");
+        // }
+
+        Ok(())
         // let wasm = wtf_encode::Encoder::new().encode(hir).finish();
         // if self.verbose {
         //     println!("{:?}", wasmparser::validate(&wasm).err());
@@ -147,7 +157,6 @@ impl Compiler {
         //         self.run_tests(&wasm, &tests).map_err(|_| 22)
         //     } // TODO: find out which error code to return here
         // }
-        todo!("more stuff")
     }
 
     fn run_tests(&self, wasm: &[u8], tests: &[Test]) -> Result<(), TestError> {

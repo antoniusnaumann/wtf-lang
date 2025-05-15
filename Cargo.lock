@@ -1457,6 +1457,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "wtf-mir"
+version = "0.0.0"
+dependencies = [
+ "wtf-hir",
+]
+
+[[package]]
 name = "wtf-parser"
 version = "0.0.0"
 dependencies = [

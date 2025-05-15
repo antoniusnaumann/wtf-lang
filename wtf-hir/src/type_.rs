@@ -1,24 +1,29 @@
 use std::{collections::HashMap, fmt::Display};
 
+use crate::FunctionSignature;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
     Never, // will never be constructed, used as the type of return/break/...
     None,
     Bool,
-    // Char
+    Char,
     Int {
         signed: bool,
         bits: usize,
     },
     String,
-    // Blank, // for builtin generic types where the type does not matter, e.g. list.len()
+    Blank, // for builtin generic types where the type does not matter, e.g. list.len()
     List(Box<Type>),
-    // Option(Box<Type>),
-    // Result { ok: Box<Type>, err: Box<Type> },
+    Option(Box<Type>),
+    Result {
+        ok: Box<Type>,
+        err: Box<Type>,
+    },
     Record(HashMap<String, Type>),
-    // Resource {
-    //     methods: HashMap<String, FunctionSignature>,
-    // },
+    Resource {
+        methods: HashMap<String, FunctionSignature>,
+    },
     Enum {
         cases: Vec<String>,
     },
@@ -37,10 +42,10 @@ impl Display for Type {
             Type::Bool => write!(f, "bool")?,
             Type::Int { signed, bits } => write!(f, "{}{}", if *signed { "s" } else { "u" }, bits)?,
             Type::String => write!(f, "string")?,
-            // Type::Blank => write!(f, "blank")?,
+            Type::Blank => write!(f, "blank")?,
             Type::List(items) => write!(f, "[{}]", items)?,
-            // Type::Option(payload) => write!(f, "({payload})?")?,
-            // Type::Result { ok, err } => write!(f, "({ok})!({err})")?,
+            Type::Option(payload) => write!(f, "({payload})?")?,
+            Type::Result { ok, err } => write!(f, "({ok})!({err})")?,
             Type::Record(hash_map) => {
                 write!(f, "{{")?;
                 let mut first = true;
@@ -54,7 +59,7 @@ impl Display for Type {
                 }
                 write!(f, "}}")?
             }
-            // Type::Resource(_) => write!(f, "...")?,
+            Type::Resource { methods } => write!(f, "...")?,
             Type::Enum { cases } => {
                 let mut first = true;
                 for case in cases {
@@ -94,7 +99,8 @@ impl Display for Type {
                 }
                 write!(f, ")")?
             }
-            Type::Name(name) => write!(f, "{}", name)?,
+            Type::Char => todo!(),
+            Type::Name(_) => todo!(),
         };
         Ok(())
     }

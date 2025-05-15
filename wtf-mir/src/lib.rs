@@ -187,91 +187,108 @@ pub enum Instruction {
     Loop(Block),
 }
 
-// impl Expression {
-//     fn param(type_: Type) -> Self {
-//         Self {
-//             type_, kind: Instruction::Param
-//         }
-//     }
-//     fn block(children: Vec<Id>, result: Id, result_type: Type) -> Self {
-//         Self {
-//             type_: result_type,
-//             kind: Instruction::Block { children, result }
-//         }
-//     }
-//     fn int(int: i64) -> Self {
-//         Self {
-//             type_: Type::Builtin(PrimitiveType::S64),
-//             kind: Instruction::Int(int)
-//         }
-//     }
-//     fn float(float: f64) -> Self {
-//         Self {
-//             type_: Type::Builtin(PrimitiveType::F64),
-//             kind: Instruction::Float(float)
-//         }
-//     }
-//     fn string(string: String) -> Self {
-//         Self {
-//             type_: Type::Builtin(PrimitiveType::String),
-//             kind: Instruction::String(string)
-//         }
-//     }
-//     fn bool(b: bool, none: Id) -> Self {
-//         Self {
-//             type_: Type::Enum(HashSet::from_iter(["True".to_string(), "String".to_string()].into_iter())),
-//             kind: Instruction::Enum { variant: if b { "true".to_string() } else { "false".to_string() }, payload: none }
-//         }
-//     }
-//     fn none() -> Self {
-//         Self {
-//             type_: Type::None,
-//             kind: Instruction::None
-//         }
-//     }
-//     fn return_(what: Id) -> Self {
-//         Self {
-//             type_: Type::Never,
-//             kind: Instruction::Return(what)
-//         }
-//     }
-//     fn break_(id: Id) -> Self {
-//         Self {
-//             type_: Type::Never,
-//             kind: Instruction::Break(id)
-//         }
-//     }
-//     fn continue_() -> Self {
-//         Self {
-//             type_: Type::Never,
-//             kind: Instruction::Continue
-//         }
-//     }
-//     fn if_(condition: Id, then: Id, else_: Id) -> Self {
-//         // TODO: Join types.
-//         Self {
-//             type_: Type::None,
-//             kind: Instruction::If { condition, then, else_ }
-//         }
-//     }
-//     fn loop_(body: Id) -> Self {
-//         // TODO: join types of breaks
-//         Self {
-//             type_: Type::Never,
-//             kind: Instruction::Loop(body),
-//         }
-//     }
-//     fn call(function: String, arguments: Vec<Id>) -> Self {
-//         Self {
-//             type_: Type::Never,
-//             kind: Instruction::FunctionCall { function, arguments }
-//         }
-//     }
-// }
+impl Expression {
+    fn param(type_: Type) -> Self {
+        Self {
+            type_,
+            kind: Instruction::Param,
+        }
+    }
+    fn block(children: Vec<Id>, result: Id, result_type: Type) -> Self {
+        Self {
+            type_: result_type,
+            kind: Instruction::Block { children, result },
+        }
+    }
+    fn int(int: i64) -> Self {
+        Self {
+            type_: Type::Builtin(PrimitiveType::S64),
+            kind: Instruction::Int(int),
+        }
+    }
+    fn float(float: f64) -> Self {
+        Self {
+            type_: Type::Builtin(PrimitiveType::F64),
+            kind: Instruction::Float(float),
+        }
+    }
+    fn string(string: String) -> Self {
+        Self {
+            type_: Type::Builtin(PrimitiveType::String),
+            kind: Instruction::String(string),
+        }
+    }
+    fn bool(b: bool, none: Id) -> Self {
+        Self {
+            type_: Type::Enum(HashSet::from_iter(
+                ["True".to_string(), "String".to_string()].into_iter(),
+            )),
+            kind: Instruction::Enum {
+                variant: if b {
+                    "true".to_string()
+                } else {
+                    "false".to_string()
+                },
+                payload: none,
+            },
+        }
+    }
+    fn none() -> Self {
+        Self {
+            type_: Type::None,
+            kind: Instruction::None,
+        }
+    }
+    fn return_(what: Id) -> Self {
+        Self {
+            type_: Type::Never,
+            kind: Instruction::Return(what),
+        }
+    }
+    fn break_(id: Id) -> Self {
+        Self {
+            type_: Type::Never,
+            kind: Instruction::Break(id),
+        }
+    }
+    fn continue_() -> Self {
+        Self {
+            type_: Type::Never,
+            kind: Instruction::Continue,
+        }
+    }
+    fn if_(condition: Id, then: Id, else_: Id) -> Self {
+        // TODO: Join types.
+        Self {
+            type_: Type::None,
+            kind: Instruction::If {
+                condition,
+                then,
+                else_,
+            },
+        }
+    }
+    fn loop_(body: Id) -> Self {
+        // TODO: join types of breaks
+        Self {
+            type_: Type::Never,
+            kind: Instruction::Loop(body),
+        }
+    }
+    fn call(function: String, arguments: Vec<Id>) -> Self {
+        Self {
+            type_: Type::Never,
+            kind: Instruction::FunctionCall {
+                function,
+                arguments,
+            },
+        }
+    }
+}
 
-// pub fn get(exprs: &Vec<Expression>, id: Id) -> Expression {
-//     exprs[id.0].clone()
-// }
+pub fn get(exprs: &Vec<Expression>, id: Id) -> Expression {
+    exprs[id.0].clone()
+}
 
 impl Display for Module {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
