@@ -1,23 +1,25 @@
-use std::fmt::Debug;
-
 use crate::lexer::{Lexer, SpannedToken, Token};
 
 use wtf_ast::*;
+use wtf_error::{Error, ErrorKind};
 
-#[derive(Clone, Debug)]
-pub struct ParserError {
-    found: SpannedToken,
-    expected: Vec<Token>,
+pub type Result<Ok> = std::result::Result<Ok, Error>;
+
+enum BraceType {
+    Paren,
+    Bracket,
+    Brace,
 }
-
-pub type Result<Ok> = std::result::Result<Ok, ParserError>;
 
 pub struct Parser {
     lexer: Lexer,
     current: SpannedToken,
 
-    // This disallows record literals in certain positions, e.g. if
+    /// This disallows record literals in certain positions, e.g. if conditions
     allow_left_brace: bool,
+
+    /// Parser errors that the parser recovered from. If this is not empty, do not proceed
+    errors: Vec<Error>,
 }
 
 impl Parser {
@@ -28,10 +30,12 @@ impl Parser {
 
     pub fn with_lexer(mut lexer: Lexer) -> Self {
         let current = lexer.next_token();
+
         Parser {
             lexer,
             current,
             allow_left_brace: true,
+            errors: vec![],
         }
     }
 
@@ -44,18 +48,16 @@ impl Parser {
             self.advance_tokens();
             Ok(())
         } else {
-            Err(ParserError {
-                found: self.current.clone(),
-                expected: vec![expected],
-            })
+            Err(self.unexpected(vec![expected]))
         }
     }
 
     /// Produces an appropriate parser error for an unexpected token
-    fn unexpected(&self, expected: Vec<Token>) -> ParserError {
-        ParserError {
-            found: self.current.clone(),
-            expected,
+    fn unexpected(&self, expected: Vec<Token>) -> Error {
+        let found = self.current.token.clone();
+        Error {
+            span: self.current.span,
+            kind: ErrorKind::UnexpectedToken { found, expected },
         }
     }
 
@@ -75,6 +77,36 @@ impl Parser {
         while self.current.token == Token::Semicolon {
             self.advance_tokens();
         }
+    }
+
+    /// Fast-forwards until the next matching Brace
+    ///
+    /// This function assumes that there is already a suitable opening brace
+    fn recover(&mut self, paren_type: BraceType) {
+        let mut nesting_depth = 1;
+        let (open, close) = match paren_type {
+            BraceType::Paren => (Token::LeftParen, Token::RightParen),
+            BraceType::Bracket => (Token::LeftBracket, Token::RightBracket),
+            BraceType::Brace => (Token::LeftBrace, Token::RightBrace),
+        };
+
+        while nesting_depth > 0 && self.current.token != Token::Eof {
+            self.advance_tokens();
+
+            if self.current.token == open {
+                nesting_depth += 1
+            } else if self.current.token == close {
+                nesting_depth -= 1
+            }
+        }
+    }
+
+    pub fn errors(&self) -> &[Error] {
+        &self.errors
+    }
+
+    pub fn chars(&self) -> &[char] {
+        self.lexer.chars()
     }
 
     fn has(&self, expected: Token) -> bool {
@@ -136,6 +168,7 @@ impl Parser {
     fn parse_declaration(&mut self) -> Result<Declaration> {
         match &self.current.token {
             Token::Func => self.parse_function_declaration().map(Declaration::Function),
+            Token::Overload => self.parse_overload_declaration().map(Declaration::Overload),
             Token::Record => self.parse_record_declaration().map(Declaration::Record),
             Token::Resource => self.parse_resource_declaration().map(Declaration::Resource),
             Token::Enum => self.parse_enum_declaration().map(Declaration::Enum),
@@ -144,6 +177,7 @@ impl Parser {
             Token::Test => self.parse_test_declaration().map(Declaration::Test),
             _t => Err(self.unexpected(vec![
                 Token::Func,
+                Token::Overload,
                 Token::Record,
                 Token::Resource,
                 Token::Enum,
@@ -181,6 +215,39 @@ impl Parser {
             return_type,
             body,
         })
+    }
+
+    fn parse_overload_declaration(&mut self) -> Result<OverloadDeclaration> {
+        self.expect_token(Token::Overload)?;
+        self.skip_linebreaks();
+
+        let name = self.expect_identifier()?;
+        self.skip_linebreaks();
+
+        self.expect_token(Token::LeftBrace)?;
+        self.skip_linebreaks();
+
+        let mut overloads = Vec::new();
+        while !self.has(Token::RightBrace) && !self.has(Token::Eof) {
+            let name = match self.expect_identifier() {
+                Ok(ident) => ident,
+                Err(err) => {
+                    self.errors.push(err);
+                    self.recover(BraceType::Brace);
+                    break;
+                }
+            };
+            overloads.push(name);
+            self.skip_linebreaks();
+            while self.has(Token::Comma) {
+                self.advance_tokens();
+                self.skip_linebreaks();
+            }
+        }
+
+        self.expect_token(Token::RightBrace)?;
+
+        Ok(OverloadDeclaration { name, overloads })
     }
 
     fn parse_parameters(&mut self) -> Result<Vec<Parameter>> {
@@ -317,7 +384,14 @@ impl Parser {
                 continue;
             }
 
-            let stmt = self.parse_statement()?;
+            let stmt = match self.parse_statement() {
+                Ok(stmt) => stmt,
+                Err(err) => {
+                    self.errors.push(err);
+                    self.recover(BraceType::Brace);
+                    break;
+                }
+            };
             statements.push(stmt);
             self.skip_newline();
         }
@@ -469,7 +543,9 @@ impl Parser {
 
         self.expect_token(Token::Contains)?;
 
+        self.allow_left_brace = false;
         let iterable = self.parse_expression()?;
+        self.allow_left_brace = true;
 
         let body = self.parse_block()?;
 
@@ -489,6 +565,7 @@ impl Parser {
 
         let mut arms = Vec::new();
 
+        // TODO: error recovery
         while !self.has(Token::RightBrace) && !self.has(Token::Eof) {
             let pattern = self.parse_pattern()?;
             self.expect_token(Token::Arrow)?;
@@ -686,19 +763,16 @@ impl Parser {
                 break;
             }
 
-            let name = self
-                .current_token_as_identifier()
-                .ok_or_else(|| self.unexpected(vec![Token::Identifier("".to_owned())]))?;
-            self.advance_tokens();
-
-            let element = if self.current.token == Token::Colon {
-                self.advance_tokens();
-                self.parse_expression()?
-            } else {
-                Expression::Identifier(name.clone())
+            let field = match self.parse_field_assignment() {
+                Ok(field) => field,
+                Err(err) => {
+                    self.errors.push(err);
+                    self.recover(BraceType::Brace);
+                    break;
+                }
             };
 
-            members.push(FieldAssignment { name, element });
+            members.push(field);
 
             self.skip_linebreaks();
             if self.current.token != Token::Comma {
@@ -709,6 +783,22 @@ impl Parser {
         self.expect_token(Token::RightBrace)?;
 
         Ok(Expression::Record { name, members })
+    }
+
+    fn parse_field_assignment(&mut self) -> Result<FieldAssignment> {
+        let name = self
+            .current_token_as_identifier()
+            .ok_or_else(|| self.unexpected(vec![Token::Identifier("".to_owned())]))?;
+        self.advance_tokens();
+
+        let element = if self.current.token == Token::Colon {
+            self.advance_tokens();
+            self.parse_expression()?
+        } else {
+            Expression::Identifier(name.clone())
+        };
+
+        Ok(FieldAssignment { name, element })
     }
 
     fn parse_postfix_expression(&mut self, expr: Expression) -> Result<Expression> {
@@ -795,10 +885,15 @@ impl Parser {
             Token::True => Literal::Boolean(true),
             Token::False => Literal::Boolean(false),
             Token::None => Literal::None,
-            _ => panic!(
-                "Tried to parse literal, but found: {:?}!",
-                self.current.token
-            ),
+            _ => {
+                return Err(self.unexpected(vec![
+                    Token::IntegerLiteral(0),
+                    Token::FloatLiteral(0.0),
+                    Token::StringLiteral("".to_owned()),
+                    Token::True,
+                    Token::False,
+                ]));
+            }
         };
         self.advance_tokens();
 
@@ -831,16 +926,20 @@ impl Parser {
     fn get_precedence(&self) -> Option<u8> {
         match self.current_token_as_binary_operator()? {
             BinaryOperator::Arithmetic(op) => match op {
-                ArithmeticOperator::Multiply | ArithmeticOperator::Divide => Some(7),
-                ArithmeticOperator::Add | ArithmeticOperator::Subtract => Some(6),
+                ArithmeticOperator::Multiply | ArithmeticOperator::Divide => Some(10),
+                ArithmeticOperator::Add | ArithmeticOperator::Subtract => Some(9),
             },
             BinaryOperator::GreaterThan
             | BinaryOperator::LessThan
             | BinaryOperator::GreaterEqual
-            | BinaryOperator::LessEqual => Some(4),
-            BinaryOperator::Equal | BinaryOperator::NotEqual => Some(3),
-            BinaryOperator::Contains => Some(2),
-            BinaryOperator::NullCoalesce => Some(1),
+            | BinaryOperator::LessEqual => Some(8),
+            BinaryOperator::Equal | BinaryOperator::NotEqual => Some(7),
+            BinaryOperator::Contains => Some(6),
+            BinaryOperator::NullCoalesce => Some(5),
+            BinaryOperator::Logic(op) => match op {
+                LogicOperator::And => Some(4),
+                LogicOperator::Or => Some(3),
+            },
         }
     }
 
@@ -865,16 +964,24 @@ impl Parser {
         let mut fields = Vec::new();
 
         while !self.has(Token::RightBrace) && !self.has(Token::Eof) {
-            let field_name = self.expect_identifier()?;
-            self.expect_token(Token::Colon)?;
-            let type_annotation = self.parse_type_annotation()?;
-            fields.push(Field {
-                name: field_name,
-                type_annotation,
-            });
+            let field = match self.parse_field() {
+                Ok(field) => field,
+                Err(err) => {
+                    self.errors.push(err);
+                    self.recover(BraceType::Brace);
+                    break;
+                }
+            };
 
-            if self.parse_delimiter().is_none() {
-                break;
+            fields.push(field);
+
+            // While the specification requires comma, semicolon or newline here, we parse this permissively, so that the formatter can correct a missing delimiter
+            while self.has(Token::Comma)
+                || self.has(Token::Newline)
+                || self.has(Token::EmptyLine)
+                || self.has(Token::Semicolon)
+            {
+                self.advance_tokens();
             }
         }
 
@@ -882,6 +989,17 @@ impl Parser {
         self.expect_token(Token::RightBrace)?;
 
         Ok(RecordDeclaration { name, fields })
+    }
+
+    fn parse_field(&mut self) -> Result<Field> {
+        let field_name = self.expect_identifier()?;
+        self.expect_token(Token::Colon)?;
+        let type_annotation = self.parse_type_annotation()?;
+
+        Ok(Field {
+            name: field_name,
+            type_annotation,
+        })
     }
 
     fn parse_resource_declaration(&mut self) -> Result<ResourceDeclaration> {
@@ -894,6 +1012,7 @@ impl Parser {
         let mut methods = Vec::new();
 
         self.skip_linebreaks();
+        // TODO: error recovery
         while !self.has(Token::RightBrace) && !self.has(Token::Eof) {
             if self.has(Token::Constructor) {
                 if constructor.is_some() {
@@ -948,6 +1067,7 @@ impl Parser {
 
         let mut variants = Vec::new();
 
+        // TODO: error recovery
         while !self.has(Token::RightBrace) && !self.has(Token::Eof) {
             let variant_name = self.expect_identifier()?;
             variants.push(variant_name);
@@ -975,6 +1095,7 @@ impl Parser {
 
         let mut cases = Vec::new();
 
+        // TODO: error recovery
         while !self.has(Token::RightBrace) && !self.has(Token::Eof) {
             let case_name = self.expect_identifier()?;
             let mut associated_types = Vec::new();
@@ -1067,6 +1188,7 @@ impl Parser {
         self.expect_token(Token::Dot)?;
         self.expect_token(Token::LeftBrace)?;
         let mut types = Vec::new();
+        // TODO: error recovery
         while self.current.token != Token::RightBrace && types.is_empty()
             || self.expect_token(Token::Comma).is_ok()
         {
@@ -1156,6 +1278,8 @@ impl TokenExt for Token {
             Token::LessEqual => Some(BinaryOperator::LessEqual),
             Token::Contains => Some(BinaryOperator::Contains),
             Token::QuestionMark => Some(BinaryOperator::NullCoalesce),
+            Token::And => Some(LogicOperator::And.into()),
+            Token::Or => Some(LogicOperator::Or.into()),
             _ => None,
         }
     }

@@ -2,10 +2,10 @@ use std::{borrow::Cow, ops::Deref};
 
 use wtf_ast::{
     ArithmeticOperator, BinaryOperator, Block, Declaration, EnumDeclaration, ExportDeclaration,
-    Expression, Field, FieldAssignment, FunctionDeclaration, IfStatement, Literal, Module,
-    ModulePath, PackageDeclaration, Parameter, RecordDeclaration, ResourceDeclaration, Statement,
-    TestDeclaration, TypeAnnotation, UnaryOperator, UseDeclaration, VariantCase,
-    VariantDeclaration, Version, WhileStatement,
+    Expression, Field, FieldAssignment, FunctionDeclaration, IfStatement, Literal, LogicOperator,
+    Module, ModulePath, OverloadDeclaration, PackageDeclaration, Parameter, RecordDeclaration,
+    ResourceDeclaration, Statement, TestDeclaration, TypeAnnotation, UnaryOperator, UseDeclaration,
+    VariantCase, VariantDeclaration, Version, WhileStatement,
 };
 
 pub trait FormatPrint {
@@ -64,6 +64,7 @@ impl FormatPrint for Declaration {
     fn format_print(&self, indent: usize) -> String {
         match self {
             Declaration::Function(decl) => decl.format_print(indent),
+            Declaration::Overload(decl) => decl.format_print(indent),
             Declaration::Record(decl) => decl.format_print(indent),
             Declaration::Resource(decl) => decl.format_print(indent),
             Declaration::Enum(decl) => decl.format_print(indent),
@@ -96,6 +97,18 @@ impl FormatPrint for Parameter {
             tab(indent),
             self.name,
             self.type_annotation.format_print(0)
+        )
+    }
+}
+
+impl FormatPrint for OverloadDeclaration {
+    fn format_print(&self, indent: usize) -> String {
+        let newline = if self.overloads.is_empty() { "" } else { "\n" };
+        format!(
+            "{}overload {} {{{newline}{}{newline}}}",
+            tab(indent),
+            self.name,
+            self.overloads.format_print("\n", indent + 1),
         )
     }
 }
@@ -416,6 +429,10 @@ impl FormatPrint for Expression {
 impl FormatPrint for BinaryOperator {
     fn format_print(&self, indent: usize) -> String {
         let op = match self {
+            BinaryOperator::Logic(logic_operator) => match logic_operator {
+                LogicOperator::And => "and",
+                LogicOperator::Or => "or",
+            },
             BinaryOperator::Arithmetic(arithmetic_operator) => match arithmetic_operator {
                 ArithmeticOperator::Add => "+",
                 ArithmeticOperator::Subtract => "-",
@@ -484,6 +501,12 @@ where
     fn format_print(&self, indent: usize) -> String {
         self.as_ref()
             .map_or_else(String::new, |e| e.format_print(indent))
+    }
+}
+
+impl FormatPrint for String {
+    fn format_print(&self, indent: usize) -> String {
+        format!("{}{}", tab(indent), self)
     }
 }
 

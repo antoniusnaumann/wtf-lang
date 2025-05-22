@@ -1,138 +1,15 @@
-use std::{borrow::Cow, rc::Rc};
-
-#[derive(Debug, PartialEq, Clone)]
-pub enum Token {
-    // Definition
-    Func,
-    Constructor,
-    Record,
-    Resource,
-    Enum,
-    Variant,
-
-    // Declaration
-    Let,
-    Var,
-
-    // Conditionals
-    If,
-    Else,
-    Match,
-
-    // Loops
-    For,
-    While,
-
-    // Control Flow
-    Return,
-    Throw,
-    Break,
-    Continue,
-
-    // Imports
-    Use,
-    Export,
-    Package,
-
-    // Literals
-    True,
-    False,
-    None,
-
-    // Unit Testing
-    Test,
-    Assert,
-
-    // Identifiers and Literals
-    Identifier(String),
-    IntegerLiteral(i64),
-    FloatLiteral(f64),
-    StringLiteral(String),
-
-    VersionLiteral(String),
-
-    // Operators
-    Plus,         // +
-    Minus,        // -
-    Asterisk,     // *
-    Slash,        // /
-    Equal,        // =
-    DoubleEqual,  // ==
-    NotEqual,     // !=
-    GreaterThan,  // >
-    LessThan,     // <
-    GreaterEqual, // >=
-    LessEqual,    // <=
-    Arrow,        // ->
-    DoubleArrow,  // =>
-    QuestionMark, // ?
-    SafeCall,     // ?.
-    Bang,         // !
-    Concat,       // ++
-    // Remove,    // --
-    Contains, // in
-
-    // Punctuation
-    LeftParen,    // (
-    RightParen,   // )
-    LeftBrace,    // {
-    RightBrace,   // }
-    LeftBracket,  // [
-    RightBracket, // ]
-    Comma,        // ,
-    Semicolon,    // ;
-    Colon,        // :
-    Dot,          // .
-    DoubleColon,  // ::
-    At,           // @
-
-    // Special tokens
-    Newline,
-    EmptyLine,
-    Eof,
-    Invalid(String),
-}
-
-impl Token {
-    pub fn try_as_version_literal(&self) -> Cow<Token> {
-        match self {
-            Token::FloatLiteral(f) => {
-                let token_str = f.to_string();
-                // TODO: proper version string validation
-                if !token_str.contains('f') && !token_str.contains('+') && !token_str.contains('-')
-                {
-                    Cow::Owned(Token::VersionLiteral(token_str.to_owned()))
-                } else {
-                    Cow::Borrowed(self)
-                }
-            }
-            _ => Cow::Borrowed(self),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct Span {
-    pub start: usize,
-    pub end: usize,
-}
-
-#[derive(Debug, Clone)]
-pub struct SpannedToken {
-    pub token: Token,
-    pub span: Span,
-}
+pub use wtf_tokens::{Span, SpannedToken, Token};
 
 #[derive(Debug, Clone)]
 pub struct Lexer {
-    input: Rc<[char]>,
+    input: Box<[char]>,
     position: usize,
     current_char: Option<char>,
 }
 
 impl Lexer {
     pub fn new(input: &str) -> Self {
-        let input: Rc<[char]> = input.chars().collect();
+        let input: Box<[char]> = input.chars().collect();
         let current_char = if input.is_empty() {
             None
         } else {
@@ -144,6 +21,10 @@ impl Lexer {
             position: 0,
             current_char,
         }
+    }
+
+    pub fn chars(&self) -> &[char] {
+        &self.input
     }
 
     fn read_char(&mut self) {
@@ -391,6 +272,7 @@ impl Lexer {
     fn lookup_identifier(&self, ident: String) -> Token {
         match ident.as_str() {
             "func" => Token::Func,
+            "overload" => Token::Overload,
             "constructor" => Token::Constructor,
             "record" => Token::Record,
             "resource" => Token::Resource,
@@ -416,6 +298,9 @@ impl Lexer {
             "none" => Token::None,
             "true" => Token::True,
             "false" => Token::False,
+            "and" => Token::And,
+            "or" => Token::Or,
+            "not" => Token::Not,
             _ => Token::Identifier(ident),
         }
     }

@@ -1,0 +1,21 @@
+package wtf:example@0.1.0;
+
+// should return 0
+export func main() -> s64 {
+}
+
+overload is_negative {
+    is_negative_u,,
+    ,,
+
+    
+is_negative_s
+}
+
+func is_negative_u(x: u64) -> bool {
+    return false
+}
+
+func is_negative_s(x: s64) -> bool {
+    return x < 0 
+}

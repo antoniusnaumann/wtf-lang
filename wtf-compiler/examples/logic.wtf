@@ -1,0 +1,29 @@
+package wtf:example@0.1.0
+
+// should return 0
+export func main() -> s64 {
+    let val = 1
+
+    if val == 0 or val != 1 {
+        return s64(1)
+    } else {
+        return s64(0)
+    }
+}
+
+test "'and' operator works" {
+    let val = 6
+    assert val != 5 and val != 7
+}
+
+test "'or' operator works" {
+    let val = 17
+    assert val == 16 or val == 17
+}
+
+test "precedence between 'or' & 'and' works" {
+    let x = 4
+    let y = 5
+    assert x == 17 and y == 5 or x == 4
+    assert x == 4 or y == 5 and x == 17
+}

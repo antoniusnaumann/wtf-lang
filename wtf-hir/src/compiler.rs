@@ -24,6 +24,9 @@ pub fn compile(ast: ast::Module) -> Module {
             ast::Declaration::Function(fun) => {
                 ast_funs.insert(fun.name.to_string(), (fun, is_export));
             }
+            ast::Declaration::Overload(overload) => {
+                todo!("Insert overloads in AST")
+            }
             ast::Declaration::Record(rec) => {
                 ast_types.insert(
                     rec.name.to_string(),
@@ -812,5 +815,51 @@ fn compile_expression(
                 Type::List(Box::new(item_ty)),
             )))
         }
+            }
+            _ => panic!("You can only call names."),
+        };
+        self.push(
+            Instruction::Call {
+                function,
+                num_arguments: arguments.len(),
+            },
+            block,
+        );
+    }
+
+    fn push_op(
+        &mut self,
+        left: &Expression,
+        right: &Expression,
+        op: BinaryOperator,
+        block: &mut Block,
+    ) {
+        let name = match op {
+            BinaryOperator::Logic(op) => match op {
+                // TODO: handling this as a function does not allow short-circuiting
+                ast::LogicOperator::And => "and",
+                ast::LogicOperator::Or => "or",
+            },
+            BinaryOperator::Arithmetic(op) => match op {
+                ast::ArithmeticOperator::Add => "add",
+                ast::ArithmeticOperator::Subtract => "sub",
+                ast::ArithmeticOperator::Multiply => "mul",
+                ast::ArithmeticOperator::Divide => "div",
+            },
+            BinaryOperator::Equal => "eq",
+            BinaryOperator::NotEqual => "ne",
+            BinaryOperator::GreaterThan => "greater_eq",
+            BinaryOperator::LessThan => "less_than",
+            BinaryOperator::GreaterEqual => "greater_eq",
+            BinaryOperator::LessEqual => "less_eq",
+            BinaryOperator::Contains => todo!(),
+            BinaryOperator::NullCoalesce => todo!("lower to if expression"),
+        };
+        // TODO: Append argument types from inferred expression types
+        let typed_name = format!("{name}"); // __s32_s32");
+        let ident = Expression::Identifier(typed_name.into());
+
+        // TODO: Avoid cloning
+        self.push_fn(&ident, &[left.clone(), right.clone()], block)
     }
 }

@@ -25,4 +25,7 @@ members = [
   "wtf-parser",
   "wtf-hir",
   "wtf-wasm",
-  "wtf-format"]
+  "wtf-format",
+  "wtf-error",
+  "wtf-tokens",
+]

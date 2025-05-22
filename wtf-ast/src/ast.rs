@@ -8,6 +8,7 @@ pub struct Module {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Declaration {
     Function(FunctionDeclaration),
+    Overload(OverloadDeclaration),
     Record(RecordDeclaration),
     Resource(ResourceDeclaration),
     Enum(EnumDeclaration),
@@ -20,6 +21,7 @@ impl Declaration {
     pub fn name(&self) -> &str {
         match self {
             Declaration::Function(f) => &f.name,
+            Declaration::Overload(o) => &o.name,
             Declaration::Record(r) => &r.name,
             Declaration::Resource(r) => &r.name,
             Declaration::Enum(e) => &e.name,
@@ -42,6 +44,13 @@ pub struct FunctionDeclaration {
     pub parameters: Vec<Parameter>,
     pub return_type: Option<TypeAnnotation>,
     pub body: Block,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct OverloadDeclaration {
+    pub name: String,
+    /// names of all functions this overload might resolve to
+    pub overloads: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -292,6 +301,7 @@ pub enum Literal {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryOperator {
     Arithmetic(ArithmeticOperator),
+    Logic(LogicOperator),
     Equal,        // '=='
     NotEqual,     // '!='
     GreaterThan,  // '>'
@@ -306,6 +316,18 @@ impl From<ArithmeticOperator> for BinaryOperator {
     fn from(value: ArithmeticOperator) -> Self {
         BinaryOperator::Arithmetic(value)
     }
+}
+
+impl From<LogicOperator> for BinaryOperator {
+    fn from(value: LogicOperator) -> Self {
+        BinaryOperator::Logic(value)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LogicOperator {
+    And,
+    Or,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

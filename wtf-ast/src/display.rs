@@ -111,6 +111,7 @@ impl Print for Declaration {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
         match self {
             Declaration::Function(v) => v.print(f, indent, c),
+            Declaration::Overload(v) => v.print(f, indent, c),
             Declaration::Record(v) => v.print(f, indent, c),
             Declaration::Resource(v) => v.print(f, indent, c),
             Declaration::Enum(v) => v.print(f, indent, c),
@@ -133,6 +134,12 @@ impl Print for FunctionDeclaration {
             self.return_type,
             self.body
         )
+    }
+}
+
+impl Print for OverloadDeclaration {
+    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
+        node!(f, indent, c, "overload", self.name, self.overloads)
     }
 }
 
@@ -275,7 +282,7 @@ impl Print for Statement {
             Statement::IfStatement(v) => v.print(f, indent, c),
             Statement::MatchStatement(_) => todo!(),
             Statement::WhileStatement(v) => v.print(f, indent, c),
-            Statement::ForStatement(_) => todo!(),
+            Statement::ForStatement(v) => v.print(f, indent, c),
             Statement::Assertion(v) => v.print(f, indent, c),
             Statement::EmptyLine => write!(f, "\n{c:indent$}(empty)"),
         }
@@ -313,6 +320,12 @@ impl Print for IfStatement {
 impl Print for WhileStatement {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
         node!(f, indent, c, "while", self.condition, self.body)
+    }
+}
+
+impl Print for ForStatement {
+    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
+        node!(f, indent, c, "for", self.variable, self.iterable, self.body)
     }
 }
 
@@ -433,6 +446,10 @@ impl Print for Literal {
 impl Print for BinaryOperator {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
         let op = match self {
+            BinaryOperator::Logic(inner) => match inner {
+                LogicOperator::And => "and",
+                LogicOperator::Or => "or",
+            },
             BinaryOperator::Arithmetic(inner) => match inner {
                 ArithmeticOperator::Add => "+",
                 ArithmeticOperator::Subtract => "-",
