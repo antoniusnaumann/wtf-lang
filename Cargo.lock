@@ -1426,6 +1426,7 @@ dependencies = [
  "wasmparser 0.222.0",
  "wasmtime",
  "wtf-ast",
+ "wtf-encode",
  "wtf-hir",
  "wtf-parser",
 ]
@@ -1454,13 +1455,6 @@ name = "wtf-hir"
 version = "0.0.0"
 dependencies = [
  "wtf-ast",
-]
-
-[[package]]
-name = "wtf-mir"
-version = "0.0.0"
-dependencies = [
- "wtf-hir",
 ]
 
 [[package]]

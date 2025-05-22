@@ -796,7 +796,7 @@ impl Parser {
             Token::False => Literal::Boolean(false),
             Token::None => Literal::None,
             _ => panic!(
-                "Tried to parser literal, but found: {:?}!",
+                "Tried to parse literal, but found: {:?}!",
                 self.current.token
             ),
         };
