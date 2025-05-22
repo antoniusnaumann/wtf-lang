@@ -1,6 +1,6 @@
 use std::{collections::HashMap, iter};
 
-use crate::{FunctionSignature, PrimitiveType, Type};
+use crate::{FunctionSignature, Type};
 
 pub trait WithBuiltins {
     fn with_builtins() -> Self;
@@ -12,22 +12,38 @@ impl WithBuiltins for HashMap<String, Type> {
     }
 }
 
+fn s(bits: usize) -> Type {
+    Type::Int { signed: true, bits }
+}
+
+fn u(bits: usize) -> Type {
+    Type::Int {
+        signed: false,
+        bits,
+    }
+}
+
+fn f(bits: usize) -> Type {
+    Type::Float { bits }
+}
+
 impl WithBuiltins for HashMap<String, FunctionSignature> {
     fn with_builtins() -> HashMap<String, FunctionSignature> {
-        use PrimitiveType as Ty;
-        let num_types = [
-            Ty::S8,
-            Ty::S16,
-            Ty::S32,
-            Ty::S64,
-            Ty::U8,
-            Ty::U16,
-            Ty::U32,
-            Ty::U64,
-            Ty::F32,
-            Ty::F64,
-        ];
-        let float_types = [Ty::F32, Ty::F64];
+        use Type as Ty;
+        let num_types: Vec<_> = [8usize, 16, 32, 64]
+            .iter()
+            .flat_map(|&bits| {
+                [
+                    Ty::Int { signed: true, bits },
+                    Ty::Int {
+                        signed: false,
+                        bits,
+                    },
+                ]
+            })
+            .chain([Ty::Float { bits: 32 }, Ty::Float { bits: 64 }])
+            .collect();
+        let float_types = [Ty::Float { bits: 32 }, Ty::Float { bits: 64 }];
         // TODO: make these methods pseudo-generic / generate them on the fly when the types fulfill their requirements
         let arithmetic = ["add", "sub", "mul", "div", "min", "max"];
         let compare = [
@@ -46,18 +62,18 @@ impl WithBuiltins for HashMap<String, FunctionSignature> {
         let float_operations = float_types.into_iter().flat_map(|ty| {
             float_instructions
                 .iter()
-                .map(|op| un_op(op, ty, ty))
+                .map(|op| un_op(op, ty.clone(), ty.clone()))
                 .collect::<Vec<_>>()
         });
 
         let conversions = [
-            conv(Ty::S64, Ty::F32),
-            conv(Ty::S64, Ty::F64),
-            conv(Ty::S32, Ty::F32),
-            conv(Ty::S32, Ty::F64),
-            conv(Ty::S32, Ty::U32),
-            conv(Ty::S64, Ty::U32),
-            conv(Ty::S64, Ty::S32),
+            conv(s(64), f(32)),
+            conv(s(64), f(64)),
+            conv(s(32), f(32)),
+            conv(s(32), f(64)),
+            conv(s(32), u(32)),
+            conv(s(64), u(32)),
+            conv(s(64), s(32)),
         ];
 
         num_types
@@ -65,8 +81,8 @@ impl WithBuiltins for HashMap<String, FunctionSignature> {
             .flat_map(|ty| {
                 arithmetic
                     .iter()
-                    .map(|op| bin_op(op, ty, ty))
-                    .chain(compare.iter().map(|op| bin_op(op, ty, Ty::Bool)))
+                    .map(|op| bin_op(op, ty.clone(), ty.clone()))
+                    .chain(compare.iter().map(|op| bin_op(op, ty.clone(), Ty::Bool)))
                     .collect::<Vec<_>>()
             })
             .chain(float_operations)
@@ -74,7 +90,7 @@ impl WithBuiltins for HashMap<String, FunctionSignature> {
             .chain(conversions)
             .chain(iter::once(fun(
                 "println".to_owned(),
-                &[Type::Builtin(Ty::String)],
+                &[Ty::String],
                 Type::Void,
             )))
             .chain(iter::once(fun(
@@ -90,27 +106,27 @@ impl WithBuiltins for HashMap<String, FunctionSignature> {
 fn collection_operations() -> Vec<(String, FunctionSignature)> {
     let collection_types = [
         (Type::List(Box::new(Type::Blank)), "list"),
-        (Type::Builtin(PrimitiveType::String), "string"),
+        (Type::String, "string"),
     ];
 
-    use PrimitiveType as Ty;
+    use Type as Ty;
     let primitive_types = [
-        Ty::S8,
-        Ty::S16,
-        Ty::S32,
-        Ty::S64,
-        Ty::U8,
-        Ty::U16,
-        Ty::U32,
-        Ty::U64,
-        Ty::F32,
-        Ty::F64,
+        s(8),
+        s(16),
+        s(32),
+        s(64),
+        u(8),
+        u(16),
+        u(32),
+        u(64),
+        f(32),
+        f(64),
         Ty::Bool,
         Ty::Char,
         Ty::String,
     ];
 
-    let collection_operations = [("len", Type::Builtin(PrimitiveType::U32))];
+    let collection_operations = [("len", u(32))];
 
     collection_types
         .into_iter()
@@ -128,28 +144,16 @@ fn collection_operations() -> Vec<(String, FunctionSignature)> {
         .collect()
 }
 
-fn conv(target: PrimitiveType, arg: PrimitiveType) -> (String, FunctionSignature) {
-    fun(
-        format!("{target}__{arg}"),
-        &[Type::Builtin(arg)],
-        Type::Builtin(target),
-    )
+fn conv(target: Type, arg: Type) -> (String, FunctionSignature) {
+    fun(format!("{target}__{arg}"), &[arg], target)
 }
 
-fn un_op(op: &str, arg: PrimitiveType, ret: PrimitiveType) -> (String, FunctionSignature) {
-    fun(
-        format!("{op}__{arg}"),
-        &[Type::Builtin(arg), Type::Builtin(arg)],
-        Type::Builtin(ret),
-    )
+fn un_op(op: &str, arg: Type, ret: Type) -> (String, FunctionSignature) {
+    fun(format!("{op}__{arg}"), &[arg.clone(), arg], ret)
 }
 
-fn bin_op(op: &str, arg: PrimitiveType, ret: PrimitiveType) -> (String, FunctionSignature) {
-    fun(
-        format!("{op}__{arg}_{arg}"),
-        &[Type::Builtin(arg), Type::Builtin(arg)],
-        Type::Builtin(ret),
-    )
+fn bin_op(op: &str, arg: Type, ret: Type) -> (String, FunctionSignature) {
+    fun(format!("{op}__{arg}_{arg}"), &[arg.clone(), arg], ret)
 }
 
 fn fun(name: impl Into<String>, params: &[Type], return_type: Type) -> (String, FunctionSignature) {

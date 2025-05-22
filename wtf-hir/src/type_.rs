@@ -5,7 +5,7 @@ use crate::FunctionSignature;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
     Never, // will never be constructed, used as the type of return/break/...
-    None,
+    Void,
     Bool,
     Char,
     Int {
@@ -37,11 +37,27 @@ pub enum Type {
     Name(String),
 }
 
+impl Type {
+    fn u8() -> Self {
+        Self::Int {
+            signed: false,
+            bits: 8,
+        }
+    }
+
+    fn i8() -> Self {
+        Self::Int {
+            signed: true,
+            bits: 8,
+        }
+    }
+}
+
 impl Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Type::Never => write!(f, "never")?,
-            Type::None => write!(f, "none")?,
+            Type::Void => write!(f, "none")?,
             Type::Bool => write!(f, "bool")?,
             Type::Int { signed, bits } => write!(f, "{}{}", if *signed { "s" } else { "u" }, bits)?,
             Type::Float { bits } => write!(f, "f{bits}")?,
@@ -114,7 +130,7 @@ pub fn unify(a: &Type, b: &Type) -> Type {
     match (a, b) {
         (Type::Never, b) => b.clone(),
         (a, Type::Never) => a.clone(),
-        (Type::None, Type::None) => Type::None,
+        (Type::Void, Type::Void) => Type::Void,
         (
             Type::Int {
                 signed: signed_a,

@@ -275,12 +275,6 @@ pub enum Expression {
         members: Vec<FieldAssignment>,
     },
     ListLiteral(Vec<Expression>),
-    Loop(Box<Expression>),
-    If {
-        condition: Box<Expression>,
-        then: Box<Expression>,
-        else_: Box<Expression>,
-    },
 }
 
 #[derive(Debug, Clone, PartialEq)]

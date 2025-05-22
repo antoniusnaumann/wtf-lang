@@ -1,12 +1,18 @@
 use std::collections::{HashMap, HashSet};
 
-use wtf_ast::{self as ast, BinaryOperator, FunctionDeclaration, TestDeclaration, TypeAnnotation, UnaryOperator};
+use wtf_ast::{
+    self as ast, BinaryOperator, FunctionDeclaration, TestDeclaration, TypeAnnotation,
+    UnaryOperator,
+};
 
+use crate::builtin::WithBuiltins;
 use crate::{
     type_::unify, visible::Visible, Body, Expression, ExpressionKind, Function, FunctionBody,
     FunctionSignature, Id, Module, Parameter, Test, Type, VarId,
 };
-use crate::builtin::WithBuiltins;
+
+const INTERNAL_PREFIX: &str = "wtfinternal";
+const INTERNAL_SUFFIX: &str = "sdafbvaeiwcoiysxuv";
 
 pub fn compile(ast: ast::Module) -> Module {
     // TODO: Convert into lookup of name -> export? on first pass
@@ -87,13 +93,27 @@ pub fn compile(ast: ast::Module) -> Module {
     for (fun, is_export) in ast_funs.values() {
         functions.insert(
             fun.name.to_string(),
-            compile_fun(fun, *is_export, &ast_types, &types, &signatures, &mut constants),
+            compile_fun(
+                fun,
+                *is_export,
+                &ast_types,
+                &types,
+                &signatures,
+                &mut constants,
+            ),
         );
     }
 
     let mut tests = Vec::new();
     for (idx, test) in ast_tests.into_iter().enumerate() {
-        tests.push(compile_test(idx, test, &signatures, &types, &ast_types, &mut constants));
+        tests.push(compile_test(
+            idx,
+            test,
+            &signatures,
+            &types,
+            &ast_types,
+            &mut constants,
+        ));
     }
 
     Module {
@@ -211,12 +231,8 @@ fn compile_type_annotation(
                 signed: false,
                 bits: 64,
             },
-            "f32" => Type::Float {
-                bits: 32,
-            },
-            "f64" => Type::Float {
-                bits: 64,
-            },
+            "f32" => Type::Float { bits: 32 },
+            "f64" => Type::Float { bits: 64 },
             "char" => Type::Char,
             "string" => Type::String,
             _ => {
@@ -267,7 +283,7 @@ fn compile_fun(
         .return_type
         .as_ref()
         .map(|type_| compile_type_annotation(&type_, ast_types))
-        .unwrap_or(Type::None);
+        .unwrap_or(Type::Void);
 
     let mut body = FunctionBodyBuilder::new();
     let mut visible = Visible::new();
@@ -306,7 +322,7 @@ fn compile_signature(
     let return_type = declaration
         .return_type
         .as_ref()
-        .map_or(Type::None, |ty| compile_type_annotation(&ty, ast_types));
+        .map_or(Type::Void, |ty| compile_type_annotation(&ty, ast_types));
 
     FunctionSignature {
         param_types,
@@ -350,7 +366,7 @@ fn compile_test(
         ast_types,
         types,
         signatures,
-        constants
+        constants,
     );
 
     Test {
@@ -533,7 +549,7 @@ fn compile_statement(
                     condition,
                     if_condition_true,
                     empty_body,
-                    Type::None,
+                    Type::Void,
                 )));
                 for id in inner_body.ids {
                     body.push(id);
@@ -541,7 +557,7 @@ fn compile_statement(
                 let none = body.push(fun.create_expr(Expression::none()));
                 body.finish(none)
             };
-            body.push(fun.create_expr(Expression::loop_(complete_body, Type::None)));
+            body.push(fun.create_expr(Expression::loop_(complete_body, Type::Void)));
         }
         ast::Statement::ForStatement(_) => todo!("impl for"),
         wtf_ast::Statement::Assertion(assert_statement) => {
@@ -552,7 +568,7 @@ fn compile_statement(
                 let never = body.push(fun.create_expr(Expression::unreachable()));
                 body.finish(never)
             };
-            body.push(fun.create_expr(Expression::if_(condition, then, else_, Type::None)));
+            body.push(fun.create_expr(Expression::if_(condition, then, else_, Type::Void)));
         }
     }
 }
@@ -564,15 +580,13 @@ fn compile_expression(
     visible: &mut Visible,
 ) -> Id {
     match expression {
-        ast::Expression::Literal(literal) => {
-            body.push(fun.create_expr(match literal {
-                ast::Literal::Integer(int) => Expression::int(*int),
-                ast::Literal::Float(float) => Expression::float(*float),
-                ast::Literal::String(string) => Expression::string(string.clone()),
-                ast::Literal::Boolean(bool) => Expression::bool(*bool),
-                ast::Literal::None => Expression::none(),
-            }))
-        }
+        ast::Expression::Literal(literal) => body.push(fun.create_expr(match literal {
+            ast::Literal::Integer(int) => Expression::int(*int),
+            ast::Literal::Float(float) => Expression::float(*float),
+            ast::Literal::String(string) => Expression::string(string.clone()),
+            ast::Literal::Boolean(bool) => Expression::bool(*bool),
+            ast::Literal::None => Expression::none(),
+        })),
         ast::Expression::Identifier(name) => {
             let binding = visible
                 .lookup(&name)
@@ -659,7 +673,7 @@ fn compile_expression(
             for arg in arguments {
                 args.push(compile_expression(arg, fun, body, visible));
             }
-            body.push(fun.create_expr(Expression::call(function, args, Type::None)))
+            body.push(fun.create_expr(Expression::call(function, args, Type::Void)))
         }
         ast::Expression::MethodCall {
             receiver,
@@ -770,7 +784,7 @@ fn compile_expression(
                 compiled_items,
                 Type::List(Box::new(item_ty)),
             )))
-        },
-            _ => panic!("You can only call names."),
         }
+        _ => panic!("You can only call names."),
     }
+}

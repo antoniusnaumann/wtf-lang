@@ -2,17 +2,14 @@
 //! no generic functions anymore – instead, the HIR only contains the used
 //! functions specialized for concrete types.
 
+mod builtin;
 mod compiler;
 mod type_;
 mod visible;
-mod builtin;
 
 pub use compiler::compile;
 use std::collections::HashSet;
-use std::{
-    collections::HashMap,
-    fmt::Display,
-};
+use std::{collections::HashMap, fmt::Display};
 use type_::Type;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -147,13 +144,13 @@ impl Expression {
         ExpressionKind::Reference(id).typed(ty)
     }
     fn var_set(var: VarId, expression: Id) -> Expression {
-        ExpressionKind::VarSet { var, expression }.typed(Type::None)
+        ExpressionKind::VarSet { var, expression }.typed(Type::Void)
     }
     fn var_get(var: VarId, ty: Type) -> Expression {
         ExpressionKind::VarGet { var }.typed(ty)
     }
     fn none() -> Self {
-        ExpressionKind::None.typed(Type::None)
+        ExpressionKind::None.typed(Type::Void)
     }
     fn int(int: i64) -> Expression {
         ExpressionKind::Int(int).typed(Type::Int {
@@ -162,7 +159,7 @@ impl Expression {
         })
     }
     fn float(float: f64) -> Expression {
-        ExpressionKind::Float(float).typed(Type::Float)
+        ExpressionKind::Float(float).typed(Type::Float { bits: 64 })
     }
     fn string(string: String) -> Expression {
         ExpressionKind::String(string).typed(Type::String)
