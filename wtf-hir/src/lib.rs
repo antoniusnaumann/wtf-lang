@@ -5,11 +5,13 @@
 mod compiler;
 mod type_;
 mod visible;
+mod builtin;
 
 pub use compiler::compile;
+use std::collections::HashSet;
 use std::{
     collections::HashMap,
-    fmt::{write, Display},
+    fmt::Display,
 };
 use type_::Type;
 
@@ -18,6 +20,7 @@ pub struct Module {
     pub types: HashMap<String, Type>,
     pub functions: HashMap<String, Function>,
     pub tests: Vec<Test>,
+    pub constants: HashSet<Vec<u8>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,7 +55,6 @@ struct FunctionBody {
 pub struct Test {
     pub name: Option<String>,
     pub id: String,
-    pub locals: Vec<Type>, // include parameters
     pub body: FunctionBody,
 }
 
@@ -86,7 +88,7 @@ pub enum ExpressionKind {
     },
     None,
     Int(i64),
-    // Float(f64), // TODO: impl
+    Float(f64),
     String(String),
     Bool(bool),
     Enum {
@@ -159,7 +161,9 @@ impl Expression {
             bits: 64,
         })
     }
-    // TODO: float
+    fn float(float: f64) -> Expression {
+        ExpressionKind::Float(float).typed(Type::Float)
+    }
     fn string(string: String) -> Expression {
         ExpressionKind::String(string).typed(Type::String)
     }
@@ -258,7 +262,7 @@ impl Display for Module {
             writeln!(f, "Tests:")?;
             for test in &self.tests {
                 write!(f, "Locals:")?;
-                for (i, ty) in test.locals.iter().enumerate() {
+                for (i, ty) in test.body.vars.iter().enumerate() {
                     write!(f, " {i}: {ty}")?;
                 }
                 write!(f, "\n")?;
@@ -331,7 +335,7 @@ impl Expression {
             ExpressionKind::VarSet { var, expression } => write!(f, "{} = {}", var, expression)?,
             ExpressionKind::VarGet { var } => write!(f, "{}", var)?,
             ExpressionKind::Int(int) => write!(f, "int {}", int)?,
-            // ExpressionKind::Float(float) => write!(f, "float {}", float)?,
+            ExpressionKind::Float(float) => write!(f, "float {}", float)?,
             ExpressionKind::String(string) => write!(f, "string {:?}", string)?,
             ExpressionKind::Bool(b) => write!(f, "bool {b}")?,
             ExpressionKind::None => write!(f, "none")?,

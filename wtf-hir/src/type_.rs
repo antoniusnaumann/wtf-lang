@@ -12,6 +12,9 @@ pub enum Type {
         signed: bool,
         bits: usize,
     },
+    Float {
+        bits: usize,
+    },
     String,
     Blank, // for builtin generic types where the type does not matter, e.g. list.len()
     List(Box<Type>),
@@ -41,6 +44,7 @@ impl Display for Type {
             Type::None => write!(f, "none")?,
             Type::Bool => write!(f, "bool")?,
             Type::Int { signed, bits } => write!(f, "{}{}", if *signed { "s" } else { "u" }, bits)?,
+            Type::Float { bits } => write!(f, "f{bits}")?,
             Type::String => write!(f, "string")?,
             Type::Blank => write!(f, "blank")?,
             Type::List(items) => write!(f, "[{}]", items)?,

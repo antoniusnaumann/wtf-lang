@@ -1,17 +1,18 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use wtf_ast::{self as ast, TestDeclaration, UnaryOperator};
+use wtf_ast::{self as ast, BinaryOperator, FunctionDeclaration, TestDeclaration, TypeAnnotation, UnaryOperator};
 
 use crate::{
     type_::unify, visible::Visible, Body, Expression, ExpressionKind, Function, FunctionBody,
     FunctionSignature, Id, Module, Parameter, Test, Type, VarId,
 };
+use crate::builtin::WithBuiltins;
 
 pub fn compile(ast: ast::Module) -> Module {
     // TODO: Convert into lookup of name -> export? on first pass
     let mut ast_types = HashMap::new();
     let mut ast_funs = HashMap::new();
-    // let mut ast_tests = Vec::new();
+    let mut ast_tests = Vec::new();
     for mut declaration in ast.declarations {
         let is_export = if let ast::Declaration::Export(ex) = declaration {
             declaration = *ex.item;
@@ -34,15 +35,13 @@ pub fn compile(ast: ast::Module) -> Module {
                 );
             }
             ast::Declaration::Resource(res) => {
-                // ast_types.insert(
-                //     res.name.to_string(),
-                //     (ast::Declaration::Resource(res), is_export),
-                // );
-                todo!()
+                ast_types.insert(
+                    res.name.to_string(),
+                    (ast::Declaration::Resource(res), is_export),
+                );
             }
             ast::Declaration::Enum(en) => {
-                // ast_types.insert(en.name.to_string(), (ast::Declaration::Enum(en), is_export));
-                todo!()
+                ast_types.insert(en.name.to_string(), (ast::Declaration::Enum(en), is_export));
             }
             ast::Declaration::Variant(var) => {
                 ast_types.insert(
@@ -54,8 +53,7 @@ pub fn compile(ast: ast::Module) -> Module {
                 panic!("TODO: error: double export is not permitted!")
             }
             ast::Declaration::Test(test) => {
-                // TODO: implement
-                // ast_tests.push(test);
+                ast_tests.push(test);
             }
         }
     }
@@ -68,68 +66,7 @@ pub fn compile(ast: ast::Module) -> Module {
         );
     }
 
-    let mut signatures = HashMap::new();
-    {
-        // Add primitive types.
-        // use ast::PrimitiveType as Ty;
-        // let num_types = [
-        //     Ty::S8,
-        //     Ty::S16,
-        //     Ty::S32,
-        //     Ty::S64,
-        //     Ty::U8,
-        //     Ty::U16,
-        //     Ty::U32,
-        //     Ty::U64,
-        //     Ty::F32,
-        //     Ty::F64,
-        // ];
-        // let float_types = [Ty::F32, Ty::F64];
-        let arithmetic = ["add", "sub", "mul", "div", "min", "max"];
-        let compare = [
-            "eq",
-            "greater_eq",
-            "greater_than",
-            "less_eq",
-            "less_than",
-            "ne",
-        ];
-        // let float_instructions = ["ceil", "floor", "trunc", "sqrt"];
-        // let float_operations = float_types.into_iter().flat_map(|ty| {
-        //     float_instructions
-        //         .iter()
-        //         .map(|op| un_op(op, ty, ty))
-        //         .collect::<Vec<_>>()
-        // });
-
-        // let conversions = [
-        //     conv(Ty::S64, Ty::F32),
-        //     conv(Ty::S64, Ty::F64),
-        //     conv(Ty::S32, Ty::F32),
-        //     conv(Ty::S32, Ty::F64),
-        //     conv(Ty::S64, Ty::U32),
-        //     conv(Ty::S64, Ty::S32),
-        // ];
-
-        // num_types
-        //     .into_iter()
-        //     .flat_map(|ty| {
-        //         arithmetic
-        //             .iter()
-        //             .map(|op| bin_op(op, ty, ty))
-        //             .chain(compare.iter().map(|op| bin_op(op, ty, Ty::Bool)))
-        //             .collect::<Vec<_>>()
-        //     })
-        //     .chain(float_operations)
-        //     .chain(conversions)
-        //     .chain(iter::once(fun(
-        //         "println".to_owned(),
-        //         &[Type::Builtin(Ty::String)],
-        //         Type::None,
-        //     )))
-        //     .chain(collection_operations())
-        //     .collect()
-    }
+    let mut signatures = HashMap::with_builtins();
     // let mut keys = signatures.keys().collect::<Vec<_>>();
     // keys.sort();
     // println!("{:#?}", keys);
@@ -146,23 +83,24 @@ pub fn compile(ast: ast::Module) -> Module {
     }
 
     let mut functions = HashMap::new();
+    let mut constants = HashSet::new();
     for (fun, is_export) in ast_funs.values() {
         functions.insert(
             fun.name.to_string(),
-            compile_fun(fun, *is_export, &ast_types, &types, &signatures),
+            compile_fun(fun, *is_export, &ast_types, &types, &signatures, &mut constants),
         );
     }
 
-    // let mut tests = Vec::new();
-    // for (idx, test) in ast_tests.into_iter().enumerate() {
-    //     tests.push(compile_test(idx, test, &signatures, &types));
-    // }
+    let mut tests = Vec::new();
+    for (idx, test) in ast_tests.into_iter().enumerate() {
+        tests.push(compile_test(idx, test, &signatures, &types, &ast_types, &mut constants));
+    }
 
     Module {
         types,
         functions,
         tests: vec![],
-        // constants,
+        constants,
     }
 }
 
@@ -185,37 +123,36 @@ fn compile_type_declaration(
             }
             Type::Record(fields)
         }
-        // ast::Declaration::Resource(resource) => {
-        //     let mut methods = HashMap::new();
-        //     for method in &resource.methods {
-        //         let return_type = {
-        //             let annotation = method
-        //                 .return_type
-        //                 .as_ref()
-        //                 .map(|it| it.clone())
-        //                 .unwrap_or_else(|| TypeAnnotation::Simple("none".to_string()));
-        //             compile_type_annotation(&annotation, ast_types)
-        //         };
-        //         methods.insert(
-        //             method.name.clone(),
-        //             FunctionSignature {
-        //                 param_types: method
-        //                     .parameters
-        //                     .iter()
-        //                     .map(|param| compile_type_annotation(&param.type_annotation, ast_types))
-        //                     .collect(),
-        //                 return_type,
-        //                 // TODO: allow exporting resource functions
-        //                 is_export: false,
-        //             },
-        //         );
-        //     }
-        //     Type::Resource(ResourceType { methods })
-        // }
-        // ast::Declaration::Enum(enum_) => Type::Enum(EnumType {
-        //     name: enum_.name.clone(),
-        //     cases: enum_.cases.iter().map(|case| case.clone()).collect(),
-        // }),
+        ast::Declaration::Resource(resource) => {
+            let mut methods = HashMap::new();
+            for method in &resource.methods {
+                let return_type = {
+                    let annotation = method
+                        .return_type
+                        .as_ref()
+                        .map(|it| it.clone())
+                        .unwrap_or_else(|| TypeAnnotation::Simple("none".to_string()));
+                    compile_type_annotation(&annotation, ast_types)
+                };
+                methods.insert(
+                    method.name.clone(),
+                    FunctionSignature {
+                        param_types: method
+                            .parameters
+                            .iter()
+                            .map(|param| compile_type_annotation(&param.type_annotation, ast_types))
+                            .collect(),
+                        return_type,
+                        // TODO: allow exporting resource functions
+                        is_export: false,
+                    },
+                );
+            }
+            Type::Resource { methods }
+        }
+        ast::Declaration::Enum(enum_) => Type::Enum {
+            cases: enum_.cases.iter().map(|case| case.clone()).collect(),
+        },
         ast::Declaration::Variant(variants) => {
             let mut cases = HashMap::new();
             for variant in &variants.cases {
@@ -274,9 +211,13 @@ fn compile_type_annotation(
                 signed: false,
                 bits: 64,
             },
-            // "f32" => PrimitiveType::F32,
-            // "f64" => PrimitiveType::F64,
-            // "char" => Type::Char,
+            "f32" => Type::Float {
+                bits: 32,
+            },
+            "f64" => Type::Float {
+                bits: 64,
+            },
+            "char" => Type::Char,
             "string" => Type::String,
             _ => {
                 let (declaration, is_export) = ast_types
@@ -289,14 +230,12 @@ fn compile_type_annotation(
             Type::List(Box::new(compile_type_annotation(annotation, ast_types)))
         }
         ast::TypeAnnotation::Option(payload) => {
-            // Type::Option(Box::new(compile_type_annotation(payload, ast_types)))
-            todo!("option")
+            Type::Option(Box::new(compile_type_annotation(payload, ast_types)))
         }
-        ast::TypeAnnotation::Result { ok, err } => todo!("result"),
-        // ast::TypeAnnotation::Result { ok, err } => Type::Result {
-        //     ok: Box::new(compile_type_annotation(ok, ast_types)),
-        //     err: Box::new(compile_type_annotation(err, ast_types)),
-        // },
+        ast::TypeAnnotation::Result { ok, err } => Type::Result {
+            ok: Box::new(compile_type_annotation(ok, ast_types)),
+            err: Box::new(compile_type_annotation(err, ast_types)),
+        },
         ast::TypeAnnotation::Tuple(fields) => Type::Tuple(
             fields
                 .into_iter()
@@ -312,7 +251,7 @@ fn compile_fun(
     ast_types: &HashMap<String, (ast::Declaration, bool)>,
     types: &HashMap<String, Type>,
     signatures: &HashMap<String, FunctionSignature>,
-    // constants: &mut HashSet<Vec<u8>>,
+    constants: &mut HashSet<Vec<u8>>,
 ) -> Function {
     let parameters: Vec<_> = declaration
         .parameters
@@ -381,32 +320,44 @@ fn compile_test(
     test: TestDeclaration,
     signatures: &HashMap<String, FunctionSignature>,
     types: &HashMap<String, Type>,
+    ast_types: &HashMap<String, (ast::Declaration, bool)>,
+    constants: &mut HashSet<Vec<u8>>,
 ) -> Test {
-    // let mut fn_compiler = FunctionCompiler::with_params(&[], signatures, types, constants);
-    // let body = fn_compiler.compile_block(&test.body);
+    const CHARS: [char; 26] = [
+        'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r',
+        's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+    ];
 
-    // const CHARS: [char; 26] = [
-    //     'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r',
-    //     's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
-    // ];
+    let mut str = String::new();
+    let mut idx = idx + 1;
+    while idx > 0 {
+        idx -= 1;
+        let rem = idx % 26;
+        str.push(CHARS[rem]);
+        idx -= rem;
+        idx /= 26;
+    }
+    let id = format!("{INTERNAL_PREFIX}-test-{str}-{INTERNAL_SUFFIX}",);
 
-    // let mut str = String::new();
-    // let mut idx = idx + 1;
-    // while idx > 0 {
-    //     idx -= 1;
-    //     let rem = idx % 26;
-    //     str.push(CHARS[rem]);
-    //     idx -= rem;
-    //     idx /= 26;
-    // }
-    // let id = format!("{INTERNAL_PREFIX}-test-{str}-{INTERNAL_SUFFIX}",);
-    // Test {
-    //     name: test.name,
-    //     id,
-    //     body,
-    //     locals: fn_compiler.locals,
-    // }
-    todo!()
+    let function = compile_fun(
+        &FunctionDeclaration {
+            name: str.clone(),
+            parameters: vec![],
+            return_type: None,
+            body: test.body,
+        },
+        true,
+        ast_types,
+        types,
+        signatures,
+        constants
+    );
+
+    Test {
+        name: test.name,
+        id,
+        body: function.body,
+    }
 }
 
 struct FunctionBodyBuilder {
@@ -616,7 +567,7 @@ fn compile_expression(
         ast::Expression::Literal(literal) => {
             body.push(fun.create_expr(match literal {
                 ast::Literal::Integer(int) => Expression::int(*int),
-                ast::Literal::Float(float) => todo!(), // Instruction::Float(*float),
+                ast::Literal::Float(float) => Expression::float(*float),
                 ast::Literal::String(string) => Expression::string(string.clone()),
                 ast::Literal::Boolean(bool) => Expression::bool(*bool),
                 ast::Literal::None => Expression::none(),
@@ -645,6 +596,11 @@ fn compile_expression(
                                 wtf_ast::ArithmeticOperator::Subtract => "subtract",
                                 wtf_ast::ArithmeticOperator::Multiply => "multiply",
                                 wtf_ast::ArithmeticOperator::Divide => "divide",
+                            },
+                            BinaryOperator::Logic(op) => match op {
+                                // TODO: handling this as a function does not allow short-circuiting
+                                ast::LogicOperator::And => "and",
+                                ast::LogicOperator::Or => "or",
                             },
                             wtf_ast::BinaryOperator::Equal => "equal",
                             wtf_ast::BinaryOperator::NotEqual => "not_equal",
@@ -814,52 +770,7 @@ fn compile_expression(
                 compiled_items,
                 Type::List(Box::new(item_ty)),
             )))
-        }
-            }
+        },
             _ => panic!("You can only call names."),
-        };
-        self.push(
-            Instruction::Call {
-                function,
-                num_arguments: arguments.len(),
-            },
-            block,
-        );
+        }
     }
-
-    fn push_op(
-        &mut self,
-        left: &Expression,
-        right: &Expression,
-        op: BinaryOperator,
-        block: &mut Block,
-    ) {
-        let name = match op {
-            BinaryOperator::Logic(op) => match op {
-                // TODO: handling this as a function does not allow short-circuiting
-                ast::LogicOperator::And => "and",
-                ast::LogicOperator::Or => "or",
-            },
-            BinaryOperator::Arithmetic(op) => match op {
-                ast::ArithmeticOperator::Add => "add",
-                ast::ArithmeticOperator::Subtract => "sub",
-                ast::ArithmeticOperator::Multiply => "mul",
-                ast::ArithmeticOperator::Divide => "div",
-            },
-            BinaryOperator::Equal => "eq",
-            BinaryOperator::NotEqual => "ne",
-            BinaryOperator::GreaterThan => "greater_eq",
-            BinaryOperator::LessThan => "less_than",
-            BinaryOperator::GreaterEqual => "greater_eq",
-            BinaryOperator::LessEqual => "less_eq",
-            BinaryOperator::Contains => todo!(),
-            BinaryOperator::NullCoalesce => todo!("lower to if expression"),
-        };
-        // TODO: Append argument types from inferred expression types
-        let typed_name = format!("{name}"); // __s32_s32");
-        let ident = Expression::Identifier(typed_name.into());
-
-        // TODO: Avoid cloning
-        self.push_fn(&ident, &[left.clone(), right.clone()], block)
-    }
-}
