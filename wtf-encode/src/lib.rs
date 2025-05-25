@@ -1,6 +1,6 @@
 use std::{collections::HashSet, fmt::Debug, iter};
 
-use wtf_hir::{self as hir, Test};
+use wtf_hir::{self as hir, Expression, Test};
 use wtf_wasm::{
     ComponentBuilder, Function, Instance, Instruction, PrimitiveType, Signature, Type,
     TypeDeclaration, TypeRef,
@@ -109,11 +109,24 @@ impl Convert<'_> for (String, hir::Type) {
                     .map(|(k, v)| (k, v.convert(lookup).unwrap()))
                     .collect(),
             },
-            hir::Type::Resource(_) => todo!(),
-            hir::Type::Enum(ty) => Type::Enum(ty.cases),
-            hir::Type::Variant(_) => todo!(),
             hir::Type::Tuple(_) => todo!(),
-            hir::Type::Builtin(_) => todo!(),
+            hir::Type::Never => todo!(),
+            hir::Type::Void => todo!(),
+            hir::Type::Bool => todo!(),
+            hir::Type::Char => todo!(),
+            hir::Type::Int { signed, bits } => todo!(),
+            hir::Type::Float { bits } => todo!(),
+            hir::Type::String => todo!(),
+            hir::Type::Blank => todo!(),
+            hir::Type::List(_) => todo!(),
+            hir::Type::Option(_) => todo!(),
+            hir::Type::Result { ok, err } => todo!(),
+            hir::Type::Record(hash_map) => todo!(),
+            hir::Type::Resource { methods } => todo!(),
+            hir::Type::Enum { cases } => Type::Enum(cases),
+            hir::Type::Variant { cases } => todo!(),
+            hir::Type::Tuple(items) => todo!(),
+            hir::Type::Name(_) => todo!(),
         };
 
         // TODO: Preserve export information
@@ -133,17 +146,19 @@ impl<'a> Convert<'a> for (String, hir::Function) {
         let params: Vec<_> = func
             .parameters
             .into_iter()
-            .map(|(name, ty)| {
+            .map(|param| {
                 (
-                    name,
-                    ty.convert(lookup)
+                    param.name,
+                    param
+                        .ty
+                        .convert(lookup)
                         .expect("Parameter type must be a valid type"),
                 )
             })
             .collect();
         let result = func.return_type.convert(lookup);
-        let locals = convert_locals(func.locals, lookup);
-        let instructions = convert_body(func.body, lookup, &locals);
+        let locals = convert_locals(func.body.vars.clone(), lookup);
+        let instructions = convert_function_body(func.body, lookup, &locals);
         let func = Function {
             signature: Signature {
                 params,
@@ -163,8 +178,8 @@ impl<'a> Convert<'a> for Test {
     type Output = Function<'a>;
 
     fn convert(self, lookup: &mut TypeLookup) -> Self::Output {
-        let locals = convert_locals(self.locals, lookup);
-        let instructions = convert_body(self.body, lookup, &locals);
+        let locals = convert_locals(self.body.vars.clone(), lookup);
+        let instructions = convert_function_body(self.body, lookup, &locals);
 
         Function {
             signature: Signature {
@@ -189,16 +204,25 @@ fn convert_locals(locals: Vec<hir::Type>, lookup: &mut TypeLookup) -> Vec<TypeRe
         .collect()
 }
 
-fn convert_body<'a>(
-    body: hir::Block,
+fn convert_function_body<'a>(
+    body: hir::FunctionBody,
     lookup: &mut TypeLookup,
     locals: &[TypeRef],
 ) -> Vec<Instruction<'a>> {
-    body.instructions
+    body.expressions
         .into_iter()
         .map(|exp| exp.convert(lookup, &locals))
         .chain(iter::once(Instruction::End))
         .collect()
+}
+
+fn convert_body<'a>(
+    body: hir::Body,
+    lookup: &mut TypeLookup,
+    locals: &[TypeRef],
+    expressions: &[Expression],
+) -> Vec<Instruction<'a>> {
+    body.ids.iter().map(|id| expressions[id]).collect()
 }
 
 trait ConvertInstruction<'a> {
@@ -207,48 +231,33 @@ trait ConvertInstruction<'a> {
     fn convert(self, lookup: &mut TypeLookup, locals: &[TypeRef]) -> Self::Output;
 }
 
-impl<'a> ConvertInstruction<'a> for hir::Block {
-    type Output = Vec<Instruction<'a>>;
-
-    fn convert(self, lookup: &mut TypeLookup, locals: &[TypeRef]) -> Self::Output {
-        self.instructions
-            .into_iter()
-            .map(|inst| inst.convert(lookup, locals))
-            .collect()
-    }
-}
-
-impl<'a> ConvertInstruction<'a> for hir::Instruction {
+impl<'a> ConvertInstruction<'a> for hir::Expression {
     type Output = Instruction<'a>;
 
     fn convert(self, lookup: &mut TypeLookup, locals: &[TypeRef]) -> Self::Output {
-        match self {
-            hir::Instruction::Pop => Instruction::Pop,
-            hir::Instruction::Load(i) => Instruction::LocalGet(i.0 as u32),
-            hir::Instruction::Store(i) => Instruction::LocalSet(i.0 as u32),
-            hir::Instruction::Int(num) => Instruction::I32(num as i32), // TODO typecheck: different instructions for different int sizes
-            hir::Instruction::Float(num) => Instruction::F32(num as f32), // TODO: typecheck: different instructions for different float sizes
-            hir::Instruction::String(string) => Instruction::Bytes(string.into_bytes()),
-            hir::Instruction::Bool(b) => Instruction::I32(if b { 1 } else { 0 }),
-            hir::Instruction::Void => Instruction::Noop,
-            hir::Instruction::Enum { case, ty: _ } => Instruction::I32(case as i32), // TODO: if the enum type has more fields than i32 allows, use i64
-            hir::Instruction::Variant { case, num_payloads } => todo!(),
-            hir::Instruction::Record(_) => Instruction::Noop,
-            hir::Instruction::Option { is_some, ty } => Instruction::Optional {
-                ty: ty
+        match self.kind {
+            hir::ExpressionKind::Int(num) => Instruction::I32(num as i32), // TODO typecheck: different instructions for different int sizes
+            hir::ExpressionKind::Float(num) => Instruction::F32(num as f32), // TODO: typecheck: different instructions for different float sizes
+            hir::ExpressionKind::String(string) => Instruction::Bytes(string.into_bytes()),
+            hir::ExpressionKind::Bool(b) => Instruction::I32(if b { 1 } else { 0 }),
+            hir::ExpressionKind::Enum { case } => Instruction::I32(case as i32), // TODO: if the enum type has more fields than i32 allows, use i64
+            hir::ExpressionKind::Variant { case, payloads } => todo!(),
+            hir::ExpressionKind::Record(_) => Instruction::Noop,
+            hir::ExpressionKind::List(members) => {
+                let ty = self
+                    .ty
                     .convert(lookup)
-                    .expect("Inner type of optional must have a type"),
-                is_some,
-            },
-            hir::Instruction::List { len, ty } => {
-                let ty = ty.convert(lookup).expect("List elements must have a type");
-                Instruction::Store { number: len, ty }
+                    .expect("List elements must have a type");
+                Instruction::Store {
+                    number: members.len(),
+                    ty,
+                }
             }
-            hir::Instruction::Call {
+            hir::ExpressionKind::Call {
                 function,
-                num_arguments,
+                arguments,
             } => Instruction::Call(function),
-            hir::Instruction::MemberChain(id, fields) => {
+            hir::ExpressionKind::Member { of: id, name } => {
                 let mut current = &locals[id.0];
                 let mut member = vec![];
                 for field in fields {
@@ -284,25 +293,37 @@ impl<'a> ConvertInstruction<'a> for hir::Instruction {
                     member,
                 }
             }
-            hir::Instruction::FieldAccess(field) => {
-                todo!("look at type here and figure out what to pop?")
-            }
-            hir::Instruction::IndexAccess { ty } => {
-                let ty = ty.convert(lookup).expect("List elements must have a type");
+            hir::ExpressionKind::IndexAccess { of: target, index } => {
+                let ty = self
+                    .ty
+                    .convert(lookup)
+                    .expect("List elements must have a type");
 
                 Instruction::IndexAccess { ty }
             }
-            hir::Instruction::Return => Instruction::Return,
-            hir::Instruction::Break => Instruction::Break,
-            hir::Instruction::Continue => Instruction::Continue,
-            hir::Instruction::Throw => todo!(),
-            hir::Instruction::If { then, else_ } => Instruction::If {
+            hir::ExpressionKind::Return(inner) => Instruction::Return, // TODO: use inner expression
+            hir::ExpressionKind::Break(inner) => Instruction::Break,
+            hir::ExpressionKind::Continue => Instruction::Continue,
+            hir::ExpressionKind::Throw(inner) => todo!(),
+            hir::ExpressionKind::If {
+                condition, // TODO: use condition
+                then,
+                else_,
+            } => Instruction::If {
                 then: then.convert(lookup, locals),
                 else_: else_.convert(lookup, locals),
             },
-            hir::Instruction::Match { arms } => todo!(),
-            hir::Instruction::Loop(block) => Instruction::Loop(block.convert(lookup, locals)),
-            hir::Instruction::Unreachable => Instruction::Unreachable,
+            hir::ExpressionKind::Match { arms } => todo!(),
+            hir::ExpressionKind::Loop(block) => Instruction::Loop(block.convert(lookup, locals)),
+            hir::ExpressionKind::Unreachable => Instruction::Unreachable,
+
+            wtf_hir::ExpressionKind::Parameter(_) => todo!(),
+            wtf_hir::ExpressionKind::Reference(id) => todo!(),
+            wtf_hir::ExpressionKind::VarSet { var, expression } => todo!(),
+            wtf_hir::ExpressionKind::VarGet { var } => todo!(),
+            wtf_hir::ExpressionKind::None => todo!(),
+            wtf_hir::ExpressionKind::Tuple(_) => todo!(),
+            wtf_hir::ExpressionKind::TupleAccess { of, index } => todo!(),
         }
     }
 }
@@ -348,40 +369,45 @@ impl Convert<'_> for hir::Type {
 
                 Some(TypeRef::Type(ty))
             }
-            hir::Type::Resource(_) => todo!(),
-            hir::Type::Enum(ty) => {
-                let ty = lookup.insert(Type::Enum(ty.cases));
+            hir::Type::Resource { methods } => todo!(),
+            hir::Type::Enum { cases } => {
+                let ty = lookup.insert(Type::Enum(cases));
 
                 Some(TypeRef::Type(ty))
             }
-            hir::Type::Variant(_) => todo!(),
+            hir::Type::Variant { cases } => todo!(),
             hir::Type::Tuple(_) => todo!(),
-            hir::Type::Builtin(ty) => Some(TypeRef::Primitive(ty.convert(lookup))),
             hir::Type::Void => None,
             hir::Type::Never => todo!("Disallow 'Never' for exported functions"),
             hir::Type::Blank => todo!("'Blank' not allowed here"),
-        }
-    }
-}
+            hir::Type::Bool => Some(TypeRef::Primitive(PrimitiveType::Bool)),
+            hir::Type::Char => Some(TypeRef::Primitive(PrimitiveType::Char)),
+            hir::Type::Int { signed, bits } => {
+                let ty = match (signed, bits) {
+                    (false, 8) => PrimitiveType::U8,
+                    (true, 8) => PrimitiveType::S8,
+                    (false, 16) => PrimitiveType::U16,
+                    (true, 16) => PrimitiveType::S16,
+                    (false, 32) => PrimitiveType::U32,
+                    (true, 32) => PrimitiveType::S32,
+                    (false, 64) => PrimitiveType::U64,
+                    (true, 64) => PrimitiveType::S64,
+                    _ => unreachable!("invalid integer type"),
+                };
 
-impl Convert<'_> for hir::PrimitiveType {
-    type Output = PrimitiveType;
+                Some(TypeRef::Primitive(ty))
+            }
+            hir::Type::Float { bits } => {
+                let ty = match bits {
+                    32 => PrimitiveType::F32,
+                    64 => PrimitiveType::F64,
+                    _ => unreachable!("invalid float type"),
+                };
 
-    fn convert(self, _lookup: &mut TypeLookup) -> Self::Output {
-        match self {
-            hir::PrimitiveType::Bool => PrimitiveType::Bool,
-            hir::PrimitiveType::S8 => PrimitiveType::S8,
-            hir::PrimitiveType::U8 => PrimitiveType::U8,
-            hir::PrimitiveType::S16 => PrimitiveType::S16,
-            hir::PrimitiveType::U16 => PrimitiveType::U16,
-            hir::PrimitiveType::S32 => PrimitiveType::S32,
-            hir::PrimitiveType::U32 => PrimitiveType::U32,
-            hir::PrimitiveType::S64 => PrimitiveType::S64,
-            hir::PrimitiveType::U64 => PrimitiveType::U64,
-            hir::PrimitiveType::F32 => PrimitiveType::F32,
-            hir::PrimitiveType::F64 => PrimitiveType::F64,
-            hir::PrimitiveType::Char => PrimitiveType::Char,
-            hir::PrimitiveType::String => PrimitiveType::String,
+                Some(TypeRef::Primitive(ty))
+            }
+            hir::Type::String => Some(TypeRef::Primitive(PrimitiveType::String)),
+            hir::Type::Name(_) => todo!(),
         }
     }
 }

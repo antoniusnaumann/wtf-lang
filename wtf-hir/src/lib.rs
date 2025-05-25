@@ -9,8 +9,9 @@ mod visible;
 
 pub use compiler::compile;
 use std::collections::HashSet;
+use std::ops::Index;
 use std::{collections::HashMap, fmt::Display};
-use type_::Type;
+pub use type_::Type;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Module {
@@ -36,13 +37,13 @@ pub struct Function {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct Parameter {
-    name: String,
-    ty: Type,
+pub struct Parameter {
+    pub name: String,
+    pub ty: Type,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct FunctionBody {
+pub struct FunctionBody {
     pub expressions: Vec<Expression>,
     pub vars: Vec<Type>,
     pub body: Body,
@@ -69,8 +70,8 @@ pub struct Body {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Expression {
-    kind: ExpressionKind,
-    ty: Type,
+    pub kind: ExpressionKind,
+    pub ty: Type,
 }
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExpressionKind {
@@ -133,6 +134,38 @@ pub enum ExpressionKind {
 impl ExpressionKind {
     fn typed(self, ty: Type) -> Expression {
         Expression { kind: self, ty }
+    }
+}
+
+impl Index<Id> for Vec<Expression> {
+    type Output = Expression;
+
+    fn index(&self, index: Id) -> &Self::Output {
+        &self[index.0]
+    }
+}
+
+impl Index<Id> for [Expression] {
+    type Output = Expression;
+
+    fn index(&self, index: Id) -> &Self::Output {
+        &self[index.0]
+    }
+}
+
+impl Index<VarId> for Vec<Type> {
+    type Output = Type;
+
+    fn index(&self, index: VarId) -> &Self::Output {
+        &self[index.0]
+    }
+}
+
+impl Index<VarId> for [Type] {
+    type Output = Type;
+
+    fn index(&self, index: VarId) -> &Self::Output {
+        &self[index.0]
     }
 }
 

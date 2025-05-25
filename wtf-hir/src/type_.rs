@@ -37,22 +37,6 @@ pub enum Type {
     Name(String),
 }
 
-impl Type {
-    fn u8() -> Self {
-        Self::Int {
-            signed: false,
-            bits: 8,
-        }
-    }
-
-    fn i8() -> Self {
-        Self::Int {
-            signed: true,
-            bits: 8,
-        }
-    }
-}
-
 impl Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

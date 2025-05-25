@@ -32,7 +32,7 @@ pub fn compile(ast: ast::Module) -> Module {
                 ast_funs.insert(fun.name.to_string(), (fun, is_export));
             }
             ast::Declaration::Overload(overload) => {
-                todo!("Insert overloads in AST")
+                todo!("Insert overloads from AST")
             }
             ast::Declaration::Record(rec) => {
                 ast_types.insert(
@@ -785,6 +785,5 @@ fn compile_expression(
                 Type::List(Box::new(item_ty)),
             )))
         }
-        _ => panic!("You can only call names."),
     }
 }
