@@ -1,6 +1,6 @@
 use std::{collections::HashMap, iter};
 
-use crate::{FunctionSignature, Type};
+use crate::{FunctionSignature, Module, Type};
 
 pub trait WithBuiltins {
     fn with_builtins() -> Self;

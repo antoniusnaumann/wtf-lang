@@ -103,9 +103,10 @@ impl Display for Type {
                 }
                 write!(f, ")")?
             }
-            Type::Char => todo!(),
-            Type::Name(_) => todo!(),
+            Type::Char => write!(f, "char")?,
+            Type::Name(name) => write!(f, "{name}")?,
         };
+
         Ok(())
     }
 }

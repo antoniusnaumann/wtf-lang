@@ -83,10 +83,10 @@ pub fn compile(ast: ast::Module) -> Module {
         );
     }
 
-    for (name, signature) in &signatures {
-        println!("{name}");
-        println!("{:#?}", signature);
-    }
+    // for (name, signature) in &signatures {
+    //     println!("{name}");
+    //     println!("{:#?}", signature);
+    // }
 
     let mut functions = HashMap::new();
     let mut constants = HashSet::new();
@@ -694,7 +694,7 @@ fn compile_expression(
             fun.create_expr(Expression::call(
                 method.clone(),
                 args,
-                todo!("figure out return type"),
+                Type::Void, // TODO: figure out actual return type
             ))
         }
         ast::Expression::FieldAccess {

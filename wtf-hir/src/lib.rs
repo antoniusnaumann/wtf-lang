@@ -322,6 +322,21 @@ impl Display for VarId {
 
 impl Display for FunctionBody {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // TODO: only print expressions that are not used in statement level
+        writeln!(f, "")?;
+        for (id, expr) in self.expressions.iter().enumerate() {
+            write!(
+                f,
+                "  {:<3}: {:<8}:: ",
+                Id(id).to_string(),
+                expr.ty.to_string()
+            )?;
+            expr.fmt(f, 0, self)?;
+            writeln!(f, "")?;
+        }
+
+        writeln!(f, "")?;
+
         self.body.fmt(f, 1, self)
     }
 }
@@ -334,13 +349,16 @@ impl Body {
         fun: &FunctionBody,
     ) -> std::fmt::Result {
         let ws = "  ";
+        for _ in 0..indentation {
+            write!(f, "{ws}")?;
+        }
         writeln!(f, "{{")?;
-        for id in &self.ids {
+        for &id in &self.ids {
             for _ in 0..(indentation + 1) {
                 write!(f, "{ws}")?;
             }
-            let expression = &fun.expressions[id.0];
-            write!(f, "{}: {} = ", id, expression.ty)?;
+            let expression = &fun.expressions[id];
+            write!(f, "{:<3}: ", id.to_string(),)?;
             expression.fmt(f, indentation + 1, fun)?;
             writeln!(f, "")?;
         }

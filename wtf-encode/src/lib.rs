@@ -210,31 +210,52 @@ fn convert_function_body<'a>(
     locals: &[TypeRef],
 ) -> Vec<Instruction<'a>> {
     body.expressions
-        .into_iter()
-        .map(|exp| exp.convert(lookup, &locals))
+        .iter()
+        .map(|exp| exp.clone().convert(lookup, &locals, &body.expressions))
         .chain(iter::once(Instruction::End))
         .collect()
-}
-
-fn convert_body<'a>(
-    body: hir::Body,
-    lookup: &mut TypeLookup,
-    locals: &[TypeRef],
-    expressions: &[Expression],
-) -> Vec<Instruction<'a>> {
-    body.ids.iter().map(|id| expressions[id]).collect()
 }
 
 trait ConvertInstruction<'a> {
     type Output;
 
-    fn convert(self, lookup: &mut TypeLookup, locals: &[TypeRef]) -> Self::Output;
+    fn convert(
+        self,
+        lookup: &mut TypeLookup,
+        locals: &[TypeRef],
+        expressions: &[Expression],
+    ) -> Self::Output;
+}
+
+impl<'a> ConvertInstruction<'a> for hir::Body {
+    type Output = Vec<Instruction<'a>>;
+
+    fn convert(
+        self,
+        lookup: &mut TypeLookup,
+        locals: &[TypeRef],
+        expressions: &[Expression],
+    ) -> Self::Output {
+        self.ids
+            .iter()
+            .map(|&id| {
+                expressions[id]
+                    .to_owned()
+                    .convert(lookup, locals, expressions)
+            })
+            .collect()
+    }
 }
 
 impl<'a> ConvertInstruction<'a> for hir::Expression {
     type Output = Instruction<'a>;
 
-    fn convert(self, lookup: &mut TypeLookup, locals: &[TypeRef]) -> Self::Output {
+    fn convert(
+        self,
+        lookup: &mut TypeLookup,
+        locals: &[TypeRef],
+        expressions: &[Expression],
+    ) -> Self::Output {
         match self.kind {
             hir::ExpressionKind::Int(num) => Instruction::I32(num as i32), // TODO typecheck: different instructions for different int sizes
             hir::ExpressionKind::Float(num) => Instruction::F32(num as f32), // TODO: typecheck: different instructions for different float sizes
@@ -257,40 +278,41 @@ impl<'a> ConvertInstruction<'a> for hir::Expression {
                 function,
                 arguments,
             } => Instruction::Call(function),
-            hir::ExpressionKind::Member { of: id, name } => {
-                let mut current = &locals[id.0];
-                let mut member = vec![];
-                for field in fields {
-                    let record = match current {
-                        TypeRef::Primitive(_) => panic!("Cannot access member of a primitive"),
-                        TypeRef::Type(ty) => &lookup.0[*ty as usize],
-                    };
-                    let Type::Record { fields } = record else {
-                        panic!("ERROR: can only access fields of records");
-                    };
+            hir::ExpressionKind::Member {
+                of: id,
+                name: field,
+            } => {
+                let record = match &expressions[id]
+                    .ty
+                    .clone()
+                    .convert(lookup)
+                    .expect("Record should have a valid type")
+                {
+                    TypeRef::Primitive(_) => panic!("Cannot access member of a primitive"),
+                    TypeRef::Type(ty) => &lookup.0[*ty as usize],
+                };
+                let Type::Record { fields } = record else {
+                    panic!("ERROR: can only access fields of records");
+                };
 
-                    let (index, ty) = fields
-                        .iter()
-                        .enumerate()
-                        .find_map(
-                            |(i, (name, ty))| {
-                                if *name == field {
-                                    Some((i, ty))
-                                } else {
-                                    None
-                                }
-                            },
-                        )
-                        .expect("Accessed field did not exist");
-
-                    member.push(index as u32);
-                    current = ty;
-                }
+                let (index, ty) = fields
+                    .iter()
+                    .enumerate()
+                    .find_map(
+                        |(i, (name, ty))| {
+                            if *name == field {
+                                Some((i, ty))
+                            } else {
+                                None
+                            }
+                        },
+                    )
+                    .expect("Accessed field did not exist");
 
                 Instruction::LocalGetMember {
-                    id: id.0 as u32,
+                    id: todo!("figure out how to update this"),
                     // TODO: convert field names to indices
-                    member,
+                    member: todo!("figure out how to update this"),
                 }
             }
             hir::ExpressionKind::IndexAccess { of: target, index } => {
@@ -310,20 +332,22 @@ impl<'a> ConvertInstruction<'a> for hir::Expression {
                 then,
                 else_,
             } => Instruction::If {
-                then: then.convert(lookup, locals),
-                else_: else_.convert(lookup, locals),
+                then: then.convert(lookup, locals, expressions),
+                else_: else_.convert(lookup, locals, expressions),
             },
             hir::ExpressionKind::Match { arms } => todo!(),
-            hir::ExpressionKind::Loop(block) => Instruction::Loop(block.convert(lookup, locals)),
+            hir::ExpressionKind::Loop(block) => {
+                Instruction::Loop(block.convert(lookup, locals, expressions))
+            }
             hir::ExpressionKind::Unreachable => Instruction::Unreachable,
 
-            wtf_hir::ExpressionKind::Parameter(_) => todo!(),
-            wtf_hir::ExpressionKind::Reference(id) => todo!(),
-            wtf_hir::ExpressionKind::VarSet { var, expression } => todo!(),
-            wtf_hir::ExpressionKind::VarGet { var } => todo!(),
-            wtf_hir::ExpressionKind::None => todo!(),
-            wtf_hir::ExpressionKind::Tuple(_) => todo!(),
-            wtf_hir::ExpressionKind::TupleAccess { of, index } => todo!(),
+            hir::ExpressionKind::Parameter(_) => todo!(),
+            hir::ExpressionKind::Reference(id) => todo!(),
+            hir::ExpressionKind::VarSet { var, expression } => todo!(),
+            hir::ExpressionKind::VarGet { var } => todo!(),
+            hir::ExpressionKind::None => todo!(),
+            hir::ExpressionKind::Tuple(_) => todo!(),
+            hir::ExpressionKind::TupleAccess { of, index } => todo!(),
         }
     }
 }
