@@ -343,9 +343,12 @@ impl<'a> ConvertInstruction<'a> for hir::Expression {
 
             hir::ExpressionKind::Parameter(_) => todo!(),
             hir::ExpressionKind::Reference(id) => todo!(),
-            hir::ExpressionKind::VarSet { var, expression } => todo!(),
-            hir::ExpressionKind::VarGet { var } => todo!(),
-            hir::ExpressionKind::None => todo!(),
+            hir::ExpressionKind::VarSet { var, expression } => {
+                // TODO: Add expression as instruction as well
+                Instruction::LocalSet(var.0 as u32)
+            }
+            hir::ExpressionKind::VarGet { var } => Instruction::LocalGet(var.0 as u32),
+            hir::ExpressionKind::Void => Instruction::Noop,
             hir::ExpressionKind::Tuple(_) => todo!(),
             hir::ExpressionKind::TupleAccess { of, index } => todo!(),
         }

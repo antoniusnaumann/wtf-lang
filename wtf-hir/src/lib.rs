@@ -57,7 +57,7 @@ pub struct Test {
 }
 
 #[derive(Debug, Clone, PartialEq, Copy)]
-pub struct VarId(usize);
+pub struct VarId(pub usize);
 
 #[derive(Debug, Clone, PartialEq, Copy)]
 pub struct Id(usize);
@@ -84,7 +84,7 @@ pub enum ExpressionKind {
     VarGet {
         var: VarId,
     },
-    None,
+    Void,
     Int(i64),
     Float(f64),
     String(String),
@@ -183,16 +183,16 @@ impl Expression {
         ExpressionKind::VarGet { var }.typed(ty)
     }
     fn none() -> Self {
-        ExpressionKind::None.typed(Type::Void)
+        ExpressionKind::Void.typed(Type::Void)
     }
     fn int(int: i64) -> Expression {
         ExpressionKind::Int(int).typed(Type::Int {
             signed: true,
-            bits: 64,
+            bits: 32,
         })
     }
     fn float(float: f64) -> Expression {
-        ExpressionKind::Float(float).typed(Type::Float { bits: 64 })
+        ExpressionKind::Float(float).typed(Type::Float { bits: 32 })
     }
     fn string(string: String) -> Expression {
         ExpressionKind::String(string).typed(Type::String)
@@ -386,7 +386,7 @@ impl Expression {
             ExpressionKind::Float(float) => write!(f, "float {}", float)?,
             ExpressionKind::String(string) => write!(f, "string {:?}", string)?,
             ExpressionKind::Bool(b) => write!(f, "bool {b}")?,
-            ExpressionKind::None => write!(f, "none")?,
+            ExpressionKind::Void => write!(f, "none")?,
             ExpressionKind::Enum { case } => write!(f, "enum case {}", case)?,
             ExpressionKind::Variant { case, payloads } => {
                 write!(f, "variant case {} with payloads:", case)?;
