@@ -120,7 +120,7 @@ pub fn compile(ast: ast::Module) -> Module {
     Module {
         types,
         functions,
-        tests: vec![],
+        tests,
         constants,
     }
 }
@@ -625,21 +625,21 @@ fn compile_expression(
                             match operator {
                                 wtf_ast::BinaryOperator::Arithmetic(operator) => match operator {
                                     wtf_ast::ArithmeticOperator::Add => "add",
-                                    wtf_ast::ArithmeticOperator::Subtract => "subtract",
-                                    wtf_ast::ArithmeticOperator::Multiply => "multiply",
-                                    wtf_ast::ArithmeticOperator::Divide => "divide",
+                                    wtf_ast::ArithmeticOperator::Subtract => "sub",
+                                    wtf_ast::ArithmeticOperator::Multiply => "mul",
+                                    wtf_ast::ArithmeticOperator::Divide => "div",
                                 },
                                 BinaryOperator::Logic(op) => match op {
                                     // TODO: handling this as a function does not allow short-circuiting
                                     ast::LogicOperator::And => "and",
                                     ast::LogicOperator::Or => "or",
                                 },
-                                wtf_ast::BinaryOperator::Equal => "equal",
-                                wtf_ast::BinaryOperator::NotEqual => "not_equal",
+                                wtf_ast::BinaryOperator::Equal => "eq",
+                                wtf_ast::BinaryOperator::NotEqual => "ne",
                                 wtf_ast::BinaryOperator::GreaterThan => "greater_than",
                                 wtf_ast::BinaryOperator::LessThan => "less_than",
-                                wtf_ast::BinaryOperator::GreaterEqual => "greater_equal",
-                                wtf_ast::BinaryOperator::LessEqual => "less_equal",
+                                wtf_ast::BinaryOperator::GreaterEqual => "greater_eq",
+                                wtf_ast::BinaryOperator::LessEqual => "less_eq",
                                 wtf_ast::BinaryOperator::Contains => "contains",
                                 wtf_ast::BinaryOperator::NullCoalesce => todo!("null coalesce"),
                             },
