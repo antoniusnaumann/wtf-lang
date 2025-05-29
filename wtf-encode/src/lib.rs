@@ -350,6 +350,9 @@ impl<'a, 'temp> InstructionBuilder<'a, 'temp> {
                     .convert(self.lookup)
                     .expect("List elements must have a type");
 
+                self.push(*target);
+                self.push(*index);
+
                 Instruction::IndexAccess { ty }.into()
             }
             hir::ExpressionKind::Return(inner) => {

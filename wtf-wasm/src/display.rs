@@ -2,7 +2,7 @@ use std::fmt::{Formatter, Result};
 
 use wasm_encoder::ComponentValType;
 
-use crate::{Instance, Instruction};
+use crate::{Instance, Instruction, Type};
 
 const WHITESPACE: &'static str = "  ";
 
@@ -12,7 +12,11 @@ pub trait Print {
 
 impl Print for Instance<'_> {
     fn print(&self, f: &mut Formatter<'_>, _indent: usize) -> Result {
-        // TODO: print types
+        for (i, ty) in self.types.iter().enumerate() {
+            write!(f, "{i:>3}: ")?;
+            ty.print(f, 0)?;
+        }
+        writeln!(f, "")?;
 
         for func in &self.functions {
             writeln!(f, "function {}", func.signature.name)?;
@@ -121,7 +125,40 @@ impl Print for ComponentValType {
                 };
                 write!(f, "{repr}")
             }
-            ComponentValType::Type(_) => todo!(),
+            ComponentValType::Type(id) => {
+                write!(f, "@{id}")
+            }
         }
+    }
+}
+
+impl Print for Type {
+    fn print(&self, f: &mut Formatter<'_>, indent: usize) -> Result {
+        for _ in 0..indent {
+            write!(f, "{}", WHITESPACE)?;
+        }
+
+        match self {
+            Type::Simple(ty) => ty.print(f, indent)?,
+            Type::List(elem) => {
+                write!(f, "[")?;
+                elem.print(f, indent)?;
+                write!(f, "]")?;
+            }
+            Type::Option(some) => {
+                some.print(f, indent)?;
+                write!(f, "?")?;
+            }
+            Type::Result { ok, err } => todo!(),
+            Type::Record { fields } => todo!(),
+            Type::Variant {} => todo!(),
+            Type::Tuple(component_val_types) => todo!(),
+            Type::Flags(items) => todo!(),
+            Type::Enum(items) => todo!(),
+            Type::Own() => todo!(),
+            Type::Borrow() => todo!(),
+        }
+
+        writeln!(f, "")
     }
 }

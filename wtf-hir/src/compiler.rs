@@ -777,7 +777,9 @@ fn find_signature(
         let arg = &actual.ty;
         if arg != expected {
             // TODO: better error reporting, similar to parser
-            todo!("Compiler error: argument type does not match")
+            todo!(
+                "Compiler error: argument type does not match for {function_name}.\nGot: {arg}, Expected: {expected}",
+            )
         }
     }
 

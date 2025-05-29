@@ -128,20 +128,21 @@ fn collection_operations() -> Vec<(String, FunctionSignature)> {
 
     let collection_operations = [("len", u(32))];
 
-    collection_types
-        .into_iter()
-        .flat_map(|(ty, s)| {
-            collection_operations
-                .iter()
-                .flat_map(|(op, ret)| {
-                    primitive_types
-                        .iter()
-                        .map(|elem| fun(format!("{op}__{s}___{elem}"), &[ty.clone()], ret.clone()))
-                        .collect::<Vec<_>>()
-                })
-                .collect::<Vec<_>>()
-        })
-        .collect()
+    let mut funs = Vec::new();
+
+    for (name, ty) in collection_operations {
+        funs.push(fun(format!("{name}__string"), &[Type::String], ty.clone()));
+
+        for elem in &primitive_types {
+            funs.push(fun(
+                format!("{name}__list___{elem}"),
+                &[Type::List(elem.to_owned().into())],
+                ty.clone(),
+            ));
+        }
+    }
+
+    funs
 }
 
 fn conv(target: Type, arg: Type) -> (String, FunctionSignature) {
