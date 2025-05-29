@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::ops::Deref;
+use std::ops::{Deref, Index};
 
 use wtf_ast::{
     self as ast, BinaryOperator, FunctionDeclaration, TestDeclaration, TypeAnnotation,
@@ -9,7 +9,7 @@ use wtf_ast::{
 use crate::builtin::WithBuiltins;
 use crate::{
     type_::unify, visible::Visible, Body, Expression, ExpressionKind, Function, FunctionBody,
-    FunctionSignature, Id, Module, Parameter, Test, Type, VarId,
+    FunctionSignature, Module, Parameter, Test, Type, VarId,
 };
 
 const INTERNAL_PREFIX: &str = "wtfinternal";
@@ -286,15 +286,15 @@ fn compile_fun(
         .map(|type_| compile_type_annotation(&type_, ast_types))
         .unwrap_or(Type::Void);
 
-    let mut body = FunctionBodyBuilder::new();
+    let mut vars = VarCollector::new();
     let mut visible = Visible::new();
 
     for (name, ty) in &parameters {
-        let param = body.create_var(ty.clone());
+        let param = vars.push(ty.clone());
         visible.bind(name.clone(), param, false);
     }
 
-    let block = compile_block(&declaration.body, &mut body, &mut visible, signatures);
+    let block = compile_block(&declaration.body, &mut vars, &mut visible, signatures);
 
     Function {
         parameters: parameters
@@ -305,7 +305,10 @@ fn compile_fun(
             })
             .collect(),
         return_type,
-        body: body.finish(block),
+        body: FunctionBody {
+            vars: vars.vars,
+            body: block.into(),
+        },
         is_export,
     }
 }
@@ -377,100 +380,61 @@ fn compile_test(
     }
 }
 
-struct FunctionBodyBuilder {
-    expressions: Vec<Expression>,
+struct VarCollector {
     vars: Vec<Type>,
 }
-impl FunctionBodyBuilder {
+impl VarCollector {
     fn new() -> Self {
-        Self {
-            expressions: vec![],
-            vars: vec![],
-        }
+        Self { vars: vec![] }
     }
 
-    fn create_expr(&mut self, expression: Expression) -> Id {
-        let id = Id(self.expressions.len());
-        self.expressions.push(expression);
-        id
-    }
-    fn get(&self, id: Id) -> &Expression {
-        &self.expressions[id.0]
-    }
-
-    fn create_var(&mut self, ty: Type) -> VarId {
+    fn push(&mut self, ty: Type) -> VarId {
         let id = VarId(self.vars.len());
         self.vars.push(ty);
         id
     }
-    fn get_var_type(&self, id: VarId) -> &Type {
-        &self.vars[id.0]
-    }
-
-    fn finish(self, body: Body) -> FunctionBody {
-        FunctionBody {
-            expressions: self.expressions,
-            vars: self.vars,
-            body,
-        }
-    }
 }
 
-struct BodyBuilder {
-    expressions: Vec<Id>,
-}
-impl BodyBuilder {
-    fn new() -> Self {
-        Self {
-            expressions: vec![],
-        }
-    }
-    fn push(&mut self, id: Id) -> Id {
-        self.expressions.push(id);
-        id
-    }
-    fn finish(self, returns: Id) -> Body {
-        Body {
-            ids: self.expressions,
-            returns,
-        }
-    }
-}
+impl Index<VarId> for VarCollector {
+    type Output = Type;
 
-fn compile_empty_body(fun: &mut FunctionBodyBuilder) -> Body {
-    let mut body_builder = BodyBuilder::new();
-    let none = body_builder.push(fun.create_expr(Expression::void()));
-    body_builder.finish(none)
+    fn index(&self, index: VarId) -> &Self::Output {
+        &self.vars[index]
+    }
 }
 
 fn compile_block(
     block: &ast::Block,
-    fun: &mut FunctionBodyBuilder,
+    fun: &mut VarCollector,
     visible: &mut Visible,
     signatures: &HashMap<String, FunctionSignature>,
 ) -> Body {
     let visible_snapshot = visible.snapshot();
 
-    let mut body_builder = BodyBuilder::new();
+    let mut statements = Vec::new();
     for statement in &block.statements {
-        compile_statement(statement, fun, &mut body_builder, visible, signatures);
+        if matches!(statement, ast::Statement::EmptyLine) {
+            continue;
+        }
+        statements.push(compile_statement(statement, fun, visible, signatures));
     }
-    let none = body_builder.push(fun.create_expr(Expression::void()));
-    let body = body_builder.finish(none);
+    statements.push(Expression::void());
 
     visible.restore(visible_snapshot);
-    body
+    Body { statements }
 }
 
 fn compile_statement(
     statement: &ast::Statement,
-    fun: &mut FunctionBodyBuilder,
-    body: &mut BodyBuilder,
+    vars: &mut VarCollector,
     visible: &mut Visible,
     signatures: &HashMap<String, FunctionSignature>,
-) {
+) -> Expression {
+    const EMPTY_BODY: Body = Body {
+        statements: Vec::new(),
+    };
     match statement {
-        ast::Statement::EmptyLine => {}
+        ast::Statement::EmptyLine => unreachable!(),
         ast::Statement::VariableDeclaration(variable_declaration) => {
             // TODO: allow uninitialized variables
             let initial_value = compile_expression(
@@ -478,22 +442,22 @@ fn compile_statement(
                     .value
                     .as_ref()
                     .expect("uninitialized var"),
-                fun,
+                vars,
                 visible,
                 signatures,
             );
-            let ty = fun.get(initial_value).ty.clone();
-            let var = fun.create_var(ty);
+            let ty = initial_value.ty.clone();
+            let var = vars.push(ty);
             // TODO: check if type matches annotated type (if exists)
             visible.bind(
                 variable_declaration.name.clone(),
                 var,
                 variable_declaration.mutable,
             );
-            body.push(fun.create_expr(Expression::var_set(var, initial_value)));
+            Expression::var_set(var, initial_value)
         }
         ast::Statement::Assignment { target, value } => {
-            let value = compile_expression(value, fun, visible, signatures);
+            let value = compile_expression(value, vars, visible, signatures);
             let name = match target {
                 ast::Expression::Identifier(name) => name,
                 _ => panic!("Can only assign to names (for now)"), // TODO
@@ -502,106 +466,95 @@ fn compile_statement(
             if !binding.mutable {
                 panic!("Tried assigning to a mutable variable.");
             }
-            body.push(fun.create_expr(Expression::var_set(binding.id, value)));
+            Expression::var_set(binding.id, value)
         }
         ast::Statement::ExpressionStatement(expression) => {
-            compile_expression(expression, fun, visible, signatures);
-            body.push(fun.create_expr(Expression::void()));
+            compile_expression(expression, vars, visible, signatures)
         }
         ast::Statement::ReturnStatement(expression) => {
             let returned = match expression {
-                Some(expression) => compile_expression(expression, fun, visible, signatures),
-                None => body.push(fun.create_expr(Expression::void())),
+                Some(expression) => compile_expression(expression, vars, visible, signatures),
+                None => Expression::void(),
             };
-            body.push(fun.create_expr(Expression::return_(returned)));
+            Expression::return_(returned)
         }
         ast::Statement::BreakStatement(expression) => {
             let value = match expression {
-                Some(expression) => compile_expression(expression, fun, visible, signatures),
-                None => body.push(fun.create_expr(Expression::void())),
+                Some(expression) => compile_expression(expression, vars, visible, signatures),
+                None => Expression::void(),
             };
-            body.push(fun.create_expr(Expression::break_(value)));
+            Expression::break_(value)
         }
-        ast::Statement::ContinueStatement => {
-            body.push(fun.create_expr(Expression::continue_()));
-        }
+        ast::Statement::ContinueStatement => Expression::continue_(),
         ast::Statement::ThrowStatement(value) => {
-            let value = compile_expression(value, fun, visible, signatures);
-            body.push(fun.create_expr(Expression::throw(value)));
+            let value = compile_expression(value, vars, visible, signatures);
+            Expression::throw(value)
         }
         ast::Statement::IfStatement(if_statement) => {
-            let condition = compile_expression(&if_statement.condition, fun, visible, signatures);
-            let then = compile_block(&if_statement.then_branch, fun, visible, signatures);
+            let condition = compile_expression(&if_statement.condition, vars, visible, signatures);
+            let then = compile_block(&if_statement.then_branch, vars, visible, signatures);
             let else_ = match &if_statement.else_branch {
-                Some(else_branch) => compile_block(&else_branch, fun, visible, signatures),
-                None => compile_empty_body(fun),
+                Some(else_branch) => compile_block(&else_branch, vars, visible, signatures),
+                None => EMPTY_BODY,
             };
-            let ty = unify(&fun.get(then.returns).ty, &fun.get(else_.returns).ty);
-            body.push(fun.create_expr(Expression::if_(condition, then, else_, ty)));
+            let ty = unify(&then.returns().ty, &else_.returns().ty);
+            Expression::if_(condition, then, else_, ty)
         }
         ast::Statement::MatchStatement(_) => todo!("impl match"),
         ast::Statement::WhileStatement(while_statement) => {
-            let inner_body = compile_block(&while_statement.body, fun, visible, signatures);
+            let inner_body = compile_block(&while_statement.body, vars, visible, signatures);
             let complete_body = {
-                let mut body = BodyBuilder::new();
+                let mut body = Vec::new();
                 let condition =
-                    compile_expression(&while_statement.condition, fun, visible, signatures);
-                let if_condition_true = {
-                    let mut b = BodyBuilder::new();
-                    let none = b.push(fun.create_expr(Expression::void()));
-                    let break_expr = b.push(fun.create_expr(Expression::break_(none)));
-                    b.finish(break_expr)
-                };
-                let empty_body = compile_empty_body(fun);
-                body.push(fun.create_expr(Expression::if_(
+                    compile_expression(&while_statement.condition, vars, visible, signatures);
+                body.push(Expression::if_(
                     condition,
-                    if_condition_true,
-                    empty_body,
+                    vec![Expression::break_(Expression::void())].into(),
+                    EMPTY_BODY,
                     Type::Void,
-                )));
-                for id in inner_body.ids {
-                    body.push(id);
+                ));
+                for statement in inner_body.statements {
+                    body.push(statement);
                 }
-                let none = body.push(fun.create_expr(Expression::void()));
-                body.finish(none)
+                body.push(Expression::void());
+                body
             };
-            body.push(fun.create_expr(Expression::loop_(complete_body, Type::Void)));
+            Expression::loop_(complete_body.into(), Type::Void)
         }
         ast::Statement::ForStatement(_) => todo!("impl for"),
         wtf_ast::Statement::Assertion(assert_statement) => {
             let condition =
-                compile_expression(&assert_statement.condition, fun, visible, signatures);
-            let then = compile_empty_body(fun);
-            let else_ = {
-                let mut body = BodyBuilder::new();
-                let never = body.push(fun.create_expr(Expression::unreachable()));
-                body.finish(never)
-            };
-            body.push(fun.create_expr(Expression::if_(condition, then, else_, Type::Void)));
+                compile_expression(&assert_statement.condition, vars, visible, signatures);
+            Expression::if_(
+                condition,
+                EMPTY_BODY,
+                vec![Expression::unreachable()].into(),
+                Type::Void,
+            )
         }
     }
 }
 
 fn compile_expression(
     expression: &ast::Expression,
-    fun: &mut FunctionBodyBuilder,
+    fun: &mut VarCollector,
     visible: &mut Visible,
     signatures: &HashMap<String, FunctionSignature>,
-) -> Id {
+) -> Expression {
     match expression {
-        ast::Expression::Literal(literal) => fun.create_expr(match literal {
+        ast::Expression::Literal(literal) => match literal {
             ast::Literal::Integer(int) => Expression::int(*int),
             ast::Literal::Float(float) => Expression::float(*float),
             ast::Literal::String(string) => Expression::string(string.clone()),
             ast::Literal::Boolean(bool) => Expression::bool(*bool),
             ast::Literal::None => Expression::void(),
-        }),
+        },
         ast::Expression::Identifier(name) => {
             let binding = visible
                 .lookup(&name)
                 .expect(&format!("Variable {} is not defined.", name));
-            let ty = fun.get_var_type(binding.id);
-            fun.create_expr(ExpressionKind::VarGet { var: binding.id }.typed(ty.clone()))
+            let ty = &fun[binding.id];
+            ExpressionKind::VarGet { var: binding.id }.typed(ty.clone())
         }
         ast::Expression::BinaryExpression {
             left,
@@ -610,42 +563,41 @@ fn compile_expression(
         } => {
             let left = compile_expression(left, fun, visible, signatures);
             let right = compile_expression(right, fun, visible, signatures);
-            fun.create_expr(
-                ExpressionKind::Call {
-                    function: format!(
-                        "{}__{}_{}",
-                        match operator {
-                            wtf_ast::BinaryOperator::Arithmetic(operator) => match operator {
-                                wtf_ast::ArithmeticOperator::Add => "add",
-                                wtf_ast::ArithmeticOperator::Subtract => "sub",
-                                wtf_ast::ArithmeticOperator::Multiply => "mul",
-                                wtf_ast::ArithmeticOperator::Divide => "div",
-                            },
-                            BinaryOperator::Logic(op) => match op {
-                                // TODO: handling this as a function does not allow short-circuiting
-                                ast::LogicOperator::And => "and",
-                                ast::LogicOperator::Or => "or",
-                            },
-                            wtf_ast::BinaryOperator::Equal => "eq",
-                            wtf_ast::BinaryOperator::NotEqual => "ne",
-                            wtf_ast::BinaryOperator::GreaterThan => "greater_than",
-                            wtf_ast::BinaryOperator::LessThan => "less_than",
-                            wtf_ast::BinaryOperator::GreaterEqual => "greater_eq",
-                            wtf_ast::BinaryOperator::LessEqual => "less_eq",
-                            wtf_ast::BinaryOperator::Contains => "contains",
-                            wtf_ast::BinaryOperator::NullCoalesce => todo!("null coalesce"),
+            // TODO: call "find_signature"
+            ExpressionKind::Call {
+                function: format!(
+                    "{}__{}_{}",
+                    match operator {
+                        wtf_ast::BinaryOperator::Arithmetic(operator) => match operator {
+                            wtf_ast::ArithmeticOperator::Add => "add",
+                            wtf_ast::ArithmeticOperator::Subtract => "sub",
+                            wtf_ast::ArithmeticOperator::Multiply => "mul",
+                            wtf_ast::ArithmeticOperator::Divide => "div",
                         },
-                        fun.get(left).ty,
-                        fun.get(right).ty
-                    ),
-                    arguments: vec![left, right],
-                }
-                .typed(fun.get(left).ty.clone()),
-            )
+                        BinaryOperator::Logic(op) => match op {
+                            // TODO: handling this as a function does not allow short-circuiting
+                            ast::LogicOperator::And => "and",
+                            ast::LogicOperator::Or => "or",
+                        },
+                        wtf_ast::BinaryOperator::Equal => "eq",
+                        wtf_ast::BinaryOperator::NotEqual => "ne",
+                        wtf_ast::BinaryOperator::GreaterThan => "greater_than",
+                        wtf_ast::BinaryOperator::LessThan => "less_than",
+                        wtf_ast::BinaryOperator::GreaterEqual => "greater_eq",
+                        wtf_ast::BinaryOperator::LessEqual => "less_eq",
+                        wtf_ast::BinaryOperator::Contains => "contains",
+                        wtf_ast::BinaryOperator::NullCoalesce => todo!("null coalesce"),
+                    },
+                    left.ty,
+                    right.ty
+                ),
+                arguments: vec![left.clone(), right],
+            }
+            .typed(left.ty)
         }
         ast::Expression::UnaryExpression { operator, operand } => {
             let operand = compile_expression(operand, fun, visible, signatures);
-            let operand_ty = fun.get(operand).ty.clone();
+            let operand_ty = operand.ty.clone();
             match operator {
                 UnaryOperator::Negate => {
                     // TODO: allow tuples
@@ -655,15 +607,11 @@ fn compile_expression(
                             if !signed {
                                 panic!("negating unsigned int")
                             }
-                            let zero = fun.create_expr(Expression {
+                            let zero = Expression {
                                 kind: ExpressionKind::Int(0),
                                 ty: Type::Int { signed, bits },
-                            });
-                            fun.create_expr(Expression::call(
-                                "subtract".to_owned(),
-                                vec![zero, operand],
-                                operand_ty,
-                            ))
+                            };
+                            Expression::call("subtract".to_owned(), vec![zero, operand], operand_ty)
                         }
                         _ => panic!("negating unsupported type"),
                     }
@@ -686,13 +634,9 @@ fn compile_expression(
                 args.push(compile_expression(arg, fun, visible, signatures));
             }
 
-            let (function, signature) = find_signature(&function, &args, fun, signatures);
+            let (function, signature) = find_signature(&function, &args, signatures);
 
-            fun.create_expr(Expression::call(
-                function.clone(),
-                args,
-                signature.return_type.clone(),
-            ))
+            Expression::call(function.clone(), args, signature.return_type.clone())
         }
         ast::Expression::MethodCall {
             receiver,
@@ -714,13 +658,9 @@ fn compile_expression(
                 args.push(arg);
             }
 
-            let (method, signature) = find_signature(&method, &args, fun, signatures);
+            let (method, signature) = find_signature(&method, &args, signatures);
 
-            fun.create_expr(Expression::call(
-                method.clone(),
-                args,
-                signature.return_type,
-            ))
+            Expression::call(method.clone(), args, signature.return_type)
         }
         ast::Expression::FieldAccess {
             object,
@@ -732,7 +672,7 @@ fn compile_expression(
                 todo!("Safe calls");
             }
             let object = compile_expression(object, fun, visible, signatures);
-            let object_ty = fun.get(object).ty.clone();
+            let object_ty = object.ty.clone();
             let member_type = match object_ty {
                 Type::Never => Type::Never,
                 Type::Record(fields) => fields
@@ -741,31 +681,27 @@ fn compile_expression(
                     .clone(),
                 _ => panic!("field access on non-struct"),
             };
-            fun.create_expr(
-                ExpressionKind::Member {
-                    of: object,
-                    name: field.clone(),
-                }
-                .typed(member_type),
-            )
+            ExpressionKind::Member {
+                of: object.into(),
+                name: field.clone(),
+            }
+            .typed(member_type)
         }
         ast::Expression::IndexAccess { collection, index } => {
             let collection = compile_expression(&collection, fun, visible, signatures);
             let index = compile_expression(index, fun, visible, signatures);
-            let collection_ty = fun.get(collection).ty.clone();
+            let collection_ty = collection.ty.clone();
             match collection_ty {
-                Type::Never => fun.create_expr(Expression::unreachable()),
+                Type::Never => Expression::unreachable(),
                 Type::String => panic!("index access on string"),
-                Type::List(item_ty) => {
-                    fun.create_expr(Expression::index_access(collection, index, *item_ty))
-                }
+                Type::List(item_ty) => Expression::index_access(collection, index, *item_ty),
                 Type::Tuple(item_tys) => {
-                    let index = match fun.get(index).kind {
+                    let index = match index.kind {
                         ExpressionKind::Int(int) => int,
                         _ => panic!("index access on tuple has to be with an int literal"),
                     } as usize;
                     let item_ty = item_tys[index].clone();
-                    fun.create_expr(Expression::tuple_access(collection, index, item_ty))
+                    Expression::tuple_access(collection, index, item_ty)
                 }
                 _ => panic!("index access on collection"),
             }
@@ -782,12 +718,12 @@ fn compile_expression(
                 None => {
                     let mut field_types = HashMap::new();
                     for (name, value) in &fields {
-                        field_types.insert(name.clone(), fun.get(*value).ty.clone());
+                        field_types.insert(name.clone(), value.ty.clone());
                     }
                     Type::Record(field_types)
                 }
             };
-            fun.create_expr(Expression::record(fields, ty))
+            Expression::record(fields, ty)
         }
         ast::Expression::ListLiteral(items) => {
             let mut compiled_items = vec![];
@@ -798,24 +734,20 @@ fn compile_expression(
             let item_ty = if compiled_items.is_empty() {
                 Type::Never
             } else {
-                let mut ty = fun.get(compiled_items[0]).ty.clone();
+                let mut ty = compiled_items[0].ty.clone();
                 for item in &compiled_items[1..] {
-                    ty = unify(&ty, &fun.get(*item).ty);
+                    ty = unify(&ty, &item.ty);
                 }
                 ty
             };
-            fun.create_expr(Expression::list(
-                compiled_items,
-                Type::List(Box::new(item_ty)),
-            ))
+            Expression::list(compiled_items, Type::List(Box::new(item_ty)))
         }
     }
 }
 
 fn find_signature(
     name: &str,
-    args: &[Id],
-    fun: &mut FunctionBodyBuilder,
+    args: &[Expression],
     signatures: &HashMap<String, FunctionSignature>,
 ) -> (String, FunctionSignature) {
     let mut mangled = format!("{name}_");
@@ -829,19 +761,25 @@ fn find_signature(
         }
     }
 
-    let (f, s) = signatures
+    let (function_name, signature) = signatures
         .get_key_value(name)
         .or_else(|| {
-            for &arg in args {
+            for arg in args {
                 mangled.push('_');
-                mangled.push_str(&type_name(&fun.get(arg).ty));
+                mangled.push_str(&type_name(&arg.ty));
             }
 
             signatures.get_key_value(&mangled)
         })
         .unwrap_or_else(|| panic!("Signature not found for name: {mangled}"));
 
-    (f.clone(), s.clone())
+    for (actual, expected) in args.iter().zip(signature.param_types.iter()) {
+        let arg = &actual.ty;
+        if arg != expected {
+            // TODO: better error reporting, similar to parser
+            todo!("Compiler error: argument type does not match")
+        }
+    }
 
-    // TODO: @marcel typecheck arguments
+    (function_name.clone(), signature.clone())
 }

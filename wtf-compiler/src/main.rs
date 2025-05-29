@@ -113,13 +113,14 @@ impl Compiler {
         let tests = hir.tests.clone();
         if self.verbose {
             println!("{hir}");
-
-            println!();
-            println!("===== WAT =====");
         }
         let wasm = wtf_encode::Encoder::new().encode(hir).finish();
         if self.verbose {
-            println!("{:?}", wasmparser::validate(&wasm).err());
+            if let Some(error) = wasmparser::validate(&wasm).err() {
+                println!();
+                println!("===== WAT =====");
+                println!("Error: {:?}", error);
+            }
         }
 
         fs::write("output.wasm", &wasm).unwrap();
