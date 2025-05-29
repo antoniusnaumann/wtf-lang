@@ -284,7 +284,6 @@ impl Display for Module {
                 }
                 writeln!(f, "")?;
             }
-            write!(f, "  ")?;
             function.body.fmt(f)?;
             write!(f, "\n}}\n")?;
         }
@@ -418,7 +417,7 @@ impl Expression {
                 }
             }
             ExpressionKind::Member { of, name } => {
-                of.fmt(f, indentation, fun);
+                of.fmt(f, indentation, fun)?;
                 write!(f, ".{name}")?
             }
             ExpressionKind::Unreachable => write!(f, "unreachable")?,
