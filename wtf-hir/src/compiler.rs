@@ -439,9 +439,10 @@ impl BodyBuilder {
 
 fn compile_empty_body(fun: &mut FunctionBodyBuilder) -> Body {
     let mut body_builder = BodyBuilder::new();
-    let none = body_builder.push(fun.create_expr(Expression::none()));
+    let none = body_builder.push(fun.create_expr(Expression::void()));
     body_builder.finish(none)
 }
+
 fn compile_block(
     block: &ast::Block,
     fun: &mut FunctionBodyBuilder,
@@ -454,7 +455,7 @@ fn compile_block(
     for statement in &block.statements {
         compile_statement(statement, fun, &mut body_builder, visible, signatures);
     }
-    let none = body_builder.push(fun.create_expr(Expression::none()));
+    let none = body_builder.push(fun.create_expr(Expression::void()));
     let body = body_builder.finish(none);
 
     visible.restore(visible_snapshot);
@@ -478,7 +479,6 @@ fn compile_statement(
                     .as_ref()
                     .expect("uninitialized var"),
                 fun,
-                body,
                 visible,
                 signatures,
             );
@@ -493,7 +493,7 @@ fn compile_statement(
             body.push(fun.create_expr(Expression::var_set(var, initial_value)));
         }
         ast::Statement::Assignment { target, value } => {
-            let value = compile_expression(value, fun, body, visible, signatures);
+            let value = compile_expression(value, fun, visible, signatures);
             let name = match target {
                 ast::Expression::Identifier(name) => name,
                 _ => panic!("Can only assign to names (for now)"), // TODO
@@ -505,20 +505,20 @@ fn compile_statement(
             body.push(fun.create_expr(Expression::var_set(binding.id, value)));
         }
         ast::Statement::ExpressionStatement(expression) => {
-            compile_expression(expression, fun, body, visible, signatures);
-            body.push(fun.create_expr(Expression::none()));
+            compile_expression(expression, fun, visible, signatures);
+            body.push(fun.create_expr(Expression::void()));
         }
         ast::Statement::ReturnStatement(expression) => {
             let returned = match expression {
-                Some(expression) => compile_expression(expression, fun, body, visible, signatures),
-                None => body.push(fun.create_expr(Expression::none())),
+                Some(expression) => compile_expression(expression, fun, visible, signatures),
+                None => body.push(fun.create_expr(Expression::void())),
             };
             body.push(fun.create_expr(Expression::return_(returned)));
         }
         ast::Statement::BreakStatement(expression) => {
             let value = match expression {
-                Some(expression) => compile_expression(expression, fun, body, visible, signatures),
-                None => body.push(fun.create_expr(Expression::none())),
+                Some(expression) => compile_expression(expression, fun, visible, signatures),
+                None => body.push(fun.create_expr(Expression::void())),
             };
             body.push(fun.create_expr(Expression::break_(value)));
         }
@@ -526,12 +526,11 @@ fn compile_statement(
             body.push(fun.create_expr(Expression::continue_()));
         }
         ast::Statement::ThrowStatement(value) => {
-            let value = compile_expression(value, fun, body, visible, signatures);
+            let value = compile_expression(value, fun, visible, signatures);
             body.push(fun.create_expr(Expression::throw(value)));
         }
         ast::Statement::IfStatement(if_statement) => {
-            let condition =
-                compile_expression(&if_statement.condition, fun, body, visible, signatures);
+            let condition = compile_expression(&if_statement.condition, fun, visible, signatures);
             let then = compile_block(&if_statement.then_branch, fun, visible, signatures);
             let else_ = match &if_statement.else_branch {
                 Some(else_branch) => compile_block(&else_branch, fun, visible, signatures),
@@ -545,16 +544,11 @@ fn compile_statement(
             let inner_body = compile_block(&while_statement.body, fun, visible, signatures);
             let complete_body = {
                 let mut body = BodyBuilder::new();
-                let condition = compile_expression(
-                    &while_statement.condition,
-                    fun,
-                    &mut body,
-                    visible,
-                    signatures,
-                );
+                let condition =
+                    compile_expression(&while_statement.condition, fun, visible, signatures);
                 let if_condition_true = {
                     let mut b = BodyBuilder::new();
-                    let none = b.push(fun.create_expr(Expression::none()));
+                    let none = b.push(fun.create_expr(Expression::void()));
                     let break_expr = b.push(fun.create_expr(Expression::break_(none)));
                     b.finish(break_expr)
                 };
@@ -568,7 +562,7 @@ fn compile_statement(
                 for id in inner_body.ids {
                     body.push(id);
                 }
-                let none = body.push(fun.create_expr(Expression::none()));
+                let none = body.push(fun.create_expr(Expression::void()));
                 body.finish(none)
             };
             body.push(fun.create_expr(Expression::loop_(complete_body, Type::Void)));
@@ -576,7 +570,7 @@ fn compile_statement(
         ast::Statement::ForStatement(_) => todo!("impl for"),
         wtf_ast::Statement::Assertion(assert_statement) => {
             let condition =
-                compile_expression(&assert_statement.condition, fun, body, visible, signatures);
+                compile_expression(&assert_statement.condition, fun, visible, signatures);
             let then = compile_empty_body(fun);
             let else_ = {
                 let mut body = BodyBuilder::new();
@@ -591,69 +585,66 @@ fn compile_statement(
 fn compile_expression(
     expression: &ast::Expression,
     fun: &mut FunctionBodyBuilder,
-    body: &mut BodyBuilder,
     visible: &mut Visible,
     signatures: &HashMap<String, FunctionSignature>,
 ) -> Id {
     match expression {
-        ast::Expression::Literal(literal) => body.push(fun.create_expr(match literal {
+        ast::Expression::Literal(literal) => fun.create_expr(match literal {
             ast::Literal::Integer(int) => Expression::int(*int),
             ast::Literal::Float(float) => Expression::float(*float),
             ast::Literal::String(string) => Expression::string(string.clone()),
             ast::Literal::Boolean(bool) => Expression::bool(*bool),
-            ast::Literal::None => Expression::none(),
-        })),
+            ast::Literal::None => Expression::void(),
+        }),
         ast::Expression::Identifier(name) => {
             let binding = visible
                 .lookup(&name)
                 .expect(&format!("Variable {} is not defined.", name));
             let ty = fun.get_var_type(binding.id);
-            body.push(fun.create_expr(ExpressionKind::VarGet { var: binding.id }.typed(ty.clone())))
+            fun.create_expr(ExpressionKind::VarGet { var: binding.id }.typed(ty.clone()))
         }
         ast::Expression::BinaryExpression {
             left,
             operator,
             right,
         } => {
-            let left = compile_expression(left, fun, body, visible, signatures);
-            let right = compile_expression(right, fun, body, visible, signatures);
-            body.push(
-                fun.create_expr(
-                    ExpressionKind::Call {
-                        function: format!(
-                            "{}__{}_{}",
-                            match operator {
-                                wtf_ast::BinaryOperator::Arithmetic(operator) => match operator {
-                                    wtf_ast::ArithmeticOperator::Add => "add",
-                                    wtf_ast::ArithmeticOperator::Subtract => "sub",
-                                    wtf_ast::ArithmeticOperator::Multiply => "mul",
-                                    wtf_ast::ArithmeticOperator::Divide => "div",
-                                },
-                                BinaryOperator::Logic(op) => match op {
-                                    // TODO: handling this as a function does not allow short-circuiting
-                                    ast::LogicOperator::And => "and",
-                                    ast::LogicOperator::Or => "or",
-                                },
-                                wtf_ast::BinaryOperator::Equal => "eq",
-                                wtf_ast::BinaryOperator::NotEqual => "ne",
-                                wtf_ast::BinaryOperator::GreaterThan => "greater_than",
-                                wtf_ast::BinaryOperator::LessThan => "less_than",
-                                wtf_ast::BinaryOperator::GreaterEqual => "greater_eq",
-                                wtf_ast::BinaryOperator::LessEqual => "less_eq",
-                                wtf_ast::BinaryOperator::Contains => "contains",
-                                wtf_ast::BinaryOperator::NullCoalesce => todo!("null coalesce"),
+            let left = compile_expression(left, fun, visible, signatures);
+            let right = compile_expression(right, fun, visible, signatures);
+            fun.create_expr(
+                ExpressionKind::Call {
+                    function: format!(
+                        "{}__{}_{}",
+                        match operator {
+                            wtf_ast::BinaryOperator::Arithmetic(operator) => match operator {
+                                wtf_ast::ArithmeticOperator::Add => "add",
+                                wtf_ast::ArithmeticOperator::Subtract => "sub",
+                                wtf_ast::ArithmeticOperator::Multiply => "mul",
+                                wtf_ast::ArithmeticOperator::Divide => "div",
                             },
-                            fun.get(left).ty,
-                            fun.get(right).ty
-                        ),
-                        arguments: vec![left, right],
-                    }
-                    .typed(fun.get(left).ty.clone()),
-                ),
+                            BinaryOperator::Logic(op) => match op {
+                                // TODO: handling this as a function does not allow short-circuiting
+                                ast::LogicOperator::And => "and",
+                                ast::LogicOperator::Or => "or",
+                            },
+                            wtf_ast::BinaryOperator::Equal => "eq",
+                            wtf_ast::BinaryOperator::NotEqual => "ne",
+                            wtf_ast::BinaryOperator::GreaterThan => "greater_than",
+                            wtf_ast::BinaryOperator::LessThan => "less_than",
+                            wtf_ast::BinaryOperator::GreaterEqual => "greater_eq",
+                            wtf_ast::BinaryOperator::LessEqual => "less_eq",
+                            wtf_ast::BinaryOperator::Contains => "contains",
+                            wtf_ast::BinaryOperator::NullCoalesce => todo!("null coalesce"),
+                        },
+                        fun.get(left).ty,
+                        fun.get(right).ty
+                    ),
+                    arguments: vec![left, right],
+                }
+                .typed(fun.get(left).ty.clone()),
             )
         }
         ast::Expression::UnaryExpression { operator, operand } => {
-            let operand = compile_expression(operand, fun, body, visible, signatures);
+            let operand = compile_expression(operand, fun, visible, signatures);
             let operand_ty = fun.get(operand).ty.clone();
             match operator {
                 UnaryOperator::Negate => {
@@ -692,16 +683,16 @@ fn compile_expression(
 
             let mut args = vec![];
             for arg in arguments {
-                args.push(compile_expression(arg, fun, body, visible, signatures));
+                args.push(compile_expression(arg, fun, visible, signatures));
             }
 
             let (function, signature) = find_signature(&function, &args, fun, signatures);
 
-            body.push(fun.create_expr(Expression::call(
+            fun.create_expr(Expression::call(
                 function.clone(),
                 args,
                 signature.return_type.clone(),
-            )))
+            ))
         }
         ast::Expression::MethodCall {
             receiver,
@@ -717,10 +708,10 @@ fn compile_expression(
             // TODO: handle calls on resources separately
 
             let mut args = vec![];
-            args.push(compile_expression(receiver, fun, body, visible, signatures));
+            args.push(compile_expression(receiver, fun, visible, signatures));
             for arg in arguments {
-                let arg = compile_expression(arg, fun, body, visible, signatures);
-                args.push(body.push(arg));
+                let arg = compile_expression(arg, fun, visible, signatures);
+                args.push(arg);
             }
 
             let (method, signature) = find_signature(&method, &args, fun, signatures);
@@ -740,7 +731,7 @@ fn compile_expression(
             if *safe {
                 todo!("Safe calls");
             }
-            let object = compile_expression(object, fun, body, visible, signatures);
+            let object = compile_expression(object, fun, visible, signatures);
             let object_ty = fun.get(object).ty.clone();
             let member_type = match object_ty {
                 Type::Never => Type::Never,
@@ -750,32 +741,31 @@ fn compile_expression(
                     .clone(),
                 _ => panic!("field access on non-struct"),
             };
-            body.push(
-                fun.create_expr(
-                    ExpressionKind::Member {
-                        of: object,
-                        name: field.clone(),
-                    }
-                    .typed(member_type),
-                ),
+            fun.create_expr(
+                ExpressionKind::Member {
+                    of: object,
+                    name: field.clone(),
+                }
+                .typed(member_type),
             )
         }
         ast::Expression::IndexAccess { collection, index } => {
-            let collection = compile_expression(&collection, fun, body, visible, signatures);
-            let index = compile_expression(index, fun, body, visible, signatures);
+            let collection = compile_expression(&collection, fun, visible, signatures);
+            let index = compile_expression(index, fun, visible, signatures);
             let collection_ty = fun.get(collection).ty.clone();
             match collection_ty {
-                Type::Never => body.push(fun.create_expr(Expression::unreachable())),
+                Type::Never => fun.create_expr(Expression::unreachable()),
                 Type::String => panic!("index access on string"),
-                Type::List(item_ty) => body
-                    .push(fun.create_expr(Expression::index_access(collection, index, *item_ty))),
+                Type::List(item_ty) => {
+                    fun.create_expr(Expression::index_access(collection, index, *item_ty))
+                }
                 Type::Tuple(item_tys) => {
                     let index = match fun.get(index).kind {
                         ExpressionKind::Int(int) => int,
                         _ => panic!("index access on tuple has to be with an int literal"),
                     } as usize;
                     let item_ty = item_tys[index].clone();
-                    body.push(fun.create_expr(Expression::tuple_access(collection, index, item_ty)))
+                    fun.create_expr(Expression::tuple_access(collection, index, item_ty))
                 }
                 _ => panic!("index access on collection"),
             }
@@ -784,8 +774,8 @@ fn compile_expression(
             let mut fields = HashMap::new();
             for member in members {
                 let name = member.name.clone();
-                let value = compile_expression(&member.element, fun, body, visible, signatures);
-                fields.insert(name, body.push(value));
+                let value = compile_expression(&member.element, fun, visible, signatures);
+                fields.insert(name, value);
             }
             let ty = match name {
                 Some(name) => todo!("get type {name}"),
@@ -797,12 +787,12 @@ fn compile_expression(
                     Type::Record(field_types)
                 }
             };
-            body.push(fun.create_expr(Expression::record(fields, ty)))
+            fun.create_expr(Expression::record(fields, ty))
         }
         ast::Expression::ListLiteral(items) => {
             let mut compiled_items = vec![];
             for item in items.iter().rev() {
-                let item = compile_expression(item, fun, body, visible, signatures);
+                let item = compile_expression(item, fun, visible, signatures);
                 compiled_items.push(item);
             }
             let item_ty = if compiled_items.is_empty() {
@@ -814,10 +804,10 @@ fn compile_expression(
                 }
                 ty
             };
-            body.push(fun.create_expr(Expression::list(
+            fun.create_expr(Expression::list(
                 compiled_items,
                 Type::List(Box::new(item_ty)),
-            )))
+            ))
         }
     }
 }

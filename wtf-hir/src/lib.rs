@@ -182,7 +182,7 @@ impl Expression {
     fn var_get(var: VarId, ty: Type) -> Expression {
         ExpressionKind::VarGet { var }.typed(ty)
     }
-    fn none() -> Self {
+    fn void() -> Self {
         ExpressionKind::Void.typed(Type::Void)
     }
     fn int(int: i64) -> Expression {
