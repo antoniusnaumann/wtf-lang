@@ -1,11 +1,12 @@
 use std::{
     cmp::max,
     collections::{HashMap, HashSet},
-    fmt::Debug,
+    fmt::{Debug, Display, Formatter},
     iter,
     ops::Deref,
 };
 
+use display::Print;
 use wasm_encoder::{
     BlockType, CanonicalOption, CodeSection, ComponentExportKind, ConstExpr, DataSection,
     ExportKind, ExportSection, FunctionSection, GlobalSection, GlobalType, MemArg, MemorySection,
@@ -14,6 +15,8 @@ use wasm_encoder::{
 
 mod instruction;
 pub use instruction::*;
+
+mod display;
 
 // wasm encoder re-exports
 pub use wasm_encoder::{
@@ -83,6 +86,12 @@ pub struct Instance<'a> {
     pub functions: Vec<Function<'a>>,
     pub types: Vec<Type>,
     pub constants: HashSet<Vec<u8>>,
+}
+
+impl Display for Instance<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.print(f, 0)
+    }
 }
 
 #[derive(Debug)]

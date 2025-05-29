@@ -113,8 +113,18 @@ impl Compiler {
         let tests = hir.tests.clone();
         if self.verbose {
             println!("{hir}");
+
+            println!();
+            println!("===== LIR =====");
         }
-        let wasm = wtf_encode::Encoder::new().encode(hir).finish();
+
+        let lir = wtf_encode::compile(hir);
+
+        if self.verbose {
+            println!("{lir}");
+        }
+
+        let wasm = wtf_encode::Encoder::new().encode(lir).finish();
         if self.verbose {
             if let Some(error) = wasmparser::validate(&wasm).err() {
                 println!();

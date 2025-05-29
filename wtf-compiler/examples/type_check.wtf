@@ -1,5 +1,5 @@
 export func main() -> s64 {
-    return s64(0)
+    return int_ident(0).s64()
 }
 
 test "Argument type matches" {

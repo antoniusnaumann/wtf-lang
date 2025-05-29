@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fmt::Debug, iter};
+use std::{fmt::Debug, iter};
 
 use wtf_hir::{self as hir, Expression, Test};
 use wtf_wasm::{
@@ -37,8 +37,7 @@ impl Encoder {
         Self::default()
     }
 
-    pub fn encode(mut self, module: hir::Module) -> Encoder {
-        let instance = module.convert();
+    pub fn encode(mut self, instance: Instance) -> Encoder {
         self.builder.encode_instance(instance);
 
         self
@@ -47,6 +46,10 @@ impl Encoder {
     pub fn finish(self) -> Vec<u8> {
         self.builder.finish()
     }
+}
+
+pub fn compile<'a>(hir: hir::Module) -> Instance<'a> {
+    hir.convert()
 }
 
 trait ConvertModule<'a> {
@@ -204,41 +207,75 @@ fn convert_locals(locals: Vec<hir::Type>, lookup: &mut TypeLookup) -> Vec<TypeRe
         .collect()
 }
 
-fn convert_function_body<'a>(
+fn convert_function_body<'a, 'temp>(
     body: hir::FunctionBody,
-    lookup: &mut TypeLookup,
-    locals: &[TypeRef],
-) -> Vec<Instruction<'a>> {
+    lookup: &'temp mut TypeLookup,
+    locals: &'temp [TypeRef],
+) -> Vec<Instruction<'a>>
+where
+    'a: 'temp,
+{
     body.body
         .statements
-        .iter()
-        .map(|exp| exp.clone().convert(lookup, &locals))
+        .into_iter()
+        .flat_map(|exp| exp.convert(lookup, locals))
         .chain(iter::once(Instruction::End))
         .collect()
 }
 
-trait ConvertInstruction<'a> {
+trait ConvertInstruction<'a, 'temp>
+where
+    'a: 'temp,
+{
     type Output;
 
-    fn convert(self, lookup: &mut TypeLookup, locals: &[TypeRef]) -> Self::Output;
+    fn convert(self, lookup: &'temp mut TypeLookup, locals: &'temp [TypeRef]) -> Self::Output;
 }
 
-impl<'a> ConvertInstruction<'a> for hir::Body {
+impl<'a, 'temp> ConvertInstruction<'a, 'temp> for hir::Body
+where
+    'a: 'temp,
+{
     type Output = Vec<Instruction<'a>>;
 
-    fn convert(self, lookup: &mut TypeLookup, locals: &[TypeRef]) -> Self::Output {
+    fn convert(self, lookup: &'temp mut TypeLookup, locals: &'temp [TypeRef]) -> Self::Output {
         self.statements
-            .iter()
-            .map(|statement| statement.to_owned().convert(lookup, locals))
+            .into_iter()
+            .flat_map(|statement| statement.to_owned().convert(lookup, locals))
             .collect()
     }
 }
 
-impl<'a> ConvertInstruction<'a> for hir::Expression {
-    type Output = Instruction<'a>;
+impl<'a, 'temp> ConvertInstruction<'a, 'temp> for hir::Expression
+where
+    'a: 'temp,
+{
+    type Output = Vec<Instruction<'a>>;
 
-    fn convert(self, lookup: &mut TypeLookup, locals: &[TypeRef]) -> Self::Output {
-        match self.kind {
+    fn convert(self, lookup: &'temp mut TypeLookup, locals: &'temp [TypeRef]) -> Self::Output {
+        let mut builder = InstructionBuilder::new(lookup, locals);
+        builder.push(self);
+        builder.instructions
+    }
+}
+
+struct InstructionBuilder<'a, 'temp> {
+    instructions: Vec<Instruction<'a>>,
+    lookup: &'temp mut TypeLookup,
+    locals: &'temp [TypeRef],
+}
+
+impl<'a, 'temp> InstructionBuilder<'a, 'temp> {
+    fn new(lookup: &'temp mut TypeLookup, locals: &'temp [TypeRef]) -> Self {
+        Self {
+            instructions: Vec::new(),
+            lookup,
+            locals,
+        }
+    }
+
+    fn push(&mut self, expression: Expression) {
+        let instruction = match expression.kind {
             hir::ExpressionKind::Int(num) => Instruction::I32(num as i32), // TODO typecheck: different instructions for different int sizes
             hir::ExpressionKind::Float(num) => Instruction::F32(num as f32), // TODO: typecheck: different instructions for different float sizes
             hir::ExpressionKind::String(string) => Instruction::Bytes(string.into_bytes()),
@@ -247,19 +284,29 @@ impl<'a> ConvertInstruction<'a> for hir::Expression {
             hir::ExpressionKind::Variant { case, payloads } => todo!(),
             hir::ExpressionKind::Record(_) => Instruction::Noop,
             hir::ExpressionKind::List(members) => {
-                let ty = self
+                let ty = expression
                     .ty
-                    .convert(lookup)
+                    .convert(self.lookup)
                     .expect("List elements must have a type");
-                Instruction::Store {
-                    number: members.len(),
-                    ty,
+
+                let number = members.len();
+
+                for member in members {
+                    self.push(member);
                 }
+
+                Instruction::Store { number, ty }
             }
             hir::ExpressionKind::Call {
                 function,
                 arguments,
-            } => Instruction::Call(function),
+            } => {
+                for arg in arguments {
+                    self.push(arg)
+                }
+
+                Instruction::Call(function).into()
+            }
             hir::ExpressionKind::Member {
                 of: parent,
                 name: field,
@@ -267,11 +314,11 @@ impl<'a> ConvertInstruction<'a> for hir::Expression {
                 let record = match parent
                     .ty
                     .clone()
-                    .convert(lookup)
+                    .convert(self.lookup)
                     .expect("Record should have a valid type")
                 {
                     TypeRef::Primitive(_) => panic!("Cannot access member of a primitive"),
-                    TypeRef::Type(ty) => &lookup.0[ty as usize],
+                    TypeRef::Type(ty) => &self.lookup.0[ty as usize],
                 };
                 let Type::Record { fields } = record else {
                     panic!("ERROR: can only access fields of records");
@@ -298,40 +345,59 @@ impl<'a> ConvertInstruction<'a> for hir::Expression {
                 }
             }
             hir::ExpressionKind::IndexAccess { of: target, index } => {
-                let ty = self
+                let ty = expression
                     .ty
-                    .convert(lookup)
+                    .convert(self.lookup)
                     .expect("List elements must have a type");
 
-                Instruction::IndexAccess { ty }
+                Instruction::IndexAccess { ty }.into()
             }
-            hir::ExpressionKind::Return(inner) => Instruction::Return, // TODO: use inner expression
-            hir::ExpressionKind::Break(inner) => Instruction::Break,
-            hir::ExpressionKind::Continue => Instruction::Continue,
-            hir::ExpressionKind::Throw(inner) => todo!(),
+            hir::ExpressionKind::Return(inner) => {
+                self.push(*inner);
+
+                Instruction::Return
+            }
+            hir::ExpressionKind::Break(inner) => {
+                self.push(*inner);
+
+                Instruction::Break
+            }
+            hir::ExpressionKind::Continue => Instruction::Continue.into(),
+            hir::ExpressionKind::Throw(inner) => {
+                self.push(*inner);
+
+                todo!("What to do with throw?")
+            }
             hir::ExpressionKind::If {
-                condition, // TODO: use condition
+                condition,
                 then,
                 else_,
-            } => Instruction::If {
-                then: then.convert(lookup, locals),
-                else_: else_.convert(lookup, locals),
-            },
+            } => {
+                self.push(*condition);
+                Instruction::If {
+                    then: then.convert(self.lookup, self.locals),
+                    else_: else_.convert(self.lookup, self.locals),
+                }
+            }
             hir::ExpressionKind::Match { arms } => todo!(),
-            hir::ExpressionKind::Loop(block) => Instruction::Loop(block.convert(lookup, locals)),
-            hir::ExpressionKind::Unreachable => Instruction::Unreachable,
+            hir::ExpressionKind::Loop(block) => {
+                Instruction::Loop(block.convert(self.lookup, self.locals)).into()
+            }
+            hir::ExpressionKind::Unreachable => Instruction::Unreachable.into(),
 
             hir::ExpressionKind::Parameter(_) => todo!(),
             hir::ExpressionKind::Reference(id) => todo!(),
             hir::ExpressionKind::VarSet { var, expression } => {
-                // TODO: Add expression as instruction as well
-                Instruction::LocalSet(var.0 as u32)
+                self.push(*expression);
+                Instruction::LocalSet(var.0 as u32).into()
             }
-            hir::ExpressionKind::VarGet { var } => Instruction::LocalGet(var.0 as u32),
-            hir::ExpressionKind::Void => Instruction::Noop,
+            hir::ExpressionKind::VarGet { var } => Instruction::LocalGet(var.0 as u32).into(),
+            hir::ExpressionKind::Void => Instruction::Noop.into(),
             hir::ExpressionKind::Tuple(_) => todo!(),
             hir::ExpressionKind::TupleAccess { of, index } => todo!(),
-        }
+        };
+
+        self.instructions.push(instruction);
     }
 }
 

@@ -53,6 +53,12 @@ pub enum Instruction<'a> {
     Wasm(WasmInstruction<'a>),
 }
 
+impl<'a> From<Instruction<'a>> for Vec<Instruction<'a>> {
+    fn from(value: Instruction<'a>) -> Self {
+        vec![value]
+    }
+}
+
 impl<'a> From<WasmInstruction<'a>> for Instruction<'a> {
     fn from(value: WasmInstruction<'a>) -> Self {
         Self::Wasm(value)
