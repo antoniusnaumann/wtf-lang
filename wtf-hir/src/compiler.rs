@@ -418,7 +418,6 @@ fn compile_block(
         }
         statements.push(compile_statement(statement, fun, visible, signatures));
     }
-    // this is potentially harmful: statements.push(Expression::void());
 
     visible.restore(visible_snapshot);
     Body { statements }

@@ -8,6 +8,7 @@ mod type_;
 mod visible;
 
 pub use compiler::compile;
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::ops::Index;
 use std::{collections::HashMap, fmt::Display};
@@ -64,8 +65,11 @@ pub struct Body {
 }
 
 impl Body {
-    pub fn returns(&self) -> &Expression {
-        self.statements.last().unwrap()
+    pub fn returns(&self) -> Cow<'_, Expression> {
+        self.statements
+            .last()
+            .map(Cow::Borrowed)
+            .unwrap_or_else(|| Cow::Owned(Expression::void()))
     }
 }
 
