@@ -610,7 +610,14 @@ fn compile_expression(
                                 kind: ExpressionKind::Int(0),
                                 ty: Type::Int { signed, bits },
                             };
-                            Expression::call("subtract".to_owned(), vec![zero, operand], operand_ty)
+                            Expression::call(
+                                format!("sub__{}_{}", operand_ty, operand_ty).to_owned(),
+                                vec![zero, operand],
+                                operand_ty,
+                            )
+                        }
+                        Type::Float { bits } => {
+                            Expression::call(format!("neg__f{bits}"), vec![operand], operand_ty)
                         }
                         _ => panic!("negating unsupported type"),
                     }
