@@ -1,6 +1,6 @@
 use std::{collections::HashMap, iter};
 
-use crate::{FunctionSignature, Module, Type};
+use crate::{FunctionSignature, Type};
 
 pub trait WithBuiltins {
     fn with_builtins() -> Self;
@@ -104,11 +104,6 @@ impl WithBuiltins for HashMap<String, FunctionSignature> {
 }
 
 fn collection_operations() -> Vec<(String, FunctionSignature)> {
-    let collection_types = [
-        (Type::List(Box::new(Type::Blank)), "list"),
-        (Type::String, "string"),
-    ];
-
     use Type as Ty;
     let primitive_types = [
         s(8),

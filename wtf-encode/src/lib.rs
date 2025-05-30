@@ -286,6 +286,7 @@ impl<'a, 'temp> InstructionBuilder<'a, 'temp> {
             hir::ExpressionKind::List(members) => {
                 let ty = expression
                     .ty
+                    .clone()
                     .convert(self.lookup)
                     .expect("List elements must have a type");
 
@@ -347,6 +348,7 @@ impl<'a, 'temp> InstructionBuilder<'a, 'temp> {
             hir::ExpressionKind::IndexAccess { of: target, index } => {
                 let ty = expression
                     .ty
+                    .clone()
                     .convert(self.lookup)
                     .expect("List elements must have a type");
 
@@ -386,7 +388,7 @@ impl<'a, 'temp> InstructionBuilder<'a, 'temp> {
             hir::ExpressionKind::Loop(block) => {
                 Instruction::Loop(block.convert(self.lookup, self.locals)).into()
             }
-            hir::ExpressionKind::Unreachable => Instruction::Unreachable.into(),
+            hir::ExpressionKind::Unreachable => Instruction::Unreachable,
 
             hir::ExpressionKind::Parameter(_) => todo!(),
             hir::ExpressionKind::Reference(id) => todo!(),
@@ -395,12 +397,22 @@ impl<'a, 'temp> InstructionBuilder<'a, 'temp> {
                 Instruction::LocalSet(var.0 as u32).into()
             }
             hir::ExpressionKind::VarGet { var } => Instruction::LocalGet(var.0 as u32).into(),
-            hir::ExpressionKind::Void => Instruction::Noop.into(),
+            hir::ExpressionKind::Void => Instruction::Noop,
             hir::ExpressionKind::Tuple(_) => todo!(),
             hir::ExpressionKind::TupleAccess { of, index } => todo!(),
         };
 
-        self.instructions.push(instruction);
+        // This is to make WASM understand that the end of the function can never be reached
+        match (expression.ty, instruction) {
+            (_, instruction @ (Instruction::Unreachable | Instruction::Return)) => {
+                self.instructions.push(instruction)
+            }
+            (hir::Type::Never, instruction) => {
+                self.instructions.push(instruction);
+                self.instructions.push(Instruction::Unreachable);
+            }
+            (_, instruction) => self.instructions.push(instruction),
+        }
     }
 }
 
