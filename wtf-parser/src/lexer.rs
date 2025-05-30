@@ -116,7 +116,7 @@ impl Lexer {
                 let identifier = self.read_identifier();
                 self.lookup_identifier(identifier)
             }
-            Some(c) if c.is_digit(10) => self.read_number(),
+            Some(c) if c.is_ascii_digit() => self.read_number(),
             Some('"') => {
                 let string = self.read_string();
                 Token::StringLiteral(string)
@@ -260,7 +260,7 @@ impl Lexer {
     fn read_identifier(&mut self) -> String {
         let start_pos = self.position;
         while let Some(c) = self.current_char {
-            if c.is_ident_char() || c.is_digit(10) {
+            if c.is_ident_char() || c.is_ascii_digit() {
                 self.read_char();
             } else {
                 break;
@@ -591,7 +591,7 @@ mod tests {
 
     #[test]
     fn test_number_literals() {
-        let input = "let int_val = 42\nlet float_val = 3.14";
+        let input = "let int_val = 42\nlet float_val = 3.18";
         let mut lexer = Lexer::new(input);
 
         let expected_tokens = vec![
@@ -603,7 +603,7 @@ mod tests {
             Token::Let,
             Token::Identifier("float_val".into()),
             Token::Equal,
-            Token::FloatLiteral(3.14),
+            Token::FloatLiteral(3.18),
             Token::Eof,
         ];
 

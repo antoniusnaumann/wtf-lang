@@ -162,7 +162,8 @@ impl<'a> Convert<'a> for (String, hir::Function) {
         let result = func.return_type.convert(lookup);
         let locals = convert_locals(func.body.vars.clone(), lookup);
         let instructions = convert_function_body(func.body, lookup, &locals);
-        let func = Function {
+
+        Function {
             signature: Signature {
                 params,
                 result,
@@ -171,9 +172,7 @@ impl<'a> Convert<'a> for (String, hir::Function) {
             },
             instructions,
             locals,
-        };
-
-        func
+        }
     }
 }
 
@@ -265,7 +264,7 @@ struct InstructionBuilder<'a, 'temp> {
     locals: &'temp [TypeRef],
 }
 
-impl<'a, 'temp> InstructionBuilder<'a, 'temp> {
+impl<'temp> InstructionBuilder<'_, 'temp> {
     fn new(lookup: &'temp mut TypeLookup, locals: &'temp [TypeRef]) -> Self {
         Self {
             instructions: Vec::new(),
@@ -306,7 +305,7 @@ impl<'a, 'temp> InstructionBuilder<'a, 'temp> {
                     self.push(arg)
                 }
 
-                Instruction::Call(function).into()
+                Instruction::Call(function)
             }
             hir::ExpressionKind::Member {
                 of: parent,
@@ -355,7 +354,7 @@ impl<'a, 'temp> InstructionBuilder<'a, 'temp> {
                 self.push(*target);
                 self.push(*index);
 
-                Instruction::IndexAccess { ty }.into()
+                Instruction::IndexAccess { ty }
             }
             hir::ExpressionKind::Return(inner) => {
                 self.push(*inner);
@@ -367,7 +366,7 @@ impl<'a, 'temp> InstructionBuilder<'a, 'temp> {
 
                 Instruction::Break
             }
-            hir::ExpressionKind::Continue => Instruction::Continue.into(),
+            hir::ExpressionKind::Continue => Instruction::Continue,
             hir::ExpressionKind::Throw(inner) => {
                 self.push(*inner);
 
@@ -386,7 +385,7 @@ impl<'a, 'temp> InstructionBuilder<'a, 'temp> {
             }
             hir::ExpressionKind::Match { arms } => todo!(),
             hir::ExpressionKind::Loop(block) => {
-                Instruction::Loop(block.convert(self.lookup, self.locals)).into()
+                Instruction::Loop(block.convert(self.lookup, self.locals))
             }
             hir::ExpressionKind::Unreachable => Instruction::Unreachable,
 
@@ -394,9 +393,9 @@ impl<'a, 'temp> InstructionBuilder<'a, 'temp> {
             hir::ExpressionKind::Reference(id) => todo!(),
             hir::ExpressionKind::VarSet { var, expression } => {
                 self.push(*expression);
-                Instruction::LocalSet(var.0 as u32).into()
+                Instruction::LocalSet(var.0 as u32)
             }
-            hir::ExpressionKind::VarGet { var } => Instruction::LocalGet(var.0 as u32).into(),
+            hir::ExpressionKind::VarGet { var } => Instruction::LocalGet(var.0 as u32),
             hir::ExpressionKind::Void => Instruction::Noop,
             hir::ExpressionKind::Tuple(_) => todo!(),
             hir::ExpressionKind::TupleAccess { of, index } => todo!(),

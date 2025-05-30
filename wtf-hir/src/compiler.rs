@@ -244,7 +244,7 @@ fn compile_type_annotation(
             }
         },
         ast::TypeAnnotation::List(item) => {
-            Type::List(Box::new(compile_type_annotation(annotation, ast_types)))
+            Type::List(Box::new(compile_type_annotation(item, ast_types)))
         }
         ast::TypeAnnotation::Option(payload) => {
             Type::Option(Box::new(compile_type_annotation(payload, ast_types)))

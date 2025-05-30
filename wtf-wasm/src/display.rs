@@ -4,7 +4,7 @@ use wasm_encoder::ComponentValType;
 
 use crate::{Instance, Instruction, Type};
 
-const WHITESPACE: &'static str = "  ";
+const WHITESPACE: &str = "  ";
 
 pub trait Print {
     fn print(&self, f: &mut Formatter<'_>, indent: usize) -> Result;
@@ -21,7 +21,7 @@ impl Print for Instance<'_> {
         for func in &self.functions {
             writeln!(f, "function {}", func.signature.name)?;
 
-            if func.locals.len() > 0 {
+            if !func.locals.is_empty() {
                 write!(f, "(locals:")?;
                 for (i, local) in func.locals.iter().enumerate() {
                     write!(f, " ")?;

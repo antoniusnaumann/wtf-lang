@@ -35,7 +35,8 @@ impl Error {
             ErrorKind::UnknownIdentifier => {
                 format!("Unknown Identifier '{span_snippet}' {position_hint}")
             }
-            ErrorKind::UnexpectedToken { found, expected } => {
+            ErrorKind::UnexpectedToken { found, expected }
+            | ErrorKind::UnexpectedKeyword { found, expected } => {
                 let tokens = if expected.len() == 1 {
                     expected[0].category_name()
                 } else {
@@ -50,7 +51,6 @@ impl Error {
                 };
                 format!("Expected {tokens} but found '{found}' {position_hint}")
             }
-            ErrorKind::UnexpectedKeyword { found, expected } => todo!(),
         }
     }
 }
