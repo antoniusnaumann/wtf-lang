@@ -66,8 +66,8 @@ impl Print for Instruction<'_> {
                         .join(", ")
                 )?;
             }
-            Instruction::IndexAccess { ty } => writeln!(f, "index")?,
-            Instruction::Optional { ty, is_some } => writeln!(f, "optional: {is_some}")?,
+            Instruction::IndexAccess { ty: _ } => writeln!(f, "index")?,
+            Instruction::Optional { ty: _, is_some } => writeln!(f, "optional: {is_some}")?,
             Instruction::I32(val) => writeln!(f, "i32: {val}")?,
             Instruction::I64(val) => writeln!(f, "i64: {val}")?,
             Instruction::F32(val) => writeln!(f, "f32: {val}")?,
@@ -88,7 +88,12 @@ impl Print for Instruction<'_> {
                     }
                 }
             }
-            Instruction::Loop(instructions) => todo!(),
+            Instruction::Loop(instructions) => {
+                writeln!(f, "loop:")?;
+                for inst in instructions {
+                    inst.print(f, indent + 1)?;
+                }
+            }
             Instruction::Block => todo!(),
             Instruction::Break => writeln!(f, "break")?,
             Instruction::Continue => writeln!(f, "continue")?,
@@ -97,7 +102,9 @@ impl Print for Instruction<'_> {
             Instruction::Unreachable => writeln!(f, "unreachable")?,
             Instruction::Pop => writeln!(f, "pop")?,
             Instruction::Noop => writeln!(f, "noop")?,
-            Instruction::Wasm(instruction) => todo!(),
+            Instruction::Wasm(instruction) => {
+                writeln!(f, "wasm: {:#?}", instruction)?;
+            }
         };
 
         Ok(())

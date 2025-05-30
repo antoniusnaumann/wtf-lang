@@ -508,8 +508,8 @@ fn compile_statement(
                     compile_expression(&while_statement.condition, vars, visible, signatures);
                 body.push(Expression::if_(
                     condition,
-                    vec![Expression::break_(Expression::void())].into(),
                     EMPTY_BODY,
+                    vec![Expression::break_(Expression::void())].into(),
                     Type::Void,
                 ));
                 for statement in inner_body.statements {
