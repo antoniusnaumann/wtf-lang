@@ -12,3 +12,14 @@ func relu(num: s32) -> s32 {
 export func main() -> s64 {
     return s64(relu(-12))
 }
+
+test "Early return works" {
+    assert true
+    return
+    assert false
+}
+
+test "Function with early return has correct output" {
+    assert relu(-12) == 0
+    assert relu(12) == 12
+}

@@ -562,37 +562,36 @@ fn compile_expression(
         } => {
             let left = compile_expression(left, fun, visible, signatures);
             let right = compile_expression(right, fun, visible, signatures);
-            // TODO: call "find_signature"
+            let name = match operator {
+                wtf_ast::BinaryOperator::Arithmetic(operator) => match operator {
+                    wtf_ast::ArithmeticOperator::Add => "add",
+                    wtf_ast::ArithmeticOperator::Subtract => "sub",
+                    wtf_ast::ArithmeticOperator::Multiply => "mul",
+                    wtf_ast::ArithmeticOperator::Divide => "div",
+                },
+                BinaryOperator::Logic(op) => match op {
+                    // TODO: handling this as a function does not allow short-circuiting
+                    ast::LogicOperator::And => "and",
+                    ast::LogicOperator::Or => "or",
+                },
+                wtf_ast::BinaryOperator::Equal => "eq",
+                wtf_ast::BinaryOperator::NotEqual => "ne",
+                wtf_ast::BinaryOperator::GreaterThan => "greater_than",
+                wtf_ast::BinaryOperator::LessThan => "less_than",
+                wtf_ast::BinaryOperator::GreaterEqual => "greater_eq",
+                wtf_ast::BinaryOperator::LessEqual => "less_eq",
+                wtf_ast::BinaryOperator::Contains => "contains",
+                wtf_ast::BinaryOperator::NullCoalesce => todo!("null coalesce"),
+            };
+
+            let args = [left, right];
+            let (name, signature) = find_signature(name, &args, signatures);
+
             ExpressionKind::Call {
-                function: format!(
-                    "{}__{}_{}",
-                    match operator {
-                        wtf_ast::BinaryOperator::Arithmetic(operator) => match operator {
-                            wtf_ast::ArithmeticOperator::Add => "add",
-                            wtf_ast::ArithmeticOperator::Subtract => "sub",
-                            wtf_ast::ArithmeticOperator::Multiply => "mul",
-                            wtf_ast::ArithmeticOperator::Divide => "div",
-                        },
-                        BinaryOperator::Logic(op) => match op {
-                            // TODO: handling this as a function does not allow short-circuiting
-                            ast::LogicOperator::And => "and",
-                            ast::LogicOperator::Or => "or",
-                        },
-                        wtf_ast::BinaryOperator::Equal => "eq",
-                        wtf_ast::BinaryOperator::NotEqual => "ne",
-                        wtf_ast::BinaryOperator::GreaterThan => "greater_than",
-                        wtf_ast::BinaryOperator::LessThan => "less_than",
-                        wtf_ast::BinaryOperator::GreaterEqual => "greater_eq",
-                        wtf_ast::BinaryOperator::LessEqual => "less_eq",
-                        wtf_ast::BinaryOperator::Contains => "contains",
-                        wtf_ast::BinaryOperator::NullCoalesce => todo!("null coalesce"),
-                    },
-                    left.ty,
-                    right.ty
-                ),
-                arguments: vec![left.clone(), right],
+                function: name,
+                arguments: args.into(),
             }
-            .typed(left.ty)
+            .typed(signature.return_type)
         }
         ast::Expression::UnaryExpression { operator, operand } => {
             let operand = compile_expression(operand, fun, visible, signatures);
