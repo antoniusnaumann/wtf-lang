@@ -90,38 +90,22 @@ pub fn compile(ast: ast::Module) -> Module {
     // }
 
     let mut functions = HashMap::new();
-    let mut constants = HashSet::new();
     for (fun, is_export) in ast_funs.values() {
         functions.insert(
             fun.name.to_string(),
-            compile_fun(
-                fun,
-                *is_export,
-                &ast_types,
-                &types,
-                &signatures,
-                &mut constants,
-            ),
+            compile_fun(fun, *is_export, &ast_types, &types, &signatures),
         );
     }
 
     let mut tests = Vec::new();
     for (idx, test) in ast_tests.into_iter().enumerate() {
-        tests.push(compile_test(
-            idx,
-            test,
-            &signatures,
-            &types,
-            &ast_types,
-            &mut constants,
-        ));
+        tests.push(compile_test(idx, test, &signatures, &types, &ast_types));
     }
 
     Module {
         types,
         functions,
         tests,
-        constants,
     }
 }
 
@@ -268,7 +252,6 @@ fn compile_fun(
     ast_types: &HashMap<String, (ast::Declaration, bool)>,
     types: &HashMap<String, Type>,
     signatures: &HashMap<String, FunctionSignature>,
-    constants: &mut HashSet<Vec<u8>>,
 ) -> Function {
     let parameters: Vec<_> = declaration
         .parameters
@@ -341,7 +324,6 @@ fn compile_test(
     signatures: &HashMap<String, FunctionSignature>,
     types: &HashMap<String, Type>,
     ast_types: &HashMap<String, (ast::Declaration, bool)>,
-    constants: &mut HashSet<Vec<u8>>,
 ) -> Test {
     const CHARS: [char; 26] = [
         'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r',
@@ -370,7 +352,6 @@ fn compile_test(
         ast_types,
         types,
         signatures,
-        constants,
     );
 
     Test {

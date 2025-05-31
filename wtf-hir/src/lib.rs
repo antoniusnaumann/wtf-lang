@@ -9,7 +9,6 @@ mod visible;
 
 pub use compiler::compile;
 use std::borrow::Cow;
-use std::collections::HashSet;
 use std::ops::Index;
 use std::{collections::HashMap, fmt::Display};
 pub use type_::Type;
@@ -19,7 +18,6 @@ pub struct Module {
     pub types: HashMap<String, Type>,
     pub functions: HashMap<String, Function>,
     pub tests: Vec<Test>,
-    pub constants: HashSet<Vec<u8>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

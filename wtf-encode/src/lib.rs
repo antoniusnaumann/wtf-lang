@@ -1,4 +1,8 @@
-use std::{fmt::Debug, iter};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    iter,
+};
 
 use wtf_hir::{self as hir, Expression, Test};
 use wtf_wasm::{
@@ -8,17 +12,20 @@ use wtf_wasm::{
 
 // PERF: use hash map here if search turns out to be slow
 #[derive(Debug, Default)]
-struct TypeLookup(Vec<Type>);
+struct Lookup {
+    types: Vec<Type>,
+    constants: HashSet<Vec<u8>>,
+}
 
-impl TypeLookup {
+impl Lookup {
     /// Adds the type if it does not exist yet and returns its index afterwards
     fn insert(&mut self, ty: Type) -> u32 {
-        let found = self.0.iter().position(|t| *t == ty);
+        let found = self.types.iter().position(|t| *t == ty);
         let idx = match found {
             Some(i) => i,
             None => {
-                self.0.push(ty);
-                self.0.len() - 1
+                self.types.push(ty);
+                self.types.len() - 1
             }
         };
 
@@ -61,17 +68,18 @@ trait ConvertModule<'a> {
 trait Convert<'a> {
     type Output;
 
-    fn convert(self, lookup: &mut TypeLookup) -> Self::Output;
+    fn convert(self, lookup: &mut Lookup) -> Self::Output;
 }
 
 impl<'a> ConvertModule<'a> for hir::Module {
     type Output = Instance<'a>;
 
     fn convert(self) -> Self::Output {
-        let mut lookup = TypeLookup::default();
+        let mut lookup = Lookup::default();
         for ty in self.types {
             ty.convert(&mut lookup);
         }
+
         let tests = self
             .tests
             .into_iter()
@@ -88,8 +96,8 @@ impl<'a> ConvertModule<'a> for hir::Module {
             name: "todo".to_owned(),
             functions,
             // TODO: Avoid cloning here
-            types: lookup.0,
-            constants: self.constants,
+            types: lookup.types,
+            constants: lookup.constants,
         }
     }
 }
@@ -97,7 +105,7 @@ impl<'a> ConvertModule<'a> for hir::Module {
 impl Convert<'_> for (String, hir::Type) {
     type Output = TypeDeclaration;
 
-    fn convert(self, lookup: &mut TypeLookup) -> Self::Output {
+    fn convert(self, lookup: &mut Lookup) -> Self::Output {
         let (name, ty) = self;
         let ty = match ty {
             hir::Type::Never => todo!(),
@@ -144,7 +152,7 @@ impl Convert<'_> for (String, hir::Type) {
 impl<'a> Convert<'a> for (String, hir::Function) {
     type Output = Function<'a>;
 
-    fn convert(self, lookup: &mut TypeLookup) -> Self::Output {
+    fn convert(self, lookup: &mut Lookup) -> Self::Output {
         let (name, func) = self;
         let params: Vec<_> = func
             .parameters
@@ -179,7 +187,7 @@ impl<'a> Convert<'a> for (String, hir::Function) {
 impl<'a> Convert<'a> for Test {
     type Output = Function<'a>;
 
-    fn convert(self, lookup: &mut TypeLookup) -> Self::Output {
+    fn convert(self, lookup: &mut Lookup) -> Self::Output {
         let locals = convert_locals(self.body.vars.clone(), lookup);
         let instructions = convert_function_body(self.body, lookup, &locals);
 
@@ -196,7 +204,7 @@ impl<'a> Convert<'a> for Test {
     }
 }
 
-fn convert_locals(locals: Vec<hir::Type>, lookup: &mut TypeLookup) -> Vec<TypeRef> {
+fn convert_locals(locals: Vec<hir::Type>, lookup: &mut Lookup) -> Vec<TypeRef> {
     locals
         .into_iter()
         .map(|ty| {
@@ -208,7 +216,7 @@ fn convert_locals(locals: Vec<hir::Type>, lookup: &mut TypeLookup) -> Vec<TypeRe
 
 fn convert_function_body<'a, 'temp>(
     body: hir::FunctionBody,
-    lookup: &'temp mut TypeLookup,
+    lookup: &'temp mut Lookup,
     locals: &'temp [TypeRef],
 ) -> Vec<Instruction<'a>>
 where
@@ -228,7 +236,7 @@ where
 {
     type Output;
 
-    fn convert(self, lookup: &'temp mut TypeLookup, locals: &'temp [TypeRef]) -> Self::Output;
+    fn convert(self, lookup: &'temp mut Lookup, locals: &'temp [TypeRef]) -> Self::Output;
 }
 
 impl<'a, 'temp> ConvertInstruction<'a, 'temp> for hir::Body
@@ -237,7 +245,7 @@ where
 {
     type Output = Vec<Instruction<'a>>;
 
-    fn convert(self, lookup: &'temp mut TypeLookup, locals: &'temp [TypeRef]) -> Self::Output {
+    fn convert(self, lookup: &'temp mut Lookup, locals: &'temp [TypeRef]) -> Self::Output {
         self.statements
             .into_iter()
             .flat_map(|statement| statement.to_owned().convert(lookup, locals))
@@ -251,7 +259,7 @@ where
 {
     type Output = Vec<Instruction<'a>>;
 
-    fn convert(self, lookup: &'temp mut TypeLookup, locals: &'temp [TypeRef]) -> Self::Output {
+    fn convert(self, lookup: &'temp mut Lookup, locals: &'temp [TypeRef]) -> Self::Output {
         let mut builder = InstructionBuilder::new(lookup, locals);
         builder.push(self);
         builder.instructions
@@ -260,12 +268,12 @@ where
 
 struct InstructionBuilder<'a, 'temp> {
     instructions: Vec<Instruction<'a>>,
-    lookup: &'temp mut TypeLookup,
+    lookup: &'temp mut Lookup,
     locals: &'temp [TypeRef],
 }
 
 impl<'temp> InstructionBuilder<'_, 'temp> {
-    fn new(lookup: &'temp mut TypeLookup, locals: &'temp [TypeRef]) -> Self {
+    fn new(lookup: &'temp mut Lookup, locals: &'temp [TypeRef]) -> Self {
         Self {
             instructions: Vec::new(),
             lookup,
@@ -277,7 +285,12 @@ impl<'temp> InstructionBuilder<'_, 'temp> {
         let instruction = match expression.kind {
             hir::ExpressionKind::Int(num) => Instruction::I32(num as i32), // TODO typecheck: different instructions for different int sizes
             hir::ExpressionKind::Float(num) => Instruction::F32(num as f32), // TODO: typecheck: different instructions for different float sizes
-            hir::ExpressionKind::String(string) => Instruction::Bytes(string.into_bytes()),
+            hir::ExpressionKind::String(string) => {
+                let bytes = string.into_bytes();
+                self.lookup.constants.insert(bytes.clone());
+                // TODO: "bytes" should probably reference an index or so instead of containing this directly
+                Instruction::Bytes(bytes)
+            }
             hir::ExpressionKind::Bool(b) => Instruction::I32(if b { 1 } else { 0 }),
             hir::ExpressionKind::Enum { case } => Instruction::I32(case as i32), // TODO: if the enum type has more fields than i32 allows, use i64
             hir::ExpressionKind::Variant { case, payloads } => todo!(),
@@ -318,7 +331,7 @@ impl<'temp> InstructionBuilder<'_, 'temp> {
                     .expect("Record should have a valid type")
                 {
                     TypeRef::Primitive(_) => panic!("Cannot access member of a primitive"),
-                    TypeRef::Type(ty) => &self.lookup.0[ty as usize],
+                    TypeRef::Type(ty) => &self.lookup.types[ty as usize],
                 };
                 let Type::Record { fields } = record else {
                     panic!("ERROR: can only access fields of records");
@@ -418,7 +431,7 @@ impl<'temp> InstructionBuilder<'_, 'temp> {
 impl Convert<'_> for hir::Type {
     type Output = Option<TypeRef>;
 
-    fn convert(self, lookup: &mut TypeLookup) -> Self::Output {
+    fn convert(self, lookup: &mut Lookup) -> Self::Output {
         match self {
             hir::Type::List(item) => {
                 let item = item.convert(lookup);
