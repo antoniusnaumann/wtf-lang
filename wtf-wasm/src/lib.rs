@@ -749,7 +749,6 @@ impl ComponentBuilder {
             }
 
             Instruction::Bytes(bytes) => {
-                println!("{:#?}", self.constants);
                 let ConstantPosition { offset, length } = self.constants[bytes];
                 vec![
                     // reversed due to stack machine

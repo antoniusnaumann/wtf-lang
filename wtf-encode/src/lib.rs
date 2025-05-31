@@ -1,8 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Debug,
-    iter,
-};
+use std::{collections::HashSet, fmt::Debug, iter};
 
 use wtf_hir::{self as hir, Expression, Test};
 use wtf_wasm::{
@@ -295,17 +291,19 @@ impl<'temp> InstructionBuilder<'_, 'temp> {
             hir::ExpressionKind::Enum { case } => Instruction::I32(case as i32), // TODO: if the enum type has more fields than i32 allows, use i64
             hir::ExpressionKind::Variant { case, payloads } => todo!(),
             hir::ExpressionKind::Record(_) => Instruction::Noop,
-            hir::ExpressionKind::List(members) => {
-                let ty = expression
-                    .ty
-                    .clone()
+            hir::ExpressionKind::List(items) => {
+                let hir::Type::List(ty) = expression.ty.clone() else {
+                    panic!("Expected list type!");
+                };
+
+                let ty = ty
                     .convert(self.lookup)
                     .expect("List elements must have a type");
 
-                let number = members.len();
+                let number = items.len();
 
-                for member in members {
-                    self.push(member);
+                for item in items {
+                    self.push(item);
                 }
 
                 Instruction::Store { number, ty }

@@ -277,7 +277,13 @@ fn compile_fun(
         visible.bind(name.clone(), param, false);
     }
 
-    let block = compile_block(&declaration.body, &mut vars, &mut visible, signatures);
+    let block = compile_block(
+        &declaration.body,
+        &mut vars,
+        &mut visible,
+        signatures,
+        ast_types,
+    );
 
     Function {
         parameters: parameters
@@ -389,6 +395,7 @@ fn compile_block(
     fun: &mut VarCollector,
     visible: &mut Visible,
     signatures: &HashMap<String, FunctionSignature>,
+    ast_types: &HashMap<String, (ast::Declaration, bool)>,
 ) -> Body {
     let visible_snapshot = visible.snapshot();
 
@@ -397,7 +404,9 @@ fn compile_block(
         if matches!(statement, ast::Statement::EmptyLine) {
             continue;
         }
-        statements.push(compile_statement(statement, fun, visible, signatures));
+        statements.push(compile_statement(
+            statement, fun, visible, signatures, ast_types,
+        ));
     }
 
     visible.restore(visible_snapshot);
@@ -409,6 +418,7 @@ fn compile_statement(
     vars: &mut VarCollector,
     visible: &mut Visible,
     signatures: &HashMap<String, FunctionSignature>,
+    ast_types: &HashMap<String, (ast::Declaration, bool)>,
 ) -> Expression {
     const EMPTY_BODY: Body = Body {
         statements: Vec::new(),
@@ -417,7 +427,7 @@ fn compile_statement(
         ast::Statement::EmptyLine => unreachable!(),
         ast::Statement::VariableDeclaration(variable_declaration) => {
             // TODO: allow uninitialized variables
-            let initial_value = compile_expression(
+            let mut initial_value = compile_expression(
                 variable_declaration
                     .value
                     .as_ref()
@@ -426,9 +436,15 @@ fn compile_statement(
                 visible,
                 signatures,
             );
-            let ty = initial_value.ty.clone();
+            let mut ty = initial_value.ty.clone();
+
+            if let Some(anno) = &variable_declaration.type_annotation {
+                let annotated_type = compile_type_annotation(&anno, ast_types);
+                ty = unify(&annotated_type, &ty);
+            }
+            initial_value.ty = ty.clone();
+
             let var = vars.push(ty);
-            // TODO: check if type matches annotated type (if exists)
             visible.bind(
                 variable_declaration.name.clone(),
                 var,
@@ -472,9 +488,17 @@ fn compile_statement(
         }
         ast::Statement::IfStatement(if_statement) => {
             let condition = compile_expression(&if_statement.condition, vars, visible, signatures);
-            let then = compile_block(&if_statement.then_branch, vars, visible, signatures);
+            let then = compile_block(
+                &if_statement.then_branch,
+                vars,
+                visible,
+                signatures,
+                ast_types,
+            );
             let else_ = match &if_statement.else_branch {
-                Some(else_branch) => compile_block(&else_branch, vars, visible, signatures),
+                Some(else_branch) => {
+                    compile_block(&else_branch, vars, visible, signatures, ast_types)
+                }
                 None => EMPTY_BODY,
             };
             let ty = unify(&then.returns().ty, &else_.returns().ty);
@@ -482,7 +506,8 @@ fn compile_statement(
         }
         ast::Statement::MatchStatement(_) => todo!("impl match"),
         ast::Statement::WhileStatement(while_statement) => {
-            let inner_body = compile_block(&while_statement.body, vars, visible, signatures);
+            let inner_body =
+                compile_block(&while_statement.body, vars, visible, signatures, ast_types);
             let complete_body = {
                 let mut body = Vec::new();
                 let condition =
@@ -718,7 +743,7 @@ fn compile_expression(
                 compiled_items.push(item);
             }
             let item_ty = if compiled_items.is_empty() {
-                Type::Never
+                Type::Blank
             } else {
                 let mut ty = compiled_items[0].ty.clone();
                 for item in &compiled_items[1..] {

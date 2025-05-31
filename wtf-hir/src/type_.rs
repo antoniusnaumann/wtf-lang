@@ -113,6 +113,8 @@ impl Display for Type {
 
 pub fn unify(a: &Type, b: &Type) -> Type {
     match (a, b) {
+        (Type::Blank, b) => b.clone(),
+        (a, Type::Blank) => a.clone(),
         (Type::Never, b) => b.clone(),
         (a, Type::Never) => a.clone(),
         (Type::Void, Type::Void) => Type::Void,
@@ -144,7 +146,7 @@ pub fn unify(a: &Type, b: &Type) -> Type {
             if name_a == name_b {
                 a.clone()
             } else {
-                panic!("incompatible named types")
+                todo!("resolve names and compare types")
             }
         }
         (a, b) => panic!("incompatible types {a} and {b}"),
