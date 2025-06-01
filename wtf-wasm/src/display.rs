@@ -161,7 +161,13 @@ impl Print for Type {
             Type::Variant {} => todo!(),
             Type::Tuple(component_val_types) => todo!(),
             Type::Flags(items) => todo!(),
-            Type::Enum(items) => todo!(),
+            Type::Enum(cases) => {
+                write!(f, "enum {{ ")?;
+                for case in cases {
+                    write!(f, "{case} ")?;
+                }
+                write!(f, "}}")?;
+            }
             Type::Own() => todo!(),
             Type::Borrow() => todo!(),
         }

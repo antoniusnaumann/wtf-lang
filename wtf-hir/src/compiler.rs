@@ -800,6 +800,8 @@ fn try_cast(annotation: &Type, mut actual: Expression) -> Expression {
             actual.ty = option.clone();
             actual
         }
+        // TODO: Decide if we want this behavior for enums... my (Antonius) sense is, ultimately no, but it is convenient for now, so let's keep it until we have operators for enums and structs implemented
+        (Type::Int { signed: _, bits: _ }, Type::Enum { cases: _ }) => actual,
         // TODO: put in more auto-conversions, e.g. casting from non-optional to optional should insert an explicit call to "some"
         (a, b) => panic!("Cannot implicitly cast {b} into {a}"),
     }
