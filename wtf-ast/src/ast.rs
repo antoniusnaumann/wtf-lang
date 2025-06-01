@@ -337,3 +337,9 @@ pub enum UnaryOperator {
     Negate, // '-'
     Not,    // '!'
 }
+
+impl AsRef<Expression> for Expression {
+    fn as_ref(&self) -> &Expression {
+        self
+    }
+}

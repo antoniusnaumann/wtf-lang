@@ -138,6 +138,7 @@ pub enum ExpressionKind {
         arms: HashMap<String, Body>,
     },
     Loop(Body),
+    Type(Type),
 }
 
 impl ExpressionKind {
@@ -458,6 +459,9 @@ impl Expression {
             ExpressionKind::Loop(body) => {
                 write!(f, "loop ")?;
                 body.fmt(f, indentation + 1, fun)?;
+            }
+            ExpressionKind::Type(ty) => {
+                write!(f, "type {ty}")?;
             }
         }
         Ok(())

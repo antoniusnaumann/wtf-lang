@@ -270,7 +270,7 @@ fn compile_fun(
         .unwrap_or(Type::Void);
 
     let mut vars = VarCollector::new();
-    let mut visible = Visible::new();
+    let mut visible = Visible::new(types);
 
     for (name, ty) in &parameters {
         let param = vars.push(ty.clone());
@@ -542,7 +542,7 @@ fn compile_statement(
 
 fn compile_expression(
     expression: &ast::Expression,
-    fun: &mut VarCollector,
+    vars: &mut VarCollector,
     visible: &mut Visible,
     signatures: &HashMap<String, FunctionSignature>,
 ) -> Expression {
@@ -555,52 +555,54 @@ fn compile_expression(
             ast::Literal::None => Expression::void(),
         },
         ast::Expression::Identifier(name) => {
-            let binding = visible
-                .lookup(&name)
-                .expect(&format!("Variable {} is not defined.", name));
-            let ty = &fun[binding.id];
-            ExpressionKind::VarGet { var: binding.id }.typed(ty.clone())
+            let binding = visible.lookup(&name);
+
+            match binding {
+                Some(binding) => {
+                    let ty = &vars[binding.id];
+                    ExpressionKind::VarGet { var: binding.id }.typed(ty.clone())
+                }
+                // The name might be an enum or other type instead, so look it up as a type
+                None => {
+                    let ty = visible
+                        .lookup_type(name)
+                        .expect(&format!("Variable {} is not defined.", name));
+
+                    ExpressionKind::Type(ty.clone()).typed(Type::Meta(ty.clone().into()))
+                }
+            }
         }
         ast::Expression::BinaryExpression {
             left,
             operator,
             right,
         } => {
-            let left = compile_expression(left, fun, visible, signatures);
-            let right = compile_expression(right, fun, visible, signatures);
             let name = match operator {
-                wtf_ast::BinaryOperator::Arithmetic(operator) => match operator {
-                    wtf_ast::ArithmeticOperator::Add => "add",
-                    wtf_ast::ArithmeticOperator::Subtract => "sub",
-                    wtf_ast::ArithmeticOperator::Multiply => "mul",
-                    wtf_ast::ArithmeticOperator::Divide => "div",
+                ast::BinaryOperator::Arithmetic(operator) => match operator {
+                    ast::ArithmeticOperator::Add => "add",
+                    ast::ArithmeticOperator::Subtract => "sub",
+                    ast::ArithmeticOperator::Multiply => "mul",
+                    ast::ArithmeticOperator::Divide => "div",
                 },
                 BinaryOperator::Logic(op) => match op {
                     // TODO: handling this as a function does not allow short-circuiting
                     ast::LogicOperator::And => "and",
                     ast::LogicOperator::Or => "or",
                 },
-                wtf_ast::BinaryOperator::Equal => "eq",
-                wtf_ast::BinaryOperator::NotEqual => "ne",
-                wtf_ast::BinaryOperator::GreaterThan => "greater_than",
-                wtf_ast::BinaryOperator::LessThan => "less_than",
-                wtf_ast::BinaryOperator::GreaterEqual => "greater_eq",
-                wtf_ast::BinaryOperator::LessEqual => "less_eq",
-                wtf_ast::BinaryOperator::Contains => "contains",
-                wtf_ast::BinaryOperator::NullCoalesce => todo!("null coalesce"),
+                ast::BinaryOperator::Equal => "eq",
+                ast::BinaryOperator::NotEqual => "ne",
+                ast::BinaryOperator::GreaterThan => "greater_than",
+                ast::BinaryOperator::LessThan => "less_than",
+                ast::BinaryOperator::GreaterEqual => "greater_eq",
+                ast::BinaryOperator::LessEqual => "less_eq",
+                ast::BinaryOperator::Contains => "contains",
+                ast::BinaryOperator::NullCoalesce => todo!("null coalesce"),
             };
 
-            let args = [left, right];
-            let (name, signature) = find_signature(name, &args, signatures);
-
-            ExpressionKind::Call {
-                function: name,
-                arguments: args.into(),
-            }
-            .typed(signature.return_type)
+            compile_call(vars, visible, signatures, &[left, right], name, Vec::new())
         }
         ast::Expression::UnaryExpression { operator, operand } => {
-            let operand = compile_expression(operand, fun, visible, signatures);
+            let operand = compile_expression(operand, vars, visible, signatures);
             let operand_ty = operand.ty.clone();
             match operator {
                 UnaryOperator::Negate => {
@@ -640,14 +642,7 @@ fn compile_expression(
                 _ => todo!("call of non-name"),
             };
 
-            let mut args = vec![];
-            for arg in arguments {
-                args.push(compile_expression(arg, fun, visible, signatures));
-            }
-
-            let (function, signature) = find_signature(&function, &args, signatures);
-
-            Expression::call(function.clone(), args, signature.return_type.clone())
+            compile_call(vars, visible, signatures, arguments, &function, Vec::new())
         }
         ast::Expression::MethodCall {
             receiver,
@@ -662,16 +657,9 @@ fn compile_expression(
 
             // TODO: handle calls on resources separately
 
-            let mut args = vec![];
-            args.push(compile_expression(receiver, fun, visible, signatures));
-            for arg in arguments {
-                let arg = compile_expression(arg, fun, visible, signatures);
-                args.push(arg);
-            }
+            let receiver = compile_expression(receiver, vars, visible, signatures);
 
-            let (method, signature) = find_signature(&method, &args, signatures);
-
-            Expression::call(method.clone(), args, signature.return_type)
+            compile_call(vars, visible, signatures, arguments, method, vec![receiver])
         }
         ast::Expression::FieldAccess {
             object,
@@ -680,27 +668,46 @@ fn compile_expression(
             safe,
         } => {
             if *safe {
-                todo!("Safe calls");
+                todo!("Desugar safe calls to if condition");
             }
-            let object = compile_expression(object, fun, visible, signatures);
+            let object = compile_expression(object, vars, visible, signatures);
             let object_ty = object.ty.clone();
-            let member_type = match object_ty {
-                Type::Never => Type::Never,
-                Type::Record(fields) => fields
-                    .get(field)
-                    .expect("No field named {field} on {ty}.")
-                    .clone(),
-                _ => panic!("field access on non-struct"),
-            };
-            ExpressionKind::Member {
-                of: object.into(),
-                name: field.clone(),
+            match object_ty {
+                Type::Never => ExpressionKind::Member {
+                    of: object.into(),
+                    name: field.clone(),
+                }
+                .typed(Type::Never),
+                Type::Record(fields) => {
+                    let member_type = fields
+                        .get(field)
+                        .expect("No field named {field} on {ty}.")
+                        .clone();
+
+                    ExpressionKind::Member {
+                        of: object.into(),
+                        name: field.clone(),
+                    }
+                    .typed(member_type)
+                }
+                Type::Meta(ty) => match *ty {
+                    Type::Enum { ref cases } => {
+                        let index = cases
+                            .iter()
+                            .position(|case| case == field)
+                            .expect(format!("Enum has no case '{field}'").as_str());
+
+                        ExpressionKind::Enum { case: index }.typed(*ty)
+                    }
+                    Type::Variant { cases: _ } => todo!(),
+                    ty => panic!("Cannot use member access syntax on type {ty}"),
+                },
+                ty => panic!("field access on non-struct and non-type: {ty}"),
             }
-            .typed(member_type)
         }
         ast::Expression::IndexAccess { collection, index } => {
-            let collection = compile_expression(&collection, fun, visible, signatures);
-            let index = compile_expression(index, fun, visible, signatures);
+            let collection = compile_expression(&collection, vars, visible, signatures);
+            let index = compile_expression(index, vars, visible, signatures);
             let collection_ty = collection.ty.clone();
             match collection_ty {
                 Type::Never => Expression::unreachable(),
@@ -721,7 +728,7 @@ fn compile_expression(
             let mut fields = HashMap::new();
             for member in members {
                 let name = member.name.clone();
-                let value = compile_expression(&member.element, fun, visible, signatures);
+                let value = compile_expression(&member.element, vars, visible, signatures);
                 fields.insert(name, value);
             }
             let ty = match name {
@@ -739,7 +746,7 @@ fn compile_expression(
         ast::Expression::ListLiteral(items) => {
             let mut compiled_items = vec![];
             for item in items.iter().rev() {
-                let item = compile_expression(item, fun, visible, signatures);
+                let item = compile_expression(item, vars, visible, signatures);
                 compiled_items.push(item);
             }
             let item_ty = if compiled_items.is_empty() {
@@ -754,6 +761,30 @@ fn compile_expression(
             Expression::list(compiled_items, Type::List(Box::new(item_ty)))
         }
     }
+}
+
+fn compile_call<Expr>(
+    vars: &mut VarCollector,
+    visible: &mut Visible<'_>,
+    signatures: &HashMap<String, FunctionSignature>,
+    arguments: &[Expr],
+    function: &str,
+    mut args: Vec<Expression>,
+) -> Expression
+where
+    Expr: AsRef<ast::Expression>,
+{
+    for arg in arguments {
+        args.push(compile_expression(arg.as_ref(), vars, visible, signatures));
+    }
+
+    let (function, signature) = find_signature(&function, &args, signatures);
+
+    for (arg, expected) in args.iter_mut().zip(signature.param_types.iter()) {
+        *arg = try_cast(expected, arg.clone());
+    }
+
+    Expression::call(function.clone(), args, signature.return_type.clone())
 }
 
 /// Tries to add an implicit cast that converts the given expression to the annotated type
@@ -786,6 +817,8 @@ fn find_signature(
             Type::List(elem) => format!("list___{}", type_name(elem)),
             Type::Option(some) => format!("option___{}", type_name(some)),
             Type::Result { ok, err } => format!("result___{}___{}", type_name(ok), type_name(err)),
+            // TODO: this is a hack to make enums work right now
+            Type::Enum { cases: _ } => "s32".to_owned(),
             _ => ty.to_string(),
         }
     }
@@ -801,16 +834,6 @@ fn find_signature(
             signatures.get_key_value(&mangled)
         })
         .unwrap_or_else(|| panic!("Signature not found for name: {mangled}"));
-
-    for (actual, expected) in args.iter().zip(signature.param_types.iter()) {
-        let arg = &actual.ty;
-        if arg != expected {
-            // TODO: better error reporting, similar to parser
-            todo!(
-                "Compiler error: argument type does not match for {function_name}.\nGot: {arg}, Expected: {expected}",
-            )
-        }
-    }
 
     (function_name.clone(), signature.clone())
 }

@@ -35,6 +35,7 @@ pub enum Type {
     },
     Tuple(Vec<Type>),
     Name(String),
+    Meta(Box<Type>),
 }
 
 impl Display for Type {
@@ -105,6 +106,7 @@ impl Display for Type {
             }
             Type::Char => write!(f, "char")?,
             Type::Name(name) => write!(f, "{name}")?,
+            Type::Meta(ty) => write!(f, "meta({ty})")?,
         };
 
         Ok(())

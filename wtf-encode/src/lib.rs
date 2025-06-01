@@ -134,6 +134,24 @@ impl Convert<'_> for (String, hir::Type) {
             hir::Type::Variant { cases } => todo!(),
             hir::Type::Tuple(items) => todo!(),
             hir::Type::Name(_) => todo!(),
+            wtf_hir::Type::Never => todo!(),
+            wtf_hir::Type::Void => todo!(),
+            wtf_hir::Type::Bool => todo!(),
+            wtf_hir::Type::Char => todo!(),
+            wtf_hir::Type::Int { signed, bits } => todo!(),
+            wtf_hir::Type::Float { bits } => todo!(),
+            wtf_hir::Type::String => todo!(),
+            wtf_hir::Type::Blank => todo!(),
+            wtf_hir::Type::List(_) => todo!(),
+            wtf_hir::Type::Option(_) => todo!(),
+            wtf_hir::Type::Result { ok, err } => todo!(),
+            wtf_hir::Type::Record(hash_map) => todo!(),
+            wtf_hir::Type::Resource { methods } => todo!(),
+            wtf_hir::Type::Enum { cases } => todo!(),
+            wtf_hir::Type::Variant { cases } => todo!(),
+            wtf_hir::Type::Tuple(items) => todo!(),
+            wtf_hir::Type::Name(_) => todo!(),
+            wtf_hir::Type::Meta(_) => todo!(),
         };
 
         // TODO: Preserve export information
@@ -410,6 +428,7 @@ impl<'temp> InstructionBuilder<'_, 'temp> {
             hir::ExpressionKind::Void => Instruction::Noop,
             hir::ExpressionKind::Tuple(_) => todo!(),
             hir::ExpressionKind::TupleAccess { of, index } => todo!(),
+            hir::ExpressionKind::Type(_) => todo!("This should probably just be a no-op"),
         };
 
         // This is to make WASM understand that the end of the function can never be reached
@@ -506,6 +525,24 @@ impl Convert<'_> for hir::Type {
             }
             hir::Type::String => Some(TypeRef::Primitive(PrimitiveType::String)),
             hir::Type::Name(_) => todo!(),
+            wtf_hir::Type::Never => todo!(),
+            wtf_hir::Type::Void => todo!(),
+            wtf_hir::Type::Bool => todo!(),
+            wtf_hir::Type::Char => todo!(),
+            wtf_hir::Type::Int { signed, bits } => todo!(),
+            wtf_hir::Type::Float { bits } => todo!(),
+            wtf_hir::Type::String => todo!(),
+            wtf_hir::Type::Blank => todo!(),
+            wtf_hir::Type::List(_) => todo!(),
+            wtf_hir::Type::Option(_) => todo!(),
+            wtf_hir::Type::Result { ok, err } => todo!(),
+            wtf_hir::Type::Record(hash_map) => todo!(),
+            wtf_hir::Type::Resource { methods } => todo!(),
+            wtf_hir::Type::Enum { cases } => todo!(),
+            wtf_hir::Type::Variant { cases } => todo!(),
+            wtf_hir::Type::Tuple(items) => todo!(),
+            wtf_hir::Type::Name(_) => todo!(),
+            wtf_hir::Type::Meta(_) => todo!(),
         }
     }
 }
