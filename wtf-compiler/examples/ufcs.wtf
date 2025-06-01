@@ -1,8 +1,12 @@
 package wtf:example@0.1.0
 
 export func main() -> s64 {
-    let y = 0
-    return y.s64()
+    let y = 1
+    return y.decr()
+}
+
+func decr(x: s32) -> s32 {
+    return x - 1
 }
 
 test "UFCS returns the same value as function call" {

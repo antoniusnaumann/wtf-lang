@@ -24,7 +24,7 @@ export func main() -> s64 {
         y -= 10
     }
 
-    return s64(x + y * 15)
+    return x + y * 15
 }
 
 

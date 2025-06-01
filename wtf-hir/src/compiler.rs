@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::ops::{Deref, Index};
 
 use wtf_ast::{
@@ -269,7 +269,7 @@ fn compile_fun(
         .map(|type_| compile_type_annotation(&type_, ast_types))
         .unwrap_or(Type::Void);
 
-    let mut vars = VarCollector::new();
+    let mut vars = VarCollector::new(return_type.clone());
     let mut visible = Visible::new(types);
 
     for (name, ty) in &parameters {
@@ -369,10 +369,16 @@ fn compile_test(
 
 struct VarCollector {
     vars: Vec<Type>,
+    /// The return type of the current function scope
+    result: Type,
 }
+
 impl VarCollector {
-    fn new() -> Self {
-        Self { vars: vec![] }
+    fn new(result: Type) -> Self {
+        Self {
+            vars: Vec::new(),
+            result,
+        }
     }
 
     fn push(&mut self, ty: Type) -> VarId {
@@ -439,7 +445,7 @@ fn compile_statement(
 
             let expression = if let Some(anno) = &variable_declaration.type_annotation {
                 let annotated_type = compile_type_annotation(&anno, ast_types);
-                try_cast(&annotated_type, initial_value)
+                try_cast(&annotated_type, initial_value, signatures)
             } else {
                 initial_value
             };
@@ -472,6 +478,7 @@ fn compile_statement(
                 Some(expression) => compile_expression(expression, vars, visible, signatures),
                 None => Expression::void(),
             };
+            let returned = try_cast(&vars.result, returned, signatures);
             Expression::return_(returned)
         }
         ast::Statement::BreakStatement(expression) => {
@@ -781,14 +788,18 @@ where
     let (function, signature) = find_signature(&function, &args, signatures);
 
     for (arg, expected) in args.iter_mut().zip(signature.param_types.iter()) {
-        *arg = try_cast(expected, arg.clone());
+        *arg = try_cast(expected, arg.clone(), signatures);
     }
 
     Expression::call(function.clone(), args, signature.return_type.clone())
 }
 
 /// Tries to add an implicit cast that converts the given expression to the annotated type
-fn try_cast(annotation: &Type, mut actual: Expression) -> Expression {
+fn try_cast(
+    annotation: &Type,
+    mut actual: Expression,
+    signatures: &HashMap<String, FunctionSignature>,
+) -> Expression {
     match (annotation, &actual.ty) {
         // No cast needed
         (a, b) if a == b => actual,
@@ -800,11 +811,36 @@ fn try_cast(annotation: &Type, mut actual: Expression) -> Expression {
             actual.ty = option.clone();
             actual
         }
+        (
+            target @ Type::Int { signed, bits },
+            Type::Int {
+                signed: sign_actual,
+                bits: bits_actual,
+            },
+        ) if (signed == sign_actual && bits >= bits_actual)
+            || (*signed && *bits >= bits_actual / 2) =>
+        {
+            cast_int(actual, *bits, *signed, signatures)
+        }
         // TODO: Decide if we want this behavior for enums... my (Antonius) sense is, ultimately no, but it is convenient for now, so let's keep it until we have operators for enums and structs implemented
         (Type::Int { signed: _, bits: _ }, Type::Enum { cases: _ }) => actual,
         // TODO: put in more auto-conversions, e.g. casting from non-optional to optional should insert an explicit call to "some"
         (a, b) => panic!("Cannot implicitly cast {b} into {a}"),
     }
+}
+
+fn cast_int(
+    actual: Expression,
+    bits: usize,
+    signed: bool,
+    signatures: &HashMap<String, FunctionSignature>,
+) -> Expression {
+    let name = format!("{}{bits}", if signed { "s" } else { "u" });
+
+    let args = [actual];
+    let (func, signature) = find_signature(&name, &args, signatures);
+
+    Expression::call(func, args.into(), signature.return_type)
 }
 
 fn find_signature(
