@@ -113,10 +113,8 @@ impl Display for Type {
 
 pub fn unify(a: &Type, b: &Type) -> Type {
     match (a, b) {
-        (Type::Blank, b) => b.clone(),
-        (a, Type::Blank) => a.clone(),
-        (Type::Never, b) => b.clone(),
-        (a, Type::Never) => a.clone(),
+        (Type::Blank, a) | (a, Type::Blank) => a.clone(),
+        (Type::Never, a) | (a, Type::Never) => a.clone(),
         (Type::Void, Type::Void) => Type::Void,
         (
             Type::Int {
@@ -134,6 +132,8 @@ pub fn unify(a: &Type, b: &Type) -> Type {
                 panic!("incompatible int types")
             }
         }
+        (Type::Void, Type::Option(a)) | (Type::Option(a), Type::Void) => Type::Option(a.clone()),
+        (Type::Void, a) | (a, Type::Void) => Type::Option(a.clone().into()),
         (Type::String, Type::String) => Type::String,
         (Type::List(item_a), Type::List(item_b)) => Type::List(Box::new(unify(item_a, item_b))),
         (Type::Record(fields_a), Type::Record(fields_b)) => {

@@ -427,7 +427,7 @@ fn compile_statement(
         ast::Statement::EmptyLine => unreachable!(),
         ast::Statement::VariableDeclaration(variable_declaration) => {
             // TODO: allow uninitialized variables
-            let mut initial_value = compile_expression(
+            let initial_value = compile_expression(
                 variable_declaration
                     .value
                     .as_ref()
@@ -436,21 +436,21 @@ fn compile_statement(
                 visible,
                 signatures,
             );
-            let mut ty = initial_value.ty.clone();
 
-            if let Some(anno) = &variable_declaration.type_annotation {
+            let expression = if let Some(anno) = &variable_declaration.type_annotation {
                 let annotated_type = compile_type_annotation(&anno, ast_types);
-                ty = unify(&annotated_type, &ty);
-            }
-            initial_value.ty = ty.clone();
+                try_cast(&annotated_type, initial_value)
+            } else {
+                initial_value
+            };
 
-            let var = vars.push(ty);
+            let var = vars.push(expression.ty.clone());
             visible.bind(
                 variable_declaration.name.clone(),
                 var,
                 variable_declaration.mutable,
             );
-            Expression::var_set(var, initial_value)
+            Expression::var_set(var, expression)
         }
         ast::Statement::Assignment { target, value } => {
             let value = compile_expression(value, vars, visible, signatures);
@@ -753,6 +753,24 @@ fn compile_expression(
             };
             Expression::list(compiled_items, Type::List(Box::new(item_ty)))
         }
+    }
+}
+
+/// Tries to add an implicit cast that converts the given expression to the annotated type
+fn try_cast(annotation: &Type, mut actual: Expression) -> Expression {
+    match (annotation, &actual.ty) {
+        // No cast needed
+        (a, b) if a == b => actual,
+        (list @ Type::List(_), Type::List(b)) if **b == Type::Blank => {
+            actual.ty = list.clone();
+            actual
+        }
+        (option @ Type::Option(_), Type::Option(b)) if **b == Type::Blank => {
+            actual.ty = option.clone();
+            actual
+        }
+        // TODO: put in more auto-conversions, e.g. casting from non-optional to optional should insert an explicit call to "some"
+        (a, b) => panic!("Cannot implicitly cast {b} into {a}"),
     }
 }
 
