@@ -24,9 +24,14 @@ pub enum Instruction<'a> {
         ty: ComponentValType,
     },
 
-    Optional {
+    Zero {
         ty: ComponentValType,
-        is_some: bool,
+    },
+    Drop {
+        ty: ComponentValType,
+    },
+    DropEnd {
+        ty: ComponentValType,
     },
 
     I32(i32),
@@ -46,7 +51,6 @@ pub enum Instruction<'a> {
     Return,
     End,
     Unreachable,
-    Pop,
     Noop,
 
     // Raw WASM instructions to allow writing inline WASM functions directly in the future

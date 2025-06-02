@@ -101,7 +101,10 @@ pub enum ExpressionKind {
     VarGet {
         var: VarId,
     },
-    Void,
+    /// Our 'void' type that can be implicitly casted to an empty optional
+    None,
+    /// The zero value of a type, only used internally, e.g. to allow uninitialized variables
+    Zero,
     Int(i64),
     Float(f64),
     String(String),
@@ -148,10 +151,11 @@ pub enum ExpressionKind {
     },
     Loop(Body),
     Type(Type),
+    Multiple(Vec<Expression>),
 }
 
 impl ExpressionKind {
-    const fn typed(self, ty: Type) -> Expression {
+    pub const fn typed(self, ty: Type) -> Expression {
         Expression { kind: self, ty }
     }
 }
@@ -190,7 +194,7 @@ impl Expression {
         ExpressionKind::VarGet { var }.typed(ty)
     }
     const fn void() -> Self {
-        ExpressionKind::Void.typed(Type::None)
+        ExpressionKind::None.typed(Type::None)
     }
     fn int(int: i64) -> Expression {
         ExpressionKind::Int(int).typed(Type::Int {
@@ -282,6 +286,15 @@ impl Expression {
     }
     fn loop_(body: Body, ty: Type) -> Expression {
         ExpressionKind::Loop(body).typed(ty)
+    }
+    fn multiple(exprs: impl Into<Vec<Expression>>) -> Expression {
+        let exprs = exprs.into();
+        let ty = exprs
+            .iter()
+            .last()
+            .map(|e| e.ty.clone())
+            .unwrap_or(Type::None);
+        ExpressionKind::Multiple(exprs).typed(ty.clone())
     }
 }
 
@@ -385,7 +398,8 @@ impl Expression {
             ExpressionKind::Float(float) => write!(f, "float {}", float)?,
             ExpressionKind::String(string) => write!(f, "string {:?}", string)?,
             ExpressionKind::Bool(b) => write!(f, "bool {b}")?,
-            ExpressionKind::Void => write!(f, "none")?,
+            ExpressionKind::None => write!(f, "none")?,
+            ExpressionKind::Zero => write!(f, "zero")?,
             ExpressionKind::Enum { case } => write!(f, "enum case {}", case)?,
             ExpressionKind::Variant { case, payloads } => {
                 write!(f, "variant case {} with payloads:", case)?;
@@ -486,6 +500,14 @@ impl Expression {
             }
             ExpressionKind::Type(ty) => {
                 write!(f, "type {ty}")?;
+            }
+            ExpressionKind::Multiple(exprs) => {
+                write!(f, "multi(")?;
+                for e in exprs {
+                    e.fmt(f, indentation, fun)?;
+                    write!(f, " ")?;
+                }
+                write!(f, ")")?;
             }
         }
         Ok(())

@@ -314,14 +314,13 @@ impl<'temp> InstructionBuilder<'_, 'temp> {
                     panic!("Expected option type!");
                 };
 
-                let ty = ty
-                    .convert(self.lookup)
-                    .expect("Optionals must have an inner type");
-
-                Instruction::Optional {
-                    ty,
-                    is_some: option.is_some(),
+                let is_some = option.is_some();
+                self.push(hir::ExpressionKind::Bool(is_some).typed(*ty.clone()));
+                match option {
+                    Some(inner) => self.push(*inner),
+                    None => self.push(hir::ExpressionKind::Zero.typed(*ty)),
                 }
+                return;
             }
             hir::ExpressionKind::List(items) => {
                 let hir::Type::List(ty) = expression.ty.clone() else {
@@ -344,11 +343,29 @@ impl<'temp> InstructionBuilder<'_, 'temp> {
                 function,
                 arguments,
             } => {
-                for arg in arguments {
+                for arg in arguments.clone() {
                     self.push(arg)
                 }
 
-                Instruction::Call(function)
+                match function.as_str() {
+                    // TODO: This is rather unelegant, that only this function is handled here. Maybe we want to handle all function calls to special functions here, before converting to stack-based representation?
+                    "is_some" => {
+                        let hir::Type::Option(inner) = arguments[0].ty.clone() else {
+                            panic!("can only call 'is_some' on optionals!")
+                        };
+                        let ty = inner.convert(self.lookup).unwrap();
+                        Instruction::Drop { ty }
+                    }
+                    "unwrap_unsafe" => {
+                        let hir::Type::Option(_) = arguments[0].ty.clone() else {
+                            panic!("can only call 'unwrap_unsafe' on optionals!")
+                        };
+                        Instruction::DropEnd {
+                            ty: TypeRef::Primitive(PrimitiveType::U32),
+                        }
+                    }
+                    name => Instruction::Call(name.to_owned()),
+                }
             }
             hir::ExpressionKind::Member {
                 of: parent,
@@ -439,10 +456,19 @@ impl<'temp> InstructionBuilder<'_, 'temp> {
                 Instruction::LocalSet(var.0 as u32)
             }
             hir::ExpressionKind::VarGet { var } => Instruction::LocalGet(var.0 as u32),
-            hir::ExpressionKind::Void => Instruction::Noop,
+            hir::ExpressionKind::None => Instruction::Noop,
+            hir::ExpressionKind::Zero => Instruction::Zero {
+                ty: expression.ty.clone().convert(self.lookup).unwrap(),
+            },
             hir::ExpressionKind::Tuple(_) => todo!(),
             hir::ExpressionKind::TupleAccess { of, index } => todo!(),
             hir::ExpressionKind::Type(_) => todo!("This should probably just be a no-op"),
+            hir::ExpressionKind::Multiple(exprs) => {
+                for e in exprs {
+                    self.push(e);
+                }
+                return;
+            }
         };
 
         // This is to make WASM understand that the end of the function can never be reached

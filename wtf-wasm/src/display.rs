@@ -67,11 +67,11 @@ impl Print for Instruction<'_> {
                 )?;
             }
             Instruction::IndexAccess { ty: _ } => writeln!(f, "index")?,
-            Instruction::Optional { ty: _, is_some } => writeln!(f, "optional: {is_some}")?,
             Instruction::I32(val) => writeln!(f, "i32: {val}")?,
             Instruction::I64(val) => writeln!(f, "i64: {val}")?,
             Instruction::F32(val) => writeln!(f, "f32: {val}")?,
             Instruction::F64(val) => writeln!(f, "f64: {val}")?,
+            Instruction::Zero { ty: _ } => writeln!(f, "zero")?,
             Instruction::If { then, else_ } => {
                 writeln!(f, "if:")?;
                 for inst in then {
@@ -100,7 +100,8 @@ impl Print for Instruction<'_> {
             Instruction::Return => writeln!(f, "return")?,
             Instruction::End => writeln!(f, "end")?,
             Instruction::Unreachable => writeln!(f, "unreachable")?,
-            Instruction::Pop => writeln!(f, "pop")?,
+            Instruction::Drop { ty: _ } => writeln!(f, "drop")?,
+            Instruction::DropEnd { ty: _ } => writeln!(f, "defer drop")?,
             Instruction::Noop => writeln!(f, "noop")?,
             Instruction::Wasm(instruction) => {
                 writeln!(f, "wasm: {:#?}", instruction)?;

@@ -321,10 +321,11 @@ impl ComponentBuilder {
                 .collect::<Vec<_>>(),
         );
 
+        let mut deferred = Vec::new();
         for instruction in &function.instructions {
             let mut nesting_deph = Vec::new();
             for lowered_instruction in
-                self.lower_instruction(instruction, &locals, &mut nesting_deph)
+                self.lower_instruction(instruction, &locals, &mut nesting_deph, &mut deferred)
             {
                 if additional_instructions.len() > 0
                     && matches!(lowered_instruction, WasmInstruction::Return)
@@ -336,6 +337,10 @@ impl ComponentBuilder {
                 func.instruction(&lowered_instruction);
             }
         }
+        for defer in deferred.iter().rev() {
+            func.instruction(defer);
+        }
+
         self.codes.function(&func);
 
         let result = self.function_count;
@@ -627,11 +632,29 @@ impl ComponentBuilder {
         }
     }
 
+    fn lower_instructions<'a>(
+        &'a self,
+        instructions: &'a [Instruction],
+        locals: &[Local],
+        nesting_depth: &mut Vec<BranchLabel>,
+    ) -> Vec<WasmInstruction<'a>> {
+        let mut appendix = Vec::new();
+
+        let mut result = instructions
+            .iter()
+            .flat_map(|inst| self.lower_instruction(inst, locals, nesting_depth, &mut appendix))
+            .collect::<Vec<_>>();
+        appendix.reverse();
+        result.extend(appendix);
+        result
+    }
+
     fn lower_instruction<'a>(
         &'a self,
         instruction: &'a Instruction,
         locals: &[Local],
         nesting_depth: &mut Vec<BranchLabel>,
+        deferred: &mut Vec<WasmInstruction<'a>>,
     ) -> Vec<WasmInstruction<'a>> {
         match instruction {
             // Locals
@@ -757,17 +780,9 @@ impl ComponentBuilder {
                 ]
             }
 
-            Instruction::Optional { ty, is_some } => {
-                if *is_some {
-                    todo!("Convert some() to wasm");
-                } else {
-                    let lower = self.lower(ty);
-
-                    let discriminant = iter::once(WasmInstruction::I32Const(0));
-                    let payload = lower.iter().map(|low| low.zero());
-
-                    discriminant.chain(payload).collect()
-                }
+            Instruction::Zero { ty } => {
+                let lower = self.lower(ty);
+                lower.iter().map(|low| low.zero()).collect()
             }
 
             Instruction::IndexAccess { ty } => {
@@ -811,17 +826,9 @@ impl ComponentBuilder {
             Instruction::If { then, else_ } => {
                 nesting_depth.push(BranchLabel::If);
                 let lowered = iter::once(WasmInstruction::If(BlockType::Empty))
-                    .chain(
-                        then.iter()
-                            .flat_map(|inst| self.lower_instruction(inst, locals, nesting_depth))
-                            .collect::<Vec<_>>(),
-                    )
+                    .chain(self.lower_instructions(then, locals, nesting_depth))
                     .chain(iter::once(WasmInstruction::Else))
-                    .chain(
-                        else_
-                            .iter()
-                            .flat_map(|inst| self.lower_instruction(inst, locals, nesting_depth)),
-                    )
+                    .chain(self.lower_instructions(else_, locals, nesting_depth))
                     .chain(iter::once(WasmInstruction::End))
                     .collect();
                 nesting_depth.pop();
@@ -836,11 +843,7 @@ impl ComponentBuilder {
                     WasmInstruction::Block(BlockType::Empty),
                 ]
                 .into_iter()
-                .chain(
-                    block
-                        .into_iter()
-                        .flat_map(|inst| self.lower_instruction(inst, locals, nesting_depth)),
-                )
+                .chain(self.lower_instructions(block, locals, nesting_depth))
                 .chain(
                     [
                         // This index counts inside out, so it should always branch to the loop
@@ -892,11 +895,24 @@ impl ComponentBuilder {
                 // TODO: Put return values in register if string is returned
                 vec![WasmInstruction::Return]
             }
-            Instruction::Pop => vec![], // vec![WasmInstruction::Drop], // TODO: Figure out how and where to handle dropping of more complex types (that lower to more than one value)
+            Instruction::Drop { ty } => self
+                .lower(ty)
+                .iter()
+                .map(|_| WasmInstruction::Drop)
+                .collect(),
             Instruction::Noop => vec![],
 
             Instruction::Wasm(wasm) => vec![wasm.clone()],
             Instruction::Unreachable => vec![WasmInstruction::Unreachable],
+            Instruction::DropEnd { ty } => {
+                deferred.extend(
+                    self.lower(ty)
+                        .iter()
+                        .map(|_| WasmInstruction::Drop)
+                        .collect::<Vec<_>>(),
+                );
+                vec![]
+            }
         }
     }
 
@@ -1005,8 +1021,7 @@ impl ComponentBuilder {
             }
 
             "is_some" => {
-                // TODO: drop however many items the payload lowers to
-                vec![WasmInstruction::Drop]
+                unreachable!("This is already handled in the encode layer (LIR)")
             }
 
             "and__bool_bool" => {

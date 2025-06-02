@@ -468,6 +468,8 @@ fn compile_statement(
             if !binding.mutable {
                 panic!("Tried assigning to a mutable variable.");
             }
+            let annotated_type = &vars[binding.id];
+            let value = try_cast(annotated_type, value, signatures);
             Expression::var_set(binding.id, value)
         }
         ast::Statement::ExpressionStatement(expression) => {
@@ -613,16 +615,30 @@ fn compile_expression(
                     };
 
                     // TODO: store the expression here to reuse it instead of duplicating
-                    let condition =
-                        Expression::call("is_some".to_owned(), vec![left.clone()], Type::Bool);
+                    let left_store = vars.push(left.ty.clone());
+                    let store_optional = Expression::var_set(left_store, left.clone());
+                    let condition = Expression::call(
+                        "is_some".to_owned(),
+                        vec![Expression::var_get(left_store, left.ty.clone())],
+                        Type::Bool,
+                    );
 
                     let result_store = vars.push(*inner_ty.clone());
-                    let left = Expression::var_set(result_store, left);
+                    let left = Expression::var_set(
+                        result_store,
+                        Expression::call(
+                            "unwrap_unsafe".to_owned(),
+                            vec![Expression::var_get(left_store, left.ty.clone())],
+                            left.ty.clone(),
+                        ),
+                    );
                     let right = Expression::var_set(result_store, right);
 
-                    // TODO: either introduce an Expression::Multiple or allow to push onto the expressions somehow
-                    Expression::if_(condition, left.into(), right.into(), *inner_ty.clone());
-                    return Expression::var_get(result_store, *inner_ty);
+                    return Expression::multiple([
+                        store_optional,
+                        Expression::if_(condition, left.into(), right.into(), *inner_ty.clone()),
+                        Expression::var_get(result_store, *inner_ty),
+                    ]);
                 }
             };
 

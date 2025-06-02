@@ -7,3 +7,15 @@ export func main() -> s64 {
 
     return result ? 42
 }
+
+test "null-coalescing operator works" {
+    let result: s32? = none
+    let result = result ? 42
+    assert result == 42
+}
+
+test "null-coalescing operator does not overwrite existing value" {
+    let result: s32? = 21
+    let result = result ? 42
+    assert result == 21
+}
