@@ -105,7 +105,7 @@ impl Convert<'_> for (String, hir::Type) {
         let (name, ty) = self;
         let ty = match ty {
             hir::Type::Never => todo!(),
-            hir::Type::Void => todo!(),
+            hir::Type::None => todo!(),
             hir::Type::Blank => todo!(),
             hir::Type::List(_) => todo!(),
             hir::Type::Option(_) => todo!(),
@@ -118,7 +118,7 @@ impl Convert<'_> for (String, hir::Type) {
             },
             hir::Type::Tuple(_) => todo!(),
             hir::Type::Never => todo!(),
-            hir::Type::Void => todo!(),
+            hir::Type::None => todo!(),
             hir::Type::Bool => todo!(),
             hir::Type::Char => todo!(),
             hir::Type::Int { signed, bits } => todo!(),
@@ -135,7 +135,7 @@ impl Convert<'_> for (String, hir::Type) {
             hir::Type::Tuple(items) => todo!(),
             hir::Type::Name(_) => todo!(),
             wtf_hir::Type::Never => todo!(),
-            wtf_hir::Type::Void => todo!(),
+            wtf_hir::Type::None => todo!(),
             wtf_hir::Type::Bool => todo!(),
             wtf_hir::Type::Char => todo!(),
             wtf_hir::Type::Int { signed, bits } => todo!(),
@@ -309,6 +309,20 @@ impl<'temp> InstructionBuilder<'_, 'temp> {
             hir::ExpressionKind::Enum { case } => Instruction::I32(case as i32), // TODO: if the enum type has more fields than i32 allows, use i64
             hir::ExpressionKind::Variant { case, payloads } => todo!(),
             hir::ExpressionKind::Record(_) => Instruction::Noop,
+            hir::ExpressionKind::Option(option) => {
+                let hir::Type::Option(ty) = expression.ty.clone() else {
+                    panic!("Expected option type!");
+                };
+
+                let ty = ty
+                    .convert(self.lookup)
+                    .expect("Optionals must have an inner type");
+
+                Instruction::Optional {
+                    ty,
+                    is_some: option.is_some(),
+                }
+            }
             hir::ExpressionKind::List(items) => {
                 let hir::Type::List(ty) = expression.ty.clone() else {
                     panic!("Expected list type!");
@@ -494,7 +508,7 @@ impl Convert<'_> for hir::Type {
             }
             hir::Type::Variant { cases } => todo!(),
             hir::Type::Tuple(_) => todo!(),
-            hir::Type::Void => None,
+            hir::Type::None => None,
             hir::Type::Never => todo!("Disallow 'Never' for exported functions"),
             hir::Type::Blank => todo!("'Blank' not allowed here"),
             hir::Type::Bool => Some(TypeRef::Primitive(PrimitiveType::Bool)),
@@ -526,7 +540,7 @@ impl Convert<'_> for hir::Type {
             hir::Type::String => Some(TypeRef::Primitive(PrimitiveType::String)),
             hir::Type::Name(_) => todo!(),
             wtf_hir::Type::Never => todo!(),
-            wtf_hir::Type::Void => todo!(),
+            wtf_hir::Type::None => todo!(),
             wtf_hir::Type::Bool => todo!(),
             wtf_hir::Type::Char => todo!(),
             wtf_hir::Type::Int { signed, bits } => todo!(),

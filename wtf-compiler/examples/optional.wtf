@@ -5,5 +5,5 @@ export func main() -> s64 {
     var result: s32? = none
     result = 0
 
-    return s64(result ? 42)
+    return result ? 42
 }

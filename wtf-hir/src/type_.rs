@@ -5,7 +5,7 @@ use crate::FunctionSignature;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type {
     Never, // will never be constructed, used as the type of return/break/...
-    Void,
+    None,
     Bool,
     Char,
     Int {
@@ -42,7 +42,7 @@ impl Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Type::Never => write!(f, "never")?,
-            Type::Void => write!(f, "void")?,
+            Type::None => write!(f, "void")?,
             Type::Bool => write!(f, "bool")?,
             Type::Int { signed, bits } => write!(f, "{}{}", if *signed { "s" } else { "u" }, bits)?,
             Type::Float { bits } => write!(f, "f{bits}")?,
@@ -117,7 +117,7 @@ pub fn unify(a: &Type, b: &Type) -> Type {
     match (a, b) {
         (Type::Blank, a) | (a, Type::Blank) => a.clone(),
         (Type::Never, a) | (a, Type::Never) => a.clone(),
-        (Type::Void, Type::Void) => Type::Void,
+        (Type::None, Type::None) => Type::None,
         (
             Type::Int {
                 signed: signed_a,
@@ -134,8 +134,8 @@ pub fn unify(a: &Type, b: &Type) -> Type {
                 panic!("incompatible int types")
             }
         }
-        (Type::Void, Type::Option(a)) | (Type::Option(a), Type::Void) => Type::Option(a.clone()),
-        (Type::Void, a) | (a, Type::Void) => Type::Option(a.clone().into()),
+        (Type::None, Type::Option(a)) | (Type::Option(a), Type::None) => Type::Option(a.clone()),
+        (Type::None, a) | (a, Type::None) => Type::Option(a.clone().into()),
         (Type::String, Type::String) => Type::String,
         (Type::List(item_a), Type::List(item_b)) => Type::List(Box::new(unify(item_a, item_b))),
         (Type::Record(fields_a), Type::Record(fields_b)) => {

@@ -1005,7 +1005,8 @@ impl ComponentBuilder {
             }
 
             "is_some" => {
-                todo!("Implement 'is_some', maybe use a buffer local to get the variant discriminant without popping.")
+                // TODO: drop however many items the payload lowers to
+                vec![WasmInstruction::Drop]
             }
 
             "and__bool_bool" => {

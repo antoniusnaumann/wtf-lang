@@ -267,7 +267,7 @@ fn compile_fun(
         .return_type
         .as_ref()
         .map(|type_| compile_type_annotation(&type_, ast_types))
-        .unwrap_or(Type::Void);
+        .unwrap_or(Type::None);
 
     let mut vars = VarCollector::new(return_type.clone());
     let mut visible = Visible::new(types);
@@ -315,7 +315,7 @@ fn compile_signature(
     let return_type = declaration
         .return_type
         .as_ref()
-        .map_or(Type::Void, |ty| compile_type_annotation(&ty, ast_types));
+        .map_or(Type::None, |ty| compile_type_annotation(&ty, ast_types));
 
     FunctionSignature {
         param_types,
@@ -523,7 +523,7 @@ fn compile_statement(
                     condition,
                     EMPTY_BODY,
                     vec![Expression::break_(Expression::void())].into(),
-                    Type::Void,
+                    Type::None,
                 ));
                 for statement in inner_body.statements {
                     body.push(statement);
@@ -531,7 +531,7 @@ fn compile_statement(
                 body.push(Expression::void());
                 body
             };
-            Expression::loop_(complete_body.into(), Type::Void)
+            Expression::loop_(complete_body.into(), Type::None)
         }
         ast::Statement::ForStatement(_) => todo!("impl for"),
         wtf_ast::Statement::Assertion(assert_statement) => {
@@ -541,7 +541,7 @@ fn compile_statement(
                 condition,
                 EMPTY_BODY,
                 vec![Expression::unreachable()].into(),
-                Type::Void,
+                Type::None,
             )
         }
     }
@@ -603,7 +603,27 @@ fn compile_expression(
                 ast::BinaryOperator::GreaterEqual => "greater_eq",
                 ast::BinaryOperator::LessEqual => "less_eq",
                 ast::BinaryOperator::Contains => "contains",
-                ast::BinaryOperator::NullCoalesce => todo!("null coalesce"),
+                ast::BinaryOperator::NullCoalesce => {
+                    let (left, right) = (
+                        compile_expression(left, vars, visible, signatures),
+                        compile_expression(right, vars, visible, signatures),
+                    );
+                    let Type::Option(inner_ty) = left.ty.clone() else {
+                        panic!("Can only use '?' on optionals")
+                    };
+
+                    // TODO: store the expression here to reuse it instead of duplicating
+                    let condition =
+                        Expression::call("is_some".to_owned(), vec![left.clone()], Type::Bool);
+
+                    let result_store = vars.push(*inner_ty.clone());
+                    let left = Expression::var_set(result_store, left);
+                    let right = Expression::var_set(result_store, right);
+
+                    // TODO: either introduce an Expression::Multiple or allow to push onto the expressions somehow
+                    Expression::if_(condition, left.into(), right.into(), *inner_ty.clone());
+                    return Expression::var_get(result_store, *inner_ty);
+                }
             };
 
             compile_call(vars, visible, signatures, &[left, right], name, Vec::new())
@@ -825,6 +845,8 @@ fn try_cast(
         // TODO: Decide if we want this behavior for enums... my (Antonius) sense is, ultimately no, but it is convenient for now, so let's keep it until we have operators for enums and structs implemented
         (Type::Int { signed: _, bits: _ }, Type::Enum { cases: _ }) => actual,
         // TODO: put in more auto-conversions, e.g. casting from non-optional to optional should insert an explicit call to "some"
+        (Type::Option(inner), Type::None) => Expression::none(*inner.clone()),
+        (Type::Option(_), _) => Expression::some(actual),
         (a, b) => panic!("Cannot implicitly cast {b} into {a}"),
     }
 }

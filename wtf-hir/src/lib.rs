@@ -71,6 +71,14 @@ impl Body {
     }
 }
 
+impl From<Expression> for Body {
+    fn from(value: Expression) -> Self {
+        Body {
+            statements: vec![value],
+        }
+    }
+}
+
 impl From<Vec<Expression>> for Body {
     fn from(value: Vec<Expression>) -> Self {
         Body { statements: value }
@@ -110,6 +118,7 @@ pub enum ExpressionKind {
         of: Box<Expression>,
         name: String,
     },
+    Option(Option<Box<Expression>>),
     List(Vec<Expression>),
     IndexAccess {
         of: Box<Expression>,
@@ -175,13 +184,13 @@ impl Expression {
             var,
             expression: expression.into(),
         }
-        .typed(Type::Void)
+        .typed(Type::None)
     }
     fn var_get(var: VarId, ty: Type) -> Expression {
         ExpressionKind::VarGet { var }.typed(ty)
     }
     const fn void() -> Self {
-        ExpressionKind::Void.typed(Type::Void)
+        ExpressionKind::Void.typed(Type::None)
     }
     fn int(int: i64) -> Expression {
         ExpressionKind::Int(int).typed(Type::Int {
@@ -203,6 +212,13 @@ impl Expression {
     }
     fn record(fields: HashMap<String, Expression>, ty: Type) -> Expression {
         ExpressionKind::Record(fields).typed(ty)
+    }
+    fn some(inner: Expression) -> Expression {
+        let ty = inner.ty.clone();
+        ExpressionKind::Option(Some(Box::new(inner))).typed(Type::Option(ty.into()))
+    }
+    fn none(inner_type: Type) -> Expression {
+        ExpressionKind::Option(None).typed(Type::Option(inner_type.into()))
     }
     fn list(items: Vec<Expression>, ty: Type) -> Expression {
         ExpressionKind::List(items).typed(ty)
@@ -385,6 +401,14 @@ impl Expression {
                     value.fmt(f, indentation, fun)?
                 }
             }
+            ExpressionKind::Option(option) => match option {
+                Some(some) => {
+                    write!(f, "some(")?;
+                    some.fmt(f, indentation, fun)?;
+                    write!(f, ")")?;
+                }
+                None => write!(f, "none")?,
+            },
             ExpressionKind::List(items) => {
                 write!(f, "list with items:")?;
                 for item in items {

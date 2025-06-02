@@ -91,7 +91,7 @@ impl WithBuiltins for HashMap<String, FunctionSignature> {
             .chain(iter::once(fun(
                 "println".to_owned(),
                 &[Ty::String],
-                Type::Void,
+                Type::None,
             )))
             .chain(iter::once(fun(
                 "is_some".to_owned(),
