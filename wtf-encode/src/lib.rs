@@ -336,12 +336,14 @@ impl<'temp> InstructionBuilder<'_, 'temp> {
                         Instruction::Drop { ty }
                     }
                     "unwrap_unsafe" => {
-                        let hir::Type::Option(_) = arguments[0].ty.clone() else {
+                        let ty = arguments[0].ty.clone();
+                        let hir::Type::Option(_) = ty.clone() else {
                             panic!("can only call 'unwrap_unsafe' on optionals!")
                         };
-                        Instruction::DropEnd {
-                            ty: TypeRef::Primitive(PrimitiveType::U32),
-                        }
+                        let parent = self.locals.len() as u32;
+                        self.locals.push(ty.convert(self.lookup).unwrap());
+                        self.instructions.push(Instruction::LocalSet(parent));
+                        Instruction::MemberGet { parent, member: 1 }
                     }
                     name => Instruction::Call(name.to_owned()),
                 }

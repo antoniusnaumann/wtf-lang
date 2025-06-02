@@ -28,9 +28,6 @@ pub enum Instruction<'a> {
     Drop {
         ty: ComponentValType,
     },
-    DropEnd {
-        ty: ComponentValType,
-    },
 
     I32(i32),
     I64(i64),

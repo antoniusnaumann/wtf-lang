@@ -101,7 +101,6 @@ impl Print for Instruction<'_> {
             Instruction::End => writeln!(f, "end")?,
             Instruction::Unreachable => writeln!(f, "unreachable")?,
             Instruction::Drop { ty: _ } => writeln!(f, "drop")?,
-            Instruction::DropEnd { ty: _ } => writeln!(f, "defer drop")?,
             Instruction::Noop => writeln!(f, "noop")?,
             Instruction::Wasm(instruction) => {
                 writeln!(f, "wasm: {:#?}", instruction)?;

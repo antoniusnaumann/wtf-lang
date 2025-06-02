@@ -337,26 +337,16 @@ impl ComponentBuilder {
                 .collect::<Vec<_>>(),
         );
 
-        let mut deferred = Vec::new();
         for instruction in &function.instructions {
             let mut nesting_deph = Vec::new();
             for lowered_instruction in
-                self.lower_instruction(instruction, &locals, &mut nesting_deph, &mut deferred)
+                self.lower_instruction(instruction, &locals, &mut nesting_deph)
             {
                 if matches!(lowered_instruction, WasmInstruction::Return) {
                     if additional_instructions.len() > 0 {
                         for additional in &additional_instructions {
                             func.instruction(additional);
                         }
-                    }
-                    if let Some(index) = result_local_index {
-                        func.instruction(&WasmInstruction::LocalSet(index));
-                    }
-                    for defer in deferred.iter().rev() {
-                        func.instruction(defer);
-                    }
-                    if let Some(index) = result_local_index {
-                        func.instruction(&WasmInstruction::LocalGet(index));
                     }
                 }
                 func.instruction(&lowered_instruction);
@@ -665,7 +655,7 @@ impl ComponentBuilder {
 
         let mut result = instructions
             .iter()
-            .flat_map(|inst| self.lower_instruction(inst, locals, nesting_depth, &mut appendix))
+            .flat_map(|inst| self.lower_instruction(inst, locals, nesting_depth))
             .collect::<Vec<_>>();
         appendix.reverse();
         result.extend(appendix);
@@ -677,14 +667,13 @@ impl ComponentBuilder {
         instruction: &'a Instruction,
         locals: &[Local],
         nesting_depth: &mut Vec<BranchLabel>,
-        deferred: &mut Vec<WasmInstruction<'a>>,
     ) -> Vec<WasmInstruction<'a>> {
         match instruction {
             // Locals
             Instruction::LocalSet(idx) => lower_local(&locals[*idx as usize])
                 .iter()
                 .map(|(i, _ty)| WasmInstruction::LocalSet(*i))
-                // .rev()
+                .rev()
                 .collect(),
             Instruction::LocalGet(idx) => lower_local(&locals[*idx as usize])
                 .iter()
@@ -697,14 +686,11 @@ impl ComponentBuilder {
 
                 // TODO: This only works if the struct is only composed of primitives
                 let id = *parent as usize;
-                let ty = match locals[id].ty {
+                let _ty = match locals[id].ty {
                     TypeRef::Primitive(_) => {
                         panic!("ERROR: field access on primitive not allowed")
                     }
                     TypeRef::Type(ty) => &self.type_declarations[ty as usize],
-                };
-                let Type::Record { fields } = &ty else {
-                    panic!("ERROR: field access on non-records not allowed")
                 };
                 let lower = lower_local(&locals[id]);
 
@@ -925,15 +911,6 @@ impl ComponentBuilder {
 
             Instruction::Wasm(wasm) => vec![wasm.clone()],
             Instruction::Unreachable => vec![WasmInstruction::Unreachable],
-            Instruction::DropEnd { ty } => {
-                deferred.extend(
-                    self.lower(ty)
-                        .iter()
-                        .map(|_| WasmInstruction::Drop)
-                        .collect::<Vec<_>>(),
-                );
-                vec![]
-            }
         }
     }
 
