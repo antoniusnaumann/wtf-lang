@@ -6,13 +6,11 @@ pub enum Instruction<'a> {
     // Locals
     LocalGet(u32),
     LocalSet(u32),
-    Call(String),
-
-    LocalGetMember {
-        id: u32,
-        /// Index of the field
-        member: Vec<u32>,
+    MemberGet {
+        parent: u32,
+        member: usize,
     },
+    Call(String),
 
     Store {
         number: usize,

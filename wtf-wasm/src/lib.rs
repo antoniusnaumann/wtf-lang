@@ -285,6 +285,22 @@ impl ComponentBuilder {
             vec![ValType::I32]
         };
         locals.extend(intermediate_locals);
+        // Intermediate local for stack juggling the result so we can drop excess stack values before returning
+        let result_local_index = if results.is_empty() {
+            None
+        } else {
+            Some(locals.len() as u32)
+        };
+        if let Some(index) = result_local_index {
+            if results.len() > 1 {
+                unreachable!("multi-return values should be indirect here already");
+            };
+            locals.push(Local {
+                index,
+                ty: TypeRef::Primitive(lift_val(&results[0])),
+                lower: results.clone(),
+            });
+        }
 
         let params: Vec<Vec<ValType>> = function
             .signature
@@ -327,19 +343,26 @@ impl ComponentBuilder {
             for lowered_instruction in
                 self.lower_instruction(instruction, &locals, &mut nesting_deph, &mut deferred)
             {
-                if additional_instructions.len() > 0
-                    && matches!(lowered_instruction, WasmInstruction::Return)
-                {
-                    for additional in &additional_instructions {
-                        func.instruction(additional);
+                if matches!(lowered_instruction, WasmInstruction::Return) {
+                    if additional_instructions.len() > 0 {
+                        for additional in &additional_instructions {
+                            func.instruction(additional);
+                        }
+                    }
+                    if let Some(index) = result_local_index {
+                        func.instruction(&WasmInstruction::LocalSet(index));
+                    }
+                    for defer in deferred.iter().rev() {
+                        func.instruction(defer);
+                    }
+                    if let Some(index) = result_local_index {
+                        func.instruction(&WasmInstruction::LocalGet(index));
                     }
                 }
                 func.instruction(&lowered_instruction);
             }
         }
-        for defer in deferred.iter().rev() {
-            func.instruction(defer);
-        }
+        func.instruction(&WasmInstruction::End);
 
         self.codes.function(&func);
 
@@ -669,12 +692,11 @@ impl ComponentBuilder {
                 .rev()
                 .collect(),
 
-            Instruction::LocalGetMember { id, member } => {
-                if member.len() > 1 {
-                    todo!("Implement access chains");
-                }
+            Instruction::MemberGet { parent, member } => {
+                // TODO: Implement member chains
+
                 // TODO: This only works if the struct is only composed of primitives
-                let id = *id as usize;
+                let id = *parent as usize;
                 let ty = match locals[id].ty {
                     TypeRef::Primitive(_) => {
                         panic!("ERROR: field access on primitive not allowed")
@@ -686,9 +708,8 @@ impl ComponentBuilder {
                 };
                 let lower = lower_local(&locals[id]);
 
-                vec![WasmInstruction::LocalGet(lower[member[0] as usize].0)]
+                vec![WasmInstruction::LocalGet(lower[*member as usize].0)]
             }
-
             Instruction::Store { number, ty } => {
                 let lower = self.lower(ty);
                 let element_length = lower.iter().fold(0, |acc, e| acc + e.byte_length());
@@ -1082,6 +1103,17 @@ impl ComponentBuilder {
         }
 
         result
+    }
+}
+
+fn lift_val(val: &ValType) -> PrimitiveValType {
+    match val {
+        ValType::I32 => PrimitiveValType::U32,
+        ValType::I64 => PrimitiveValType::U64,
+        ValType::F32 => PrimitiveValType::F32,
+        ValType::F64 => PrimitiveValType::F64,
+        ValType::V128 => todo!(),
+        ValType::Ref(_) => todo!(),
     }
 }
 

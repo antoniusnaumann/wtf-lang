@@ -52,8 +52,8 @@ impl Print for Instruction<'_> {
         match self {
             Instruction::LocalGet(id) => writeln!(f, "get: {id}")?,
             Instruction::LocalSet(id) => writeln!(f, "set: {id}")?,
+            Instruction::MemberGet { parent, member } => writeln!(f, "member: {parent} {member}")?,
             Instruction::Call(name) => writeln!(f, "call: {name}")?,
-            Instruction::LocalGetMember { id, member } => todo!(),
             Instruction::Store { number, ty } => writeln!(f, "store: {number}")?,
             Instruction::Bytes(items) => {
                 writeln!(
@@ -158,7 +158,14 @@ impl Print for Type {
                 write!(f, "?")?;
             }
             Type::Result { ok, err } => todo!(),
-            Type::Record { fields } => todo!(),
+            Type::Record { fields } => {
+                write!(f, "record {{")?;
+                for (name, ty) in fields {
+                    write!(f, " {name}: ")?;
+                    ty.print(f, indent)?;
+                }
+                write!(f, "}}")?;
+            }
             Type::Variant {} => todo!(),
             Type::Tuple(component_val_types) => todo!(),
             Type::Flags(items) => todo!(),

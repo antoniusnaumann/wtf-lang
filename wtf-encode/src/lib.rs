@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fmt::Debug, iter};
+use std::{collections::HashSet, fmt::Debug, ops::Sub};
 
 use wtf_hir::{self as hir, Expression, Test};
 use wtf_wasm::{
@@ -117,41 +117,16 @@ impl Convert<'_> for (String, hir::Type) {
                     .collect(),
             },
             hir::Type::Tuple(_) => todo!(),
-            hir::Type::Never => todo!(),
-            hir::Type::None => todo!(),
             hir::Type::Bool => todo!(),
             hir::Type::Char => todo!(),
             hir::Type::Int { signed, bits } => todo!(),
             hir::Type::Float { bits } => todo!(),
             hir::Type::String => todo!(),
-            hir::Type::Blank => todo!(),
-            hir::Type::List(_) => todo!(),
-            hir::Type::Option(_) => todo!(),
-            hir::Type::Result { ok, err } => todo!(),
-            hir::Type::Record(hash_map) => todo!(),
             hir::Type::Resource { methods } => todo!(),
             hir::Type::Enum { cases } => Type::Enum(cases),
             hir::Type::Variant { cases } => todo!(),
-            hir::Type::Tuple(items) => todo!(),
             hir::Type::Name(_) => todo!(),
-            wtf_hir::Type::Never => todo!(),
-            wtf_hir::Type::None => todo!(),
-            wtf_hir::Type::Bool => todo!(),
-            wtf_hir::Type::Char => todo!(),
-            wtf_hir::Type::Int { signed, bits } => todo!(),
-            wtf_hir::Type::Float { bits } => todo!(),
-            wtf_hir::Type::String => todo!(),
-            wtf_hir::Type::Blank => todo!(),
-            wtf_hir::Type::List(_) => todo!(),
-            wtf_hir::Type::Option(_) => todo!(),
-            wtf_hir::Type::Result { ok, err } => todo!(),
-            wtf_hir::Type::Record(hash_map) => todo!(),
-            wtf_hir::Type::Resource { methods } => todo!(),
-            wtf_hir::Type::Enum { cases } => todo!(),
-            wtf_hir::Type::Variant { cases } => todo!(),
-            wtf_hir::Type::Tuple(items) => todo!(),
-            wtf_hir::Type::Name(_) => todo!(),
-            wtf_hir::Type::Meta(_) => todo!(),
+            hir::Type::Meta(_) => todo!(),
         };
 
         // TODO: Preserve export information
@@ -182,8 +157,8 @@ impl<'a> Convert<'a> for (String, hir::Function) {
             })
             .collect();
         let result = func.return_type.convert(lookup);
-        let locals = convert_locals(func.body.vars.clone(), lookup);
-        let instructions = convert_function_body(func.body, lookup, &locals);
+        let mut locals = convert_locals(func.body.vars.clone(), lookup);
+        let instructions = convert_function_body(func.body, lookup, &mut locals);
 
         Function {
             signature: Signature {
@@ -202,8 +177,8 @@ impl<'a> Convert<'a> for Test {
     type Output = Function<'a>;
 
     fn convert(self, lookup: &mut Lookup) -> Self::Output {
-        let locals = convert_locals(self.body.vars.clone(), lookup);
-        let instructions = convert_function_body(self.body, lookup, &locals);
+        let mut locals = convert_locals(self.body.vars.clone(), lookup);
+        let instructions = convert_function_body(self.body, lookup, &mut locals);
 
         Function {
             signature: Signature {
@@ -231,7 +206,7 @@ fn convert_locals(locals: Vec<hir::Type>, lookup: &mut Lookup) -> Vec<TypeRef> {
 fn convert_function_body<'a, 'temp>(
     body: hir::FunctionBody,
     lookup: &'temp mut Lookup,
-    locals: &'temp [TypeRef],
+    locals: &'temp mut Vec<TypeRef>,
 ) -> Vec<Instruction<'a>>
 where
     'a: 'temp,
@@ -240,7 +215,6 @@ where
         .statements
         .into_iter()
         .flat_map(|exp| exp.convert(lookup, locals))
-        .chain(iter::once(Instruction::End))
         .collect()
 }
 
@@ -250,7 +224,7 @@ where
 {
     type Output;
 
-    fn convert(self, lookup: &'temp mut Lookup, locals: &'temp [TypeRef]) -> Self::Output;
+    fn convert(self, lookup: &'temp mut Lookup, locals: &'temp mut Vec<TypeRef>) -> Self::Output;
 }
 
 impl<'a, 'temp> ConvertInstruction<'a, 'temp> for hir::Body
@@ -259,7 +233,7 @@ where
 {
     type Output = Vec<Instruction<'a>>;
 
-    fn convert(self, lookup: &'temp mut Lookup, locals: &'temp [TypeRef]) -> Self::Output {
+    fn convert(self, lookup: &'temp mut Lookup, locals: &'temp mut Vec<TypeRef>) -> Self::Output {
         self.statements
             .into_iter()
             .flat_map(|statement| statement.to_owned().convert(lookup, locals))
@@ -273,7 +247,7 @@ where
 {
     type Output = Vec<Instruction<'a>>;
 
-    fn convert(self, lookup: &'temp mut Lookup, locals: &'temp [TypeRef]) -> Self::Output {
+    fn convert(self, lookup: &'temp mut Lookup, locals: &'temp mut Vec<TypeRef>) -> Self::Output {
         let mut builder = InstructionBuilder::new(lookup, locals);
         builder.push(self);
         builder.instructions
@@ -283,11 +257,11 @@ where
 struct InstructionBuilder<'a, 'temp> {
     instructions: Vec<Instruction<'a>>,
     lookup: &'temp mut Lookup,
-    locals: &'temp [TypeRef],
+    locals: &'temp mut Vec<TypeRef>,
 }
 
 impl<'temp> InstructionBuilder<'_, 'temp> {
-    fn new(lookup: &'temp mut Lookup, locals: &'temp [TypeRef]) -> Self {
+    fn new(lookup: &'temp mut Lookup, locals: &'temp mut Vec<TypeRef>) -> Self {
         Self {
             instructions: Vec::new(),
             lookup,
@@ -378,30 +352,29 @@ impl<'temp> InstructionBuilder<'_, 'temp> {
                     .expect("Record should have a valid type")
                 {
                     TypeRef::Primitive(_) => panic!("Cannot access member of a primitive"),
-                    TypeRef::Type(ty) => &self.lookup.types[ty as usize],
+                    ty @ TypeRef::Type(index) => {
+                        self.locals.push(ty);
+                        self.lookup.types[index as usize].clone()
+                    }
                 };
                 let Type::Record { fields } = record else {
                     panic!("ERROR: can only access fields of records");
                 };
+                let index = self.locals.len().sub(1) as u32;
 
-                let (index, ty) = fields
+                // TODO: climb parents to get to the top most struct, only push parent after arriving at the origin of the struct -- ideally optimize when the struct is obtained via a variable access
+                self.push(*parent);
+                self.instructions.push(Instruction::LocalSet(index));
+
+                let pos = fields
                     .iter()
-                    .enumerate()
-                    .find_map(
-                        |(i, (name, ty))| {
-                            if *name == field {
-                                Some((i, ty))
-                            } else {
-                                None
-                            }
-                        },
-                    )
-                    .expect("Accessed field did not exist");
+                    .position(|(name, _)| *name == field)
+                    .expect("Field should exist");
 
-                Instruction::LocalGetMember {
-                    id: todo!("figure out how to update this"),
-                    // TODO: convert field names to indices
-                    member: todo!("figure out how to update this"),
+                Instruction::MemberGet {
+                    parent: index,
+                    // TODO: climb parents to get to the top most struct
+                    member: pos,
                 }
             }
             hir::ExpressionKind::IndexAccess { of: target, index } => {
@@ -565,24 +538,7 @@ impl Convert<'_> for hir::Type {
             }
             hir::Type::String => Some(TypeRef::Primitive(PrimitiveType::String)),
             hir::Type::Name(_) => todo!(),
-            wtf_hir::Type::Never => todo!(),
-            wtf_hir::Type::None => todo!(),
-            wtf_hir::Type::Bool => todo!(),
-            wtf_hir::Type::Char => todo!(),
-            wtf_hir::Type::Int { signed, bits } => todo!(),
-            wtf_hir::Type::Float { bits } => todo!(),
-            wtf_hir::Type::String => todo!(),
-            wtf_hir::Type::Blank => todo!(),
-            wtf_hir::Type::List(_) => todo!(),
-            wtf_hir::Type::Option(_) => todo!(),
-            wtf_hir::Type::Result { ok, err } => todo!(),
-            wtf_hir::Type::Record(hash_map) => todo!(),
-            wtf_hir::Type::Resource { methods } => todo!(),
-            wtf_hir::Type::Enum { cases } => todo!(),
-            wtf_hir::Type::Variant { cases } => todo!(),
-            wtf_hir::Type::Tuple(items) => todo!(),
-            wtf_hir::Type::Name(_) => todo!(),
-            wtf_hir::Type::Meta(_) => todo!(),
+            hir::Type::Meta(_) => todo!(),
         }
     }
 }
