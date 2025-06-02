@@ -282,7 +282,12 @@ impl<'temp> InstructionBuilder<'_, 'temp> {
             hir::ExpressionKind::Bool(b) => Instruction::I32(if b { 1 } else { 0 }),
             hir::ExpressionKind::Enum { case } => Instruction::I32(case as i32), // TODO: if the enum type has more fields than i32 allows, use i64
             hir::ExpressionKind::Variant { case, payloads } => todo!(),
-            hir::ExpressionKind::Record(_) => Instruction::Noop,
+            hir::ExpressionKind::Record(fields) => {
+                for (_, field) in fields {
+                    self.push(field);
+                }
+                return;
+            }
             hir::ExpressionKind::Option(option) => {
                 let hir::Type::Option(ty) = expression.ty.clone() else {
                     panic!("Expected option type!");
