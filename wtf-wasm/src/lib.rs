@@ -591,8 +591,8 @@ impl ComponentBuilder {
     fn register_builtin_functions(&mut self) {
         let mut func_len = wasm_encoder::Function::new([]);
         {
-            const LEN_ARG: u32 = 0;
-            // const PTR_BYTE: u32 = 1;
+            // const PTR_BYTE: u32 = 0;
+            const LEN_ARG: u32 = 1;
             const SIZE_ARG: u32 = 2;
             func_len.instruction(&WasmInstruction::LocalGet(LEN_ARG));
             func_len.instruction(&WasmInstruction::LocalGet(SIZE_ARG));
@@ -678,7 +678,7 @@ impl ComponentBuilder {
             Instruction::LocalGet(idx) => lower_local(&locals[*idx as usize])
                 .iter()
                 .map(|(i, _ty)| WasmInstruction::LocalGet(*i))
-                .rev()
+                // .rev()
                 .collect(),
 
             Instruction::MemberGet { parent, member } => {
@@ -766,9 +766,8 @@ impl ComponentBuilder {
                     })
                 });
                 let pointer = [
-                    // reversed due to stack machine
-                    WasmInstruction::I32Const(length as i32),
                     WasmInstruction::LocalGet(list_offset_buffer),
+                    WasmInstruction::I32Const(length as i32),
                 ];
 
                 allocation
@@ -781,9 +780,8 @@ impl ComponentBuilder {
             Instruction::Bytes(bytes) => {
                 let ConstantPosition { offset, length } = self.constants[bytes];
                 vec![
-                    // reversed due to stack machine
-                    WasmInstruction::I32Const(length as i32),
                     WasmInstruction::I32Const(offset as i32),
+                    WasmInstruction::I32Const(length as i32),
                 ]
             }
 
@@ -808,15 +806,19 @@ impl ComponentBuilder {
                     _ => todo!("implement index access for more types"),
                 };
 
+                let index_buffer = (locals.len() - 1) as u32;
+
                 [
                     vec![
+                        WasmInstruction::LocalSet(index_buffer),
+                        // Drop list length
+                        WasmInstruction::Drop,
+                        WasmInstruction::LocalGet(index_buffer),
                         WasmInstruction::I32Const(element_length as i32),
                         WasmInstruction::I32Mul,
                         WasmInstruction::I32Add,
                         // TODO: check array bounds
-                        WasmInstruction::Call(self.builtin_func_index + FUNC_INSERT_OFFSET_I32),
-                        // drop array length
-                        WasmInstruction::Drop,
+                        // WasmInstruction::Call(self.builtin_func_index + FUNC_INSERT_OFFSET_I32),
                     ],
                     load_instructions,
                 ]

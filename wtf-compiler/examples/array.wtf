@@ -2,7 +2,7 @@ package wtf:example@0.1.0
 
 // should return 0
 export func main() -> s64 {
-    let array: [s32] = []
+    let array: [s32] = [5]
     return array.len()
 }
 
@@ -56,4 +56,9 @@ test "multiple arrays do not overwrite each other" {
     let second = [7, 17, 21]
 
     assert first[2] == 42
+}
+
+test "array" {
+    let array = [99]
+    let array2 = array
 }
