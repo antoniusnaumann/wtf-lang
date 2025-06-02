@@ -275,7 +275,7 @@ impl ComponentBuilder {
             });
             additional_instructions = intermediate_locals
                 .iter()
-                // it seems that this .rev() call is wrong here, but I don't know why
+                // TODO: Check if that reverse call should be in here, now that the locals are fixed. Probably yes...
                 // .rev()
                 .map(|local| WasmInstruction::LocalSet(local.index))
                 .chain(additional_instructions)

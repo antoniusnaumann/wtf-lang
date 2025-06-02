@@ -2,7 +2,7 @@ package wtf:example@0.1.0
 
 // should return 0
 export func main() -> s64 {
-    let array: [s32] = [5]
+    let array: [s32] = []
     return array.len()
 }
 
