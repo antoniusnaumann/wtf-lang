@@ -13,7 +13,7 @@ export func double_cap(x: s32, cap: s32) -> s32 {
 
 // should return 0
 export func main() -> s64 {
-   return s64(double_cap(5, 11) - 10)
+   return double_cap(5, 11) - 10
 }
 
 test "cap value larger than cap" {

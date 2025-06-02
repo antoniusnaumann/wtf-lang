@@ -28,6 +28,11 @@ jobs:
             "./examples/string.wtf",
             "./examples/tests.wtf",
             "./examples/ufcs.wtf",
+            # "./examples/for.wtf",                  
+            "./examples/logic.wtf",
+            "./examples/optional.wtf",      
+            # "./overload.wtf
+            "./examples/type_check.wtf",
           ]
     runs-on: macos-latest
     steps:

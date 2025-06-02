@@ -1,0 +1,15 @@
+export func main() -> s64 {
+    return int_ident(0).s64()
+}
+
+test "Argument type matches" {
+    let a = 5
+
+    assert int_ident(a) == 5
+    assert int_ident(5) == 5
+    assert int_ident(2 + 3) == 5
+}
+
+func int_ident(a: s32) -> s32 {
+    return a
+}

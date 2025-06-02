@@ -97,10 +97,8 @@ impl Compiler {
                 println!("Removing tests...");
                 println!();
             }
-            ast.declarations.retain(|decl| match decl {
-                wtf_ast::Declaration::Test(_) => false,
-                _ => true,
-            })
+            ast.declarations
+                .retain(|decl| !matches!(decl, wtf_ast::Declaration::Test(_)))
         }
 
         if self.verbose {
@@ -115,11 +113,22 @@ impl Compiler {
             println!("{hir}");
 
             println!();
-            println!("===== WAT =====");
+            println!("===== LIR =====");
         }
-        let wasm = wtf_encode::Encoder::new().encode(hir).finish();
+
+        let lir = wtf_encode::compile(hir);
+
         if self.verbose {
-            println!("{:?}", wasmparser::validate(&wasm).err());
+            println!("{lir}");
+        }
+
+        let wasm = wtf_encode::Encoder::new().encode(lir).finish();
+        if self.verbose {
+            if let Some(error) = wasmparser::validate(&wasm).err() {
+                println!();
+                println!("===== WAT =====");
+                println!("Error: {:?}", error);
+            }
         }
 
         fs::write("output.wasm", &wasm).unwrap();
@@ -168,7 +177,7 @@ impl Compiler {
         config.wasm_component_model(true);
 
         let engine = Engine::new(&config)?;
-        let mut store = Store::new(&engine, {});
+        let mut store = Store::new(&engine, ());
         let linker = Linker::new(&engine);
         let component = Component::from_binary(&engine, wasm)?;
 
@@ -223,7 +232,7 @@ impl Compiler {
         config.wasm_component_model(true);
 
         let engine = Engine::new(&config)?;
-        let mut store = Store::new(&engine, {});
+        let mut store = Store::new(&engine, ());
         let mut linker = Linker::new(&engine);
         linker
             .root()
@@ -241,7 +250,7 @@ impl Compiler {
             .expect("main function did not exist");
 
         // This allows main functions without return value
-        if func.results(&store).len() == 0 {
+        if func.results(&store).is_empty() {
             let mut result = [];
             func.call(&mut store, &[], &mut result)?;
 

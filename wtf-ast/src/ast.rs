@@ -34,7 +34,7 @@ impl Declaration {
 
 impl TestDeclaration {
     pub fn name(&self) -> &str {
-        self.name.as_ref().map(String::as_str).unwrap_or("<test>")
+        self.name.as_deref().unwrap_or("<test>")
     }
 }
 
@@ -336,4 +336,10 @@ pub enum ArithmeticOperator {
 pub enum UnaryOperator {
     Negate, // '-'
     Not,    // '!'
+}
+
+impl AsRef<Expression> for Expression {
+    fn as_ref(&self) -> &Expression {
+        self
+    }
 }

@@ -6,13 +6,11 @@ pub enum Instruction<'a> {
     // Locals
     LocalGet(u32),
     LocalSet(u32),
-    Call(String),
-
-    LocalGetMember {
-        id: u32,
-        /// Index of the field
-        member: Vec<u32>,
+    MemberGet {
+        parent: u32,
+        member: usize,
     },
+    Call(String),
 
     Store {
         number: usize,
@@ -24,9 +22,11 @@ pub enum Instruction<'a> {
         ty: ComponentValType,
     },
 
-    Optional {
+    Zero {
         ty: ComponentValType,
-        is_some: bool,
+    },
+    Drop {
+        ty: ComponentValType,
     },
 
     I32(i32),
@@ -46,11 +46,16 @@ pub enum Instruction<'a> {
     Return,
     End,
     Unreachable,
-    Pop,
     Noop,
 
     // Raw WASM instructions to allow writing inline WASM functions directly in the future
     Wasm(WasmInstruction<'a>),
+}
+
+impl<'a> From<Instruction<'a>> for Vec<Instruction<'a>> {
+    fn from(value: Instruction<'a>) -> Self {
+        vec![value]
+    }
 }
 
 impl<'a> From<WasmInstruction<'a>> for Instruction<'a> {

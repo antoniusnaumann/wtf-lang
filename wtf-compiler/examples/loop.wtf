@@ -24,5 +24,31 @@ export func main() -> s64 {
         y -= 10
     }
 
-    return s64(x + y * 15)
+    return x + y * 15
+}
+
+
+test "Increment variable gradually in loop" {
+    var x = 5
+    while x < 15 {
+        x += 1
+    }
+
+    assert x == 15
+}
+
+test "Loop does not run when condition is false" {
+    var x = 17
+    while x < 10 {
+        assert false
+    }
+}
+
+test "Loop does run when condition is true" {
+    var x = 17
+    while x == 17 {
+        return
+    }
+
+    assert false
 }

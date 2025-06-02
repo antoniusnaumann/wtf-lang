@@ -72,7 +72,7 @@ impl Print for str {
     }
 }
 
-impl Print for [String] {
+impl Print for Vec<String> {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
         let strings = self.join(" ");
         write!(f, "\n{c:indent$}({})", strings)
@@ -91,16 +91,6 @@ impl Print for [UseDeclaration] {
                 elem.interface,
                 elem.types
             )?;
-        }
-
-        Ok(())
-    }
-}
-
-impl Print for [Declaration] {
-    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
-        for elem in self {
-            node!(f, indent, c, "decl", elem)?;
         }
 
         Ok(())
@@ -149,16 +139,6 @@ impl Print for RecordDeclaration {
     }
 }
 
-impl Print for [Field] {
-    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
-        for field in self {
-            field.print(f, indent, c)?;
-        }
-
-        Ok(())
-    }
-}
-
 impl Print for Field {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
         node!(f, indent, c, "field", self.name, self.type_annotation)
@@ -167,7 +147,15 @@ impl Print for Field {
 
 impl Print for ResourceDeclaration {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
-        todo!()
+        node!(
+            f,
+            indent,
+            c,
+            "resource",
+            self.name,
+            self.fields,
+            self.methods
+        )
     }
 }
 
@@ -186,15 +174,6 @@ impl Print for EnumDeclaration {
     }
 }
 
-impl Print for [Case<'_>] {
-    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
-        for case in self {
-            case.print(f, indent, c)?;
-        }
-        Ok(())
-    }
-}
-
 impl Print for Case<'_> {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
         node!(f, indent, c, "case", self.0)
@@ -203,7 +182,13 @@ impl Print for Case<'_> {
 
 impl Print for VariantDeclaration {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
-        todo!()
+        node!(f, indent, c, "variant", self.cases)
+    }
+}
+
+impl Print for VariantCase {
+    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
+        node!(f, indent, c, "case", self.name, self.associated_types)
     }
 }
 
@@ -216,16 +201,6 @@ impl Print for ExportDeclaration {
 impl Print for TestDeclaration {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
         node!(f, indent, c, "test", self.name, self.body)
-    }
-}
-
-impl Print for [Parameter] {
-    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
-        for elem in self {
-            elem.print(f, indent, c)?;
-        }
-
-        Ok(())
     }
 }
 
@@ -256,16 +231,6 @@ impl Print for TypeAnnotation {
 impl Print for Block {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
         node!(f, indent, c, "block", self.statements)
-    }
-}
-
-impl Print for [Statement] {
-    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
-        for elem in self {
-            elem.print(f, indent, c)?;
-        }
-
-        Ok(())
     }
 }
 
@@ -421,16 +386,6 @@ impl Print for Receiver<'_> {
     }
 }
 
-impl Print for [Expression] {
-    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
-        for elem in self {
-            elem.print(f, indent, c)?;
-        }
-
-        Ok(())
-    }
-}
-
 impl Print for Literal {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
         match self {
@@ -481,18 +436,18 @@ impl Print for UnaryOperator {
     }
 }
 
-impl Print for [FieldAssignment] {
+impl Print for FieldAssignment {
+    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
+        node!(f, indent, c, "fieldinit", self.name, self.element)
+    }
+}
+
+impl<T: Print> Print for [T] {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
         for elem in self {
             elem.print(f, indent, c)?;
         }
 
         Ok(())
-    }
-}
-
-impl Print for FieldAssignment {
-    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
-        node!(f, indent, c, "fieldinit", self.name, self.element)
     }
 }

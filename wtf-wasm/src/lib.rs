@@ -1,11 +1,12 @@
 use std::{
     cmp::max,
     collections::{HashMap, HashSet},
-    fmt::Debug,
+    fmt::{Debug, Display, Formatter},
     iter,
     ops::Deref,
 };
 
+use display::Print;
 use wasm_encoder::{
     BlockType, CanonicalOption, CodeSection, ComponentExportKind, ConstExpr, DataSection,
     ExportKind, ExportSection, FunctionSection, GlobalSection, GlobalType, MemArg, MemorySection,
@@ -14,6 +15,8 @@ use wasm_encoder::{
 
 mod instruction;
 pub use instruction::*;
+
+mod display;
 
 // wasm encoder re-exports
 pub use wasm_encoder::{
@@ -83,6 +86,12 @@ pub struct Instance<'a> {
     pub functions: Vec<Function<'a>>,
     pub types: Vec<Type>,
     pub constants: HashSet<Vec<u8>>,
+}
+
+impl Display for Instance<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.print(f, 0)
+    }
 }
 
 #[derive(Debug)]
@@ -266,7 +275,7 @@ impl ComponentBuilder {
             });
             additional_instructions = intermediate_locals
                 .iter()
-                // it seems that this .rev() call is wrong here, but I don't know why
+                // TODO: Check if that reverse call should be in here, now that the locals are fixed. Probably yes...
                 // .rev()
                 .map(|local| WasmInstruction::LocalSet(local.index))
                 .chain(additional_instructions)
@@ -276,6 +285,22 @@ impl ComponentBuilder {
             vec![ValType::I32]
         };
         locals.extend(intermediate_locals);
+        // Intermediate local for stack juggling the result so we can drop excess stack values before returning
+        let result_local_index = if results.is_empty() {
+            None
+        } else {
+            Some(locals.len() as u32)
+        };
+        if let Some(index) = result_local_index {
+            if results.len() > 1 {
+                unreachable!("multi-return values should be indirect here already");
+            };
+            locals.push(Local {
+                index,
+                ty: TypeRef::Primitive(lift_val(&results[0])),
+                lower: results.clone(),
+            });
+        }
 
         let params: Vec<Vec<ValType>> = function
             .signature
@@ -317,16 +342,18 @@ impl ComponentBuilder {
             for lowered_instruction in
                 self.lower_instruction(instruction, &locals, &mut nesting_deph)
             {
-                if additional_instructions.len() > 0
-                    && matches!(lowered_instruction, WasmInstruction::Return)
-                {
-                    for additional in &additional_instructions {
-                        func.instruction(additional);
+                if matches!(lowered_instruction, WasmInstruction::Return) {
+                    if additional_instructions.len() > 0 {
+                        for additional in &additional_instructions {
+                            func.instruction(additional);
+                        }
                     }
                 }
                 func.instruction(&lowered_instruction);
             }
         }
+        func.instruction(&WasmInstruction::End);
+
         self.codes.function(&func);
 
         let result = self.function_count;
@@ -564,8 +591,8 @@ impl ComponentBuilder {
     fn register_builtin_functions(&mut self) {
         let mut func_len = wasm_encoder::Function::new([]);
         {
-            const LEN_ARG: u32 = 0;
-            // const PTR_BYTE: u32 = 1;
+            // const PTR_BYTE: u32 = 0;
+            const LEN_ARG: u32 = 1;
             const SIZE_ARG: u32 = 2;
             func_len.instruction(&WasmInstruction::LocalGet(LEN_ARG));
             func_len.instruction(&WasmInstruction::LocalGet(SIZE_ARG));
@@ -618,6 +645,23 @@ impl ComponentBuilder {
         }
     }
 
+    fn lower_instructions<'a>(
+        &'a self,
+        instructions: &'a [Instruction],
+        locals: &[Local],
+        nesting_depth: &mut Vec<BranchLabel>,
+    ) -> Vec<WasmInstruction<'a>> {
+        let mut appendix = Vec::new();
+
+        let mut result = instructions
+            .iter()
+            .flat_map(|inst| self.lower_instruction(inst, locals, nesting_depth))
+            .collect::<Vec<_>>();
+        appendix.reverse();
+        result.extend(appendix);
+        result
+    }
+
     fn lower_instruction<'a>(
         &'a self,
         instruction: &'a Instruction,
@@ -629,34 +673,29 @@ impl ComponentBuilder {
             Instruction::LocalSet(idx) => lower_local(&locals[*idx as usize])
                 .iter()
                 .map(|(i, _ty)| WasmInstruction::LocalSet(*i))
-                // .rev()
+                .rev()
                 .collect(),
             Instruction::LocalGet(idx) => lower_local(&locals[*idx as usize])
                 .iter()
                 .map(|(i, _ty)| WasmInstruction::LocalGet(*i))
-                .rev()
+                // .rev()
                 .collect(),
 
-            Instruction::LocalGetMember { id, member } => {
-                if member.len() > 1 {
-                    todo!("Implement access chains");
-                }
+            Instruction::MemberGet { parent, member } => {
+                // TODO: Implement member chains
+
                 // TODO: This only works if the struct is only composed of primitives
-                let id = *id as usize;
-                let ty = match locals[id].ty {
+                let id = *parent as usize;
+                let _ty = match locals[id].ty {
                     TypeRef::Primitive(_) => {
                         panic!("ERROR: field access on primitive not allowed")
                     }
                     TypeRef::Type(ty) => &self.type_declarations[ty as usize],
                 };
-                let Type::Record { fields } = &ty else {
-                    panic!("ERROR: field access on non-records not allowed")
-                };
                 let lower = lower_local(&locals[id]);
 
-                vec![WasmInstruction::LocalGet(lower[member[0] as usize].0)]
+                vec![WasmInstruction::LocalGet(lower[*member as usize].0)]
             }
-
             Instruction::Store { number, ty } => {
                 let lower = self.lower(ty);
                 let element_length = lower.iter().fold(0, |acc, e| acc + e.byte_length());
@@ -727,9 +766,8 @@ impl ComponentBuilder {
                     })
                 });
                 let pointer = [
-                    // reversed due to stack machine
-                    WasmInstruction::I32Const(length as i32),
                     WasmInstruction::LocalGet(list_offset_buffer),
+                    WasmInstruction::I32Const(length as i32),
                 ];
 
                 allocation
@@ -742,23 +780,14 @@ impl ComponentBuilder {
             Instruction::Bytes(bytes) => {
                 let ConstantPosition { offset, length } = self.constants[bytes];
                 vec![
-                    // reversed due to stack machine
-                    WasmInstruction::I32Const(length as i32),
                     WasmInstruction::I32Const(offset as i32),
+                    WasmInstruction::I32Const(length as i32),
                 ]
             }
 
-            Instruction::Optional { ty, is_some } => {
-                if *is_some {
-                    todo!("Convert some() to wasm");
-                } else {
-                    let lower = self.lower(ty);
-
-                    let discriminant = iter::once(WasmInstruction::I32Const(0));
-                    let payload = lower.iter().map(|low| low.zero());
-
-                    discriminant.chain(payload).collect()
-                }
+            Instruction::Zero { ty } => {
+                let lower = self.lower(ty);
+                lower.iter().map(|low| low.zero()).collect()
             }
 
             Instruction::IndexAccess { ty } => {
@@ -777,15 +806,19 @@ impl ComponentBuilder {
                     _ => todo!("implement index access for more types"),
                 };
 
+                let index_buffer = (locals.len() - 1) as u32;
+
                 [
                     vec![
+                        WasmInstruction::LocalSet(index_buffer),
+                        // Drop list length
+                        WasmInstruction::Drop,
+                        WasmInstruction::LocalGet(index_buffer),
                         WasmInstruction::I32Const(element_length as i32),
                         WasmInstruction::I32Mul,
                         WasmInstruction::I32Add,
                         // TODO: check array bounds
-                        WasmInstruction::Call(self.builtin_func_index + FUNC_INSERT_OFFSET_I32),
-                        // drop array length
-                        WasmInstruction::Drop,
+                        // WasmInstruction::Call(self.builtin_func_index + FUNC_INSERT_OFFSET_I32),
                     ],
                     load_instructions,
                 ]
@@ -802,17 +835,9 @@ impl ComponentBuilder {
             Instruction::If { then, else_ } => {
                 nesting_depth.push(BranchLabel::If);
                 let lowered = iter::once(WasmInstruction::If(BlockType::Empty))
-                    .chain(
-                        then.iter()
-                            .flat_map(|inst| self.lower_instruction(inst, locals, nesting_depth))
-                            .collect::<Vec<_>>(),
-                    )
+                    .chain(self.lower_instructions(then, locals, nesting_depth))
                     .chain(iter::once(WasmInstruction::Else))
-                    .chain(
-                        else_
-                            .iter()
-                            .flat_map(|inst| self.lower_instruction(inst, locals, nesting_depth)),
-                    )
+                    .chain(self.lower_instructions(else_, locals, nesting_depth))
                     .chain(iter::once(WasmInstruction::End))
                     .collect();
                 nesting_depth.pop();
@@ -827,11 +852,7 @@ impl ComponentBuilder {
                     WasmInstruction::Block(BlockType::Empty),
                 ]
                 .into_iter()
-                .chain(
-                    block
-                        .into_iter()
-                        .flat_map(|inst| self.lower_instruction(inst, locals, nesting_depth)),
-                )
+                .chain(self.lower_instructions(block, locals, nesting_depth))
                 .chain(
                     [
                         // This index counts inside out, so it should always branch to the loop
@@ -883,7 +904,11 @@ impl ComponentBuilder {
                 // TODO: Put return values in register if string is returned
                 vec![WasmInstruction::Return]
             }
-            Instruction::Pop => vec![], // vec![WasmInstruction::Drop], // TODO: Figure out how and where to handle dropping of more complex types (that lower to more than one value)
+            Instruction::Drop { ty } => self
+                .lower(ty)
+                .iter()
+                .map(|_| WasmInstruction::Drop)
+                .collect(),
             Instruction::Noop => vec![],
 
             Instruction::Wasm(wasm) => vec![wasm.clone()],
@@ -996,7 +1021,7 @@ impl ComponentBuilder {
             }
 
             "is_some" => {
-                todo!("Implement 'is_some', maybe use a buffer local to get the variant discriminant without popping.")
+                unreachable!("This is already handled in the encode layer (LIR)")
             }
 
             "and__bool_bool" => {
@@ -1057,6 +1082,17 @@ impl ComponentBuilder {
         }
 
         result
+    }
+}
+
+fn lift_val(val: &ValType) -> PrimitiveValType {
+    match val {
+        ValType::I32 => PrimitiveValType::U32,
+        ValType::I64 => PrimitiveValType::U64,
+        ValType::F32 => PrimitiveValType::F32,
+        ValType::F64 => PrimitiveValType::F64,
+        ValType::V128 => todo!(),
+        ValType::Ref(_) => todo!(),
     }
 }
 

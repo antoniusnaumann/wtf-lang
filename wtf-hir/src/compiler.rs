@@ -1,17 +1,15 @@
-use std::{
-    collections::{HashMap, HashSet},
-    iter,
-    ops::Deref,
-};
+use std::collections::HashMap;
+use std::ops::{Deref, Index};
 
 use wtf_ast::{
-    self as ast, ArithmeticOperator, BinaryOperator, Expression, Literal, TestDeclaration,
-    TypeAnnotation, UnaryOperator,
+    self as ast, BinaryOperator, FunctionDeclaration, TestDeclaration, TypeAnnotation,
+    UnaryOperator,
 };
 
+use crate::builtin::WithBuiltins;
 use crate::{
-    builtin::WithBuiltins, visible::Visible, Block, EnumType, Function, FunctionSignature,
-    Instruction, LocalId, Module, PrimitiveType, ResourceType, Test, Type,
+    type_::unify, visible::Visible, Body, Expression, ExpressionKind, Function, FunctionBody,
+    FunctionSignature, Module, Parameter, Test, Type, VarId,
 };
 
 const INTERNAL_PREFIX: &str = "wtfinternal";
@@ -35,7 +33,7 @@ pub fn compile(ast: ast::Module) -> Module {
                 ast_funs.insert(fun.name.to_string(), (fun, is_export));
             }
             ast::Declaration::Overload(overload) => {
-                todo!("Insert overloads in AST")
+                todo!("Insert overloads from AST")
             }
             ast::Declaration::Record(rec) => {
                 ast_types.insert(
@@ -67,11 +65,11 @@ pub fn compile(ast: ast::Module) -> Module {
         }
     }
 
-    let mut types = HashMap::with_builtins();
-    for (ty, is_export) in ast_types.values() {
+    let mut types = HashMap::new();
+    for (decl, is_export) in ast_types.values() {
         types.insert(
-            ty.name().to_owned(),
-            compile_type_declaration(ty, *is_export, &ast_types),
+            decl.name().to_owned(),
+            compile_type_declaration(decl, *is_export, &ast_types),
         );
     }
 
@@ -86,32 +84,28 @@ pub fn compile(ast: ast::Module) -> Module {
         );
     }
 
-    let mut constants = HashSet::new();
+    // for (name, signature) in &signatures {
+    //     println!("{name}");
+    //     println!("{:#?}", signature);
+    // }
+
     let mut functions = HashMap::new();
     for (fun, is_export) in ast_funs.values() {
         functions.insert(
             fun.name.to_string(),
-            compile_fun(
-                fun,
-                *is_export,
-                &ast_types,
-                &types,
-                &signatures,
-                &mut constants,
-            ),
+            compile_fun(fun, *is_export, &ast_types, &types, &signatures),
         );
     }
 
     let mut tests = Vec::new();
     for (idx, test) in ast_tests.into_iter().enumerate() {
-        tests.push(compile_test(idx, test, &signatures, &types, &mut constants));
+        tests.push(compile_test(idx, test, &signatures, &types, &ast_types));
     }
 
     Module {
         types,
         functions,
         tests,
-        constants,
     }
 }
 
@@ -159,14 +153,13 @@ fn compile_type_declaration(
                     },
                 );
             }
-            Type::Resource(ResourceType { methods })
+            Type::Resource { methods }
         }
-        ast::Declaration::Enum(enum_) => Type::Enum(EnumType {
-            name: enum_.name.clone(),
+        ast::Declaration::Enum(enum_) => Type::Enum {
             cases: enum_.cases.iter().map(|case| case.clone()).collect(),
-        }),
+        },
         ast::Declaration::Variant(variants) => {
-            let mut result = HashMap::new();
+            let mut cases = HashMap::new();
             for variant in &variants.cases {
                 let mut fields = HashMap::new();
                 for field in &variant.associated_types {
@@ -175,9 +168,9 @@ fn compile_type_declaration(
                         compile_type_annotation(&field.type_annotation, ast_types),
                     );
                 }
-                result.insert(variant.name.clone(), fields);
+                cases.insert(variant.name.clone(), fields);
             }
-            Type::Variant(result)
+            Type::Variant { cases }
         }
         _ => unreachable!(),
     };
@@ -189,27 +182,51 @@ fn compile_type_annotation(
     ast_types: &HashMap<String, (ast::Declaration, bool)>,
 ) -> Type {
     match annotation {
-        ast::TypeAnnotation::Simple(name) => Type::Builtin(match name.as_str() {
-            "bool" => PrimitiveType::Bool,
-            "s8" => PrimitiveType::S8,
-            "s16" => PrimitiveType::S16,
-            "s32" => PrimitiveType::S32,
-            "s64" => PrimitiveType::S64,
-            "u8" => PrimitiveType::U8,
-            "u16" => PrimitiveType::U16,
-            "u32" => PrimitiveType::U32,
-            "u64" => PrimitiveType::U64,
-            "f32" => PrimitiveType::F32,
-            "f64" => PrimitiveType::F64,
-            "char" => PrimitiveType::Char,
-            "string" => PrimitiveType::String,
+        ast::TypeAnnotation::Simple(name) => match name.as_str() {
+            "bool" => Type::Bool,
+            "s8" => Type::Int {
+                signed: true,
+                bits: 8,
+            },
+            "s16" => Type::Int {
+                signed: true,
+                bits: 16,
+            },
+            "s32" => Type::Int {
+                signed: true,
+                bits: 32,
+            },
+            "s64" => Type::Int {
+                signed: true,
+                bits: 64,
+            },
+            "u8" => Type::Int {
+                signed: false,
+                bits: 8,
+            },
+            "u16" => Type::Int {
+                signed: false,
+                bits: 16,
+            },
+            "u32" => Type::Int {
+                signed: false,
+                bits: 32,
+            },
+            "u64" => Type::Int {
+                signed: false,
+                bits: 64,
+            },
+            "f32" => Type::Float { bits: 32 },
+            "f64" => Type::Float { bits: 64 },
+            "char" => Type::Char,
+            "string" => Type::String,
             _ => {
                 let (declaration, is_export) = ast_types
                     .get(name)
                     .unwrap_or_else(|| panic!("unknown type {name}"));
-                return compile_type_declaration(declaration, *is_export, ast_types);
+                compile_type_declaration(declaration, *is_export, ast_types)
             }
-        }),
+        },
         ast::TypeAnnotation::List(item) => {
             Type::List(Box::new(compile_type_annotation(item, ast_types)))
         }
@@ -235,7 +252,6 @@ fn compile_fun(
     ast_types: &HashMap<String, (ast::Declaration, bool)>,
     types: &HashMap<String, Type>,
     signatures: &HashMap<String, FunctionSignature>,
-    constants: &mut HashSet<Vec<u8>>,
 ) -> Function {
     let parameters: Vec<_> = declaration
         .parameters
@@ -251,16 +267,37 @@ fn compile_fun(
         .return_type
         .as_ref()
         .map(|type_| compile_type_annotation(&type_, ast_types))
-        .unwrap_or(Type::Void);
+        .unwrap_or(Type::None);
 
-    let mut fn_compiler = FunctionCompiler::with_params(&parameters, signatures, types, constants);
+    let mut vars = VarCollector::new(return_type.clone());
+    let mut visible = Visible::new(types);
 
-    let body = fn_compiler.compile_block(&declaration.body);
+    for (name, ty) in &parameters {
+        let param = vars.push(ty.clone());
+        visible.bind(name.clone(), param, false);
+    }
+
+    let block = compile_block(
+        &declaration.body,
+        &mut vars,
+        &mut visible,
+        signatures,
+        ast_types,
+    );
+
     Function {
-        parameters,
+        parameters: parameters
+            .iter()
+            .map(|(name, ty)| Parameter {
+                name: name.clone(),
+                ty: ty.clone(),
+            })
+            .collect(),
         return_type,
-        locals: fn_compiler.locals,
-        body,
+        body: FunctionBody {
+            vars: vars.vars,
+            body: block.into(),
+        },
         is_export,
     }
 }
@@ -278,7 +315,7 @@ fn compile_signature(
     let return_type = declaration
         .return_type
         .as_ref()
-        .map_or(Type::Void, |ty| compile_type_annotation(&ty, ast_types));
+        .map_or(Type::None, |ty| compile_type_annotation(&ty, ast_types));
 
     FunctionSignature {
         param_types,
@@ -292,11 +329,8 @@ fn compile_test(
     test: TestDeclaration,
     signatures: &HashMap<String, FunctionSignature>,
     types: &HashMap<String, Type>,
-    constants: &mut HashSet<Vec<u8>>,
+    ast_types: &HashMap<String, (ast::Declaration, bool)>,
 ) -> Test {
-    let mut fn_compiler = FunctionCompiler::with_params(&[], signatures, types, constants);
-    let body = fn_compiler.compile_block(&test.body);
-
     const CHARS: [char; 26] = [
         'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r',
         's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
@@ -312,650 +346,570 @@ fn compile_test(
         idx /= 26;
     }
     let id = format!("{INTERNAL_PREFIX}-test-{str}-{INTERNAL_SUFFIX}",);
+
+    let function = compile_fun(
+        &FunctionDeclaration {
+            name: str.clone(),
+            parameters: vec![],
+            return_type: None,
+            body: test.body,
+        },
+        true,
+        ast_types,
+        types,
+        signatures,
+    );
+
     Test {
         name: test.name,
         id,
-        body,
-        locals: fn_compiler.locals,
+        body: function.body,
     }
 }
 
-struct FunctionCompiler<'a> {
-    visible: Visible,
-    stack: Vec<Type>,
-    locals: Vec<Type>,
-
-    signatures: &'a HashMap<String, FunctionSignature>,
-    types: &'a HashMap<String, Type>,
-    constants: &'a mut HashSet<Vec<u8>>,
+struct VarCollector {
+    vars: Vec<Type>,
+    /// The return type of the current function scope
+    result: Type,
 }
 
-impl<'a> FunctionCompiler<'a> {
-    fn with_params(
-        parameters: &[(String, Type)],
-        signatures: &'a HashMap<String, FunctionSignature>,
-        types: &'a HashMap<String, Type>,
-        constants: &'a mut HashSet<Vec<u8>>,
-    ) -> Self {
-        let param_types: Vec<_> = parameters.iter().map(|(_, ty)| ty.clone()).collect();
-        let mut visible = Visible::new();
-        for (i, (s, _)) in parameters.iter().enumerate() {
-            visible.bind(s.clone(), LocalId(i), false);
-        }
-
-        FunctionCompiler {
-            visible,
-            stack: param_types.clone(),
-            locals: param_types,
-            signatures,
-            types,
-            constants,
+impl VarCollector {
+    fn new(result: Type) -> Self {
+        Self {
+            vars: Vec::new(),
+            result,
         }
     }
 
-    fn push(&mut self, instruction: Instruction, block: &mut Block) {
-        self.apply(&instruction);
-        block.instructions.push(instruction);
+    fn push(&mut self, ty: Type) -> VarId {
+        let id = VarId(self.vars.len());
+        self.vars.push(ty);
+        id
+    }
+}
+
+impl Index<VarId> for VarCollector {
+    type Output = Type;
+
+    fn index(&self, index: VarId) -> &Self::Output {
+        &self.vars[index]
+    }
+}
+
+fn compile_block(
+    block: &ast::Block,
+    fun: &mut VarCollector,
+    visible: &mut Visible,
+    signatures: &HashMap<String, FunctionSignature>,
+    ast_types: &HashMap<String, (ast::Declaration, bool)>,
+) -> Body {
+    let visible_snapshot = visible.snapshot();
+
+    let mut statements = Vec::new();
+    for statement in &block.statements {
+        if matches!(statement, ast::Statement::EmptyLine) {
+            continue;
+        }
+        statements.push(compile_statement(
+            statement, fun, visible, signatures, ast_types,
+        ));
     }
 
-    fn apply(&mut self, instruction: &Instruction) {
-        match instruction {
-            Instruction::Pop => {
-                self.stack.pop();
+    visible.restore(visible_snapshot);
+    Body { statements }
+}
+
+fn compile_statement(
+    statement: &ast::Statement,
+    vars: &mut VarCollector,
+    visible: &mut Visible,
+    signatures: &HashMap<String, FunctionSignature>,
+    ast_types: &HashMap<String, (ast::Declaration, bool)>,
+) -> Expression {
+    const EMPTY_BODY: Body = Body {
+        statements: Vec::new(),
+    };
+    match statement {
+        ast::Statement::EmptyLine => unreachable!(),
+        ast::Statement::VariableDeclaration(variable_declaration) => {
+            // TODO: allow uninitialized variables
+            let initial_value = compile_expression(
+                variable_declaration
+                    .value
+                    .as_ref()
+                    .expect("uninitialized var"),
+                vars,
+                visible,
+                signatures,
+            );
+
+            let expression = if let Some(anno) = &variable_declaration.type_annotation {
+                let annotated_type = compile_type_annotation(&anno, ast_types);
+                try_cast(&annotated_type, initial_value, signatures)
+            } else {
+                initial_value
+            };
+
+            let var = vars.push(expression.ty.clone());
+            visible.bind(
+                variable_declaration.name.clone(),
+                var,
+                variable_declaration.mutable,
+            );
+            Expression::var_set(var, expression)
+        }
+        ast::Statement::Assignment { target, value } => {
+            let value = compile_expression(value, vars, visible, signatures);
+            let name = match target {
+                ast::Expression::Identifier(name) => name,
+                _ => panic!("Can only assign to names (for now)"), // TODO
+            };
+            let binding = visible.lookup(name).expect("Name {name} not defined");
+            if !binding.mutable {
+                panic!("Tried assigning to a mutable variable.");
             }
-            Instruction::Load(local_id) => {
-                self.stack.push(self.locals[local_id.0].clone());
-            }
-            Instruction::Store(local_id) => {
-                self.stack.pop(); // TODO: ensure types match
-            }
-            Instruction::Int(_) => self.stack.push(Type::Builtin(PrimitiveType::S32)),
-            Instruction::Float(_) => self.stack.push(Type::Builtin(PrimitiveType::F32)),
-            Instruction::Bool(_) => self.stack.push(Type::Builtin(PrimitiveType::Bool)),
-            Instruction::String(_) => self.stack.push(Type::Builtin(PrimitiveType::String)),
-            Instruction::Void => self.stack.push(Type::Void),
-            Instruction::Enum { case, ty } => self.stack.push(ty.clone().into()), // TODO: Introduce ref type that holds an RC or something instead of the whole type definition
-            Instruction::Variant { case, num_payloads } => {
-                let mut payloads = vec![];
-                for _ in 0..*num_payloads {
-                    payloads.push(self.stack.pop().unwrap());
+            let annotated_type = &vars[binding.id];
+            let value = try_cast(annotated_type, value, signatures);
+            Expression::var_set(binding.id, value)
+        }
+        ast::Statement::ExpressionStatement(expression) => {
+            compile_expression(expression, vars, visible, signatures)
+        }
+        ast::Statement::ReturnStatement(expression) => {
+            let returned = match expression {
+                Some(expression) => compile_expression(expression, vars, visible, signatures),
+                None => Expression::void(),
+            };
+            let returned = try_cast(&vars.result, returned, signatures);
+            Expression::return_(returned)
+        }
+        ast::Statement::BreakStatement(expression) => {
+            let value = match expression {
+                Some(expression) => compile_expression(expression, vars, visible, signatures),
+                None => Expression::void(),
+            };
+            Expression::break_(value)
+        }
+        ast::Statement::ContinueStatement => Expression::continue_(),
+        ast::Statement::ThrowStatement(value) => {
+            let value = compile_expression(value, vars, visible, signatures);
+            Expression::throw(value)
+        }
+        ast::Statement::IfStatement(if_statement) => {
+            let condition = compile_expression(&if_statement.condition, vars, visible, signatures);
+            let then = compile_block(
+                &if_statement.then_branch,
+                vars,
+                visible,
+                signatures,
+                ast_types,
+            );
+            let else_ = match &if_statement.else_branch {
+                Some(else_branch) => {
+                    compile_block(&else_branch, vars, visible, signatures, ast_types)
                 }
-                let mut type_ = HashMap::new();
-                type_.insert(case.to_string(), payloads);
-                self.stack.push(Type::Variant(todo!()));
-            }
-            Instruction::Record(field_names) => {
-                let mut fields = HashMap::new();
-                for field in field_names {
-                    fields.insert(field.clone(), self.stack.pop().unwrap());
+                None => EMPTY_BODY,
+            };
+            let ty = unify(&then.returns().ty, &else_.returns().ty);
+            Expression::if_(condition, then, else_, ty)
+        }
+        ast::Statement::MatchStatement(_) => todo!("impl match"),
+        ast::Statement::WhileStatement(while_statement) => {
+            let inner_body =
+                compile_block(&while_statement.body, vars, visible, signatures, ast_types);
+            let complete_body = {
+                let mut body = Vec::new();
+                let condition =
+                    compile_expression(&while_statement.condition, vars, visible, signatures);
+                body.push(Expression::if_(
+                    condition,
+                    EMPTY_BODY,
+                    vec![Expression::break_(Expression::void())].into(),
+                    Type::None,
+                ));
+                for statement in inner_body.statements {
+                    body.push(statement);
                 }
-                self.stack.push(Type::Record(fields));
-            }
-            Instruction::Option { is_some, ty } => self.stack.push(Type::Option(ty.clone().into())),
-            Instruction::List { len, ty: _ } => {
-                let mut items = vec![];
-                for _ in 0..*len {
-                    items.push(self.stack.pop().unwrap());
+                body.push(Expression::void());
+                body
+            };
+            Expression::loop_(complete_body.into(), Type::None)
+        }
+        ast::Statement::ForStatement(_) => todo!("impl for"),
+        wtf_ast::Statement::Assertion(assert_statement) => {
+            let condition =
+                compile_expression(&assert_statement.condition, vars, visible, signatures);
+            Expression::if_(
+                condition,
+                EMPTY_BODY,
+                vec![Expression::unreachable()].into(),
+                Type::None,
+            )
+        }
+    }
+}
+
+fn compile_expression(
+    expression: &ast::Expression,
+    vars: &mut VarCollector,
+    visible: &mut Visible,
+    signatures: &HashMap<String, FunctionSignature>,
+) -> Expression {
+    match expression {
+        ast::Expression::Literal(literal) => match literal {
+            ast::Literal::Integer(int) => Expression::int(*int),
+            ast::Literal::Float(float) => Expression::float(*float),
+            ast::Literal::String(string) => Expression::string(string.clone()),
+            ast::Literal::Boolean(bool) => Expression::bool(*bool),
+            ast::Literal::None => Expression::void(),
+        },
+        ast::Expression::Identifier(name) => {
+            let binding = visible.lookup(&name);
+
+            match binding {
+                Some(binding) => {
+                    let ty = &vars[binding.id];
+                    ExpressionKind::VarGet { var: binding.id }.typed(ty.clone())
                 }
-                if items.len() > 0 {
-                    self.stack.push(Type::List(Box::new(items[0].clone()))); // TODO: ensure items have same type
-                } else {
-                    // TODO: Figure out type from later usage for empty lists
-                    self.stack
-                        .push(Type::List(Box::new(Type::Builtin(PrimitiveType::Bool))))
+                // The name might be an enum or other type instead, so look it up as a type
+                None => {
+                    let ty = visible
+                        .lookup_type(name)
+                        .expect(&format!("Variable {} is not defined.", name));
+
+                    ExpressionKind::Type(ty.clone()).typed(Type::Meta(ty.clone().into()))
                 }
             }
-            Instruction::Call {
-                function,
-                num_arguments,
-            } => {
-                let mut args = vec![];
-                for _ in 0..*num_arguments {
-                    args.push(self.stack.pop().unwrap());
-                }
-                // The names here should already be resolved to their fully qualified name
-                self.stack.push(
-                    self.signatures
-                        .get(function)
-                        .expect(&format!("Resolved function {function} should exist"))
-                        .return_type
-                        .clone(),
-                );
-            }
-            Instruction::MemberChain(id, fields) => {
-                let mut ty = &self.locals[id.0];
-                for field in fields {
-                    let Type::Record(fields) = ty else {
-                        panic!("Member access on non-record.")
+        }
+        ast::Expression::BinaryExpression {
+            left,
+            operator,
+            right,
+        } => {
+            let name = match operator {
+                ast::BinaryOperator::Arithmetic(operator) => match operator {
+                    ast::ArithmeticOperator::Add => "add",
+                    ast::ArithmeticOperator::Subtract => "sub",
+                    ast::ArithmeticOperator::Multiply => "mul",
+                    ast::ArithmeticOperator::Divide => "div",
+                },
+                BinaryOperator::Logic(op) => match op {
+                    // TODO: handling this as a function does not allow short-circuiting
+                    ast::LogicOperator::And => "and",
+                    ast::LogicOperator::Or => "or",
+                },
+                ast::BinaryOperator::Equal => "eq",
+                ast::BinaryOperator::NotEqual => "ne",
+                ast::BinaryOperator::GreaterThan => "greater_than",
+                ast::BinaryOperator::LessThan => "less_than",
+                ast::BinaryOperator::GreaterEqual => "greater_eq",
+                ast::BinaryOperator::LessEqual => "less_eq",
+                ast::BinaryOperator::Contains => "contains",
+                ast::BinaryOperator::NullCoalesce => {
+                    let (left, right) = (
+                        compile_expression(left, vars, visible, signatures),
+                        compile_expression(right, vars, visible, signatures),
+                    );
+                    let Type::Option(inner_ty) = left.ty.clone() else {
+                        panic!("Can only use '?' on optionals")
                     };
 
-                    ty = &fields[field];
-                }
-
-                self.stack.push(ty.clone());
-            }
-            Instruction::FieldAccess(field) => {
-                if let Type::Record(record) = self.stack.pop().unwrap() {
-                    self.stack.push(record[field].clone());
-                } else {
-                    panic!("Field access on non-record.");
-                }
-            }
-            Instruction::IndexAccess { ty } => {
-                let _index = self.stack.pop().unwrap();
-                // TODO: type-check index
-                if let Type::List(element) = self.stack.pop().unwrap() {
-                    // TODO: validate that types match?
-                    self.stack.push(*element);
-                } else {
-                    panic!("Index access of non-list!");
-                }
-            }
-            Instruction::Return => {
-                self.stack.push(Type::Never);
-            }
-            Instruction::Break => {
-                self.stack.push(Type::Never);
-            }
-            Instruction::Continue => {
-                self.stack.push(Type::Never);
-            }
-            Instruction::Throw => {
-                self.stack.push(Type::Never);
-            }
-            Instruction::If { then, else_ } => {
-                let condition = self.stack.pop().unwrap();
-                assert!(
-                    condition == Type::Builtin(PrimitiveType::Bool),
-                    "Condition: {:#?}",
-                    condition
-                );
-            }
-            Instruction::Match { arms } => {
-                let condition = self.stack.pop().unwrap();
-            }
-            Instruction::Loop(_block) => {
-                // TODO: loops with result
-                self.stack.push(Type::Void)
-            }
-            Instruction::Unreachable => self.stack.push(Type::Never),
-        }
-    }
-
-    fn compile_block(&mut self, block: &ast::Block) -> Block {
-        let restore = self.stack.clone();
-        let mut result = Block {
-            instructions: Vec::new(),
-            ty: Type::Void,
-        };
-        for statement in &block.statements {
-            self.compile_statement(statement, &mut result);
-        }
-        if result.instructions.is_empty() {
-            result.instructions.push(Instruction::Void);
-        }
-        result.ty = self.stack.pop().unwrap_or(Type::Void);
-        self.stack = restore;
-        result
-    }
-
-    fn compile_statement(&mut self, statement: &ast::Statement, block: &mut Block) {
-        match statement {
-            ast::Statement::VariableDeclaration(variable_declaration) => {
-                // TODO: allow uninitialized variables
-                self.compile_expression(variable_declaration.value.as_ref().unwrap(), block);
-                // TODO: check if type matches annotated type (if exists)
-                let type_ = self.stack.last().unwrap().clone();
-                let local = LocalId(self.locals.len());
-                self.locals.push(type_);
-                self.visible.bind(
-                    variable_declaration.name.clone(),
-                    local,
-                    variable_declaration.mutable,
-                );
-                self.push(Instruction::Store(local), block);
-            }
-            ast::Statement::Assignment { target, value } => {
-                self.compile_expression(value, block);
-                if let ast::Expression::Identifier(name) = target {
-                    let local = self.visible.lookup(name).expect("Name {name} not defined");
-                    self.push(Instruction::Store(local), block);
-                } else {
-                    panic!("Can only assign to names");
-                }
-            }
-            ast::Statement::ExpressionStatement(expression) => {
-                self.compile_expression(expression, block);
-                self.push(Instruction::Pop, block);
-            }
-            ast::Statement::ReturnStatement(expression) => {
-                match expression {
-                    Some(expression) => self.compile_expression(expression, block),
-                    None => self.push(Instruction::Void, block),
-                }
-                self.push(Instruction::Return, block);
-            }
-            ast::Statement::BreakStatement(expression) => {
-                match expression {
-                    Some(expression) => self.compile_expression(expression, block),
-                    None => self.push(Instruction::Void, block),
-                };
-                self.push(Instruction::Break, block)
-            }
-            ast::Statement::ContinueStatement => self.push(Instruction::Continue, block),
-            ast::Statement::ThrowStatement(throw) => {
-                self.compile_expression(throw, block);
-                self.push(Instruction::Throw, block);
-            }
-            ast::Statement::IfStatement(if_statement) => {
-                self.compile_expression(&if_statement.condition, block);
-                let then = self.compile_block(&if_statement.then_branch);
-                let else_ = match &if_statement.else_branch {
-                    Some(else_branch) => self.compile_block(&else_branch),
-                    None => Block::new(),
-                };
-                let after = match (&then.ty, &else_.ty) {
-                    (Type::Never, Type::Never) => vec![Instruction::Unreachable],
-                    (Type::Never, _) => vec![],
-                    (_, Type::Never) => vec![],
-                    (a, b) if a == b => vec![],
-                    _ => todo!("If and else arm types must match or diverge!"),
-                };
-                self.push(Instruction::If { then, else_ }, block);
-                for instruction in after {
-                    self.push(instruction, block);
-                }
-            }
-            ast::Statement::MatchStatement(_) => todo!(),
-            ast::Statement::WhileStatement(while_statement) => {
-                let mut inner_body = Block::new();
-                self.compile_expression(&while_statement.condition, &mut inner_body);
-                let totally_inner_body = self.compile_block(&while_statement.body);
-                self.push(
-                    Instruction::If {
-                        then: totally_inner_body,
-                        else_: Block {
-                            instructions: vec![Instruction::Void, Instruction::Break],
-                            ty: Type::Never,
-                        },
-                    },
-                    &mut inner_body,
-                );
-                self.push(Instruction::Loop(inner_body), block)
-            }
-            ast::Statement::ForStatement(for_statement) => {
-                let mut inner_body = Block::new();
-                self.compile_expression(
-                    &Expression::FunctionCall {
-                        function: Expression::Identifier("next".into()).into(),
-                        arguments: vec![for_statement.iterable.clone()],
-                    },
-                    &mut inner_body,
-                );
-                self.push(
-                    Instruction::Store(LocalId(todo!("create local for for loop"))),
-                    &mut inner_body,
-                );
-                // TODO: check if next is not none and unwrap it in then branch
-                let totally_inner_body = self.compile_block(&for_statement.body);
-                self.push(
-                    Instruction::If {
-                        then: totally_inner_body,
-                        else_: Block {
-                            instructions: vec![Instruction::Void, Instruction::Break],
-                            ty: Type::Never,
-                        },
-                    },
-                    &mut inner_body,
-                );
-                self.push(Instruction::Loop(inner_body), block)
-            }
-            ast::Statement::Assertion(assert_statement) => {
-                self.compile_expression(&assert_statement.condition, block);
-                self.push(
-                    Instruction::If {
-                        then: Block {
-                            ty: Type::Void,
-                            instructions: vec![],
-                        },
-                        else_: Block {
-                            instructions: vec![Instruction::Unreachable],
-                            ty: Type::Never,
-                        },
-                    },
-                    block,
-                );
-            }
-            ast::Statement::EmptyLine => {}
-        }
-    }
-
-    fn compile_expression(&mut self, expression: &ast::Expression, block: &mut Block) {
-        match expression {
-            ast::Expression::Literal(literal) => {
-                let lit = match literal {
-                    ast::Literal::Integer(int) => Instruction::Int(*int),
-                    ast::Literal::Float(float) => Instruction::Float(*float),
-                    ast::Literal::String(string) => {
-                        self.constants.insert(string.as_bytes().into());
-                        Instruction::String(string.clone())
-                    }
-                    ast::Literal::Boolean(bool) => Instruction::Bool(*bool),
-                    ast::Literal::None => Instruction::Option {
-                        is_some: false,
-                        // TODO: Infer type here
-                        ty: Type::Builtin(PrimitiveType::S32),
-                    },
-                };
-
-                self.push(lit, block)
-            }
-            ast::Expression::Identifier(name) => {
-                let local = self
-                    .visible
-                    .lookup(&name)
-                    .expect(&format!("Variable {} is not defined.", name));
-                self.push(Instruction::Load(local), block);
-            }
-            ast::Expression::BinaryExpression {
-                left,
-                operator,
-                right,
-            } => {
-                self.push_op(left, right, *operator, block);
-            }
-            ast::Expression::UnaryExpression { operator, operand } => match operator {
-                UnaryOperator::Negate => {
-                    match operand.deref() {
-                        Expression::Literal(lit) => {
-                            let lit = match lit {
-                                Literal::Integer(int) => Instruction::Int(-int),
-                                Literal::Float(float) => Instruction::Float(-float),
-                                Literal::String(_) => todo!("String cannot be negated"),
-                                Literal::Boolean(_) => {
-                                    todo!("Boolean cannot be negated with '-', use '!'")
-                                }
-                                Literal::None => todo!("'None' cannot be negated"),
-                            };
-                            self.push(lit, block)
-                        }
-                        operand => self.push_op(
-                            &Expression::Literal(
-                                // TODO: use zero value from inferred expression or add an untyped zero literal
-                                Literal::Integer(0),
-                            ),
-                            operand,
-                            BinaryOperator::Arithmetic(ArithmeticOperator::Subtract),
-                            block,
-                        ),
-                    }
-                }
-                UnaryOperator::Not => todo!("xor(x, -1)"),
-            },
-            ast::Expression::YeetExpression { .. } => todo!(),
-            ast::Expression::FunctionCall {
-                function,
-                arguments,
-            } => {
-                self.push_fn(function, arguments, block);
-            }
-            ast::Expression::MethodCall {
-                receiver,
-                method,
-                arguments,
-                safe,
-            } => {
-                // TODO: Check if receiver is a resource first and insert a dynamic method call in this case
-                if *safe {
-                    todo!("Safe calls");
-                }
-                self.push_fn(
-                    &Expression::Identifier(method.clone()),
-                    iter::once(receiver.deref()).chain(arguments),
-                    block,
-                );
-            }
-            ast::Expression::FieldAccess {
-                object,
-                field,
-                // TODO: Desugar safe calls to if condition
-                safe,
-            } => {
-                if *safe {
-                    todo!("Safe calls");
-                }
-                let mut inner = object;
-                let mut fields = vec![field];
-                // Find out if this is a chain of member fields on a local value
-                loop {
-                    match inner.deref() {
-                        Expression::FieldAccess {
-                            object,
-                            field,
-                            safe: false,
-                        } => {
-                            inner = object;
-                            fields.push(field);
-                        }
-                        Expression::Identifier(name) => {
-                            // TODO: find ident here
-                            let local = self.visible.lookup(&name);
-                            match local {
-                                Some(local) => self.push(
-                                    Instruction::MemberChain(
-                                        local,
-                                        fields.into_iter().cloned().rev().collect(),
-                                    ),
-                                    block,
-                                ),
-                                None => {
-                                    let Some((name, enum_or_variant)) = self
-                                        .types
-                                        .iter()
-                                        .find(|(type_name, _)| type_name.as_str() == name)
-                                    else {
-                                        println!("{:#?}", self.types);
-                                        panic!("No local, enum or variant with name: {name}")
-                                    };
-
-                                    match enum_or_variant {
-                                        Type::Enum(ty) => match fields.as_slice() {
-                                            [field] => {
-                                                let Some(case) =
-                                                    ty.cases.iter().position(|e| e == *field)
-                                                else {
-                                                    panic!("Enum {name} has no case {field}")
-                                                };
-
-                                                self.push(
-                                                    Instruction::Enum {
-                                                        case,
-                                                        ty: ty.clone().into(),
-                                                    },
-                                                    block,
-                                                )
-                                            }
-                                            _ => todo!("Enums cases have no associated fields."),
-                                        },
-                                        Type::Variant(cases) => {
-                                            todo!("Implement case access for variants")
-                                        }
-                                        ty => panic!("Cannot access field on non-enum type {ty}"),
-                                    }
-                                }
-                            }
-                            break;
-                        }
-                        _ => {
-                            self.compile_expression(&object, block);
-
-                            self.push(Instruction::FieldAccess(field.to_string()), block);
-                            break;
-                        }
-                    }
-                }
-            }
-            ast::Expression::IndexAccess { collection, index } => {
-                self.compile_expression(&collection, block);
-                self.compile_expression(index, block);
-                // TODO: get type from collection
-                self.push(
-                    Instruction::IndexAccess {
-                        ty: Type::Builtin(PrimitiveType::S32),
-                    },
-                    block,
-                );
-            }
-            ast::Expression::Record { name, members } => {
-                let mut fields = vec![];
-                for member in members {
-                    self.compile_expression(&member.element, block);
-                    fields.push(member.name.to_string());
-                }
-                self.push(Instruction::Record(fields), block);
-            }
-            ast::Expression::ListLiteral(items) => {
-                for item in items.iter().rev() {
-                    self.compile_expression(item, block);
-                }
-                // TODO: @marcel type checker should insert the correct item type here
-                // TODO: This is currently a very cheap literal-only way of doing it
-                let mut item_type = PrimitiveType::S32;
-                for item in items {
-                    match item {
-                        Expression::Literal(lit) => {
-                            item_type = match lit {
-                                Literal::Integer(_) => PrimitiveType::S32,
-                                Literal::Float(_) => PrimitiveType::F32,
-                                Literal::String(_) => PrimitiveType::String,
-                                Literal::Boolean(_) => PrimitiveType::Bool,
-                                Literal::None => {
-                                    todo!("Infer optional from presence of none literal in array")
-                                }
-                            };
-                            break;
-                        }
-                        _ => continue,
-                    }
-                }
-                self.push(
-                    Instruction::List {
-                        len: items.len(),
-                        ty: Type::Builtin(item_type),
-                    },
-                    block,
-                );
-            }
-        }
-    }
-
-    fn push_fn<'ex>(
-        &mut self,
-        function: &Expression,
-        arguments: impl IntoIterator<Item = &'ex Expression>,
-        block: &mut Block,
-    ) {
-        let arguments: Vec<_> = arguments.into_iter().collect();
-        fn mangle(ty: &Type) -> std::borrow::Cow<str> {
-            match ty {
-                Type::Never => panic!("Never as an arg is not allowed"),
-                Type::Void => panic!("Void as an arg is not allowed"),
-                Type::Blank => panic!("Blank as an arg is not allowed"),
-                Type::List(elem) => format!("list___{}", mangle(elem)).into(),
-                Type::Option(inner) => format!("option___{}", mangle(inner)).into(),
-                Type::Result { ok, err } => {
-                    format!("result___{}__{}", mangle(ok), mangle(err)).into()
-                }
-                Type::Record(_) => todo!(),
-                Type::Resource(_) => todo!(),
-                Type::Enum(_) => "u32".into(), // TODO: do we need to handle quasi-similar enums here?
-                Type::Variant(_) => todo!(),
-                Type::Tuple(_) => todo!(),
-                Type::Builtin(ty) => ty.name().into(),
-            }
-        }
-
-        fn mangle_fn<'a>(name: &'a str, args: &[Type]) -> std::borrow::Cow<'a, str> {
-            if args.len() == 0 {
-                name.into()
-            } else {
-                let postfix = args
-                    .iter()
-                    .map(|arg| mangle(arg))
-                    .collect::<Vec<_>>()
-                    .join("_");
-                format!("{name}__{postfix}").into()
-            }
-        }
-
-        let mut arg_types = vec![];
-        for arg in &arguments {
-            self.compile_expression(arg, block);
-            arg_types.push(self.stack.last().unwrap().clone());
-        }
-
-        // TODO: Function overloading for non-builtin functions
-        // TODO: Resolve functions into fully qualified names
-        let function = match function {
-            ast::Expression::Identifier(name) if self.signatures.contains_key(name) => name.into(),
-            ast::Expression::Identifier(name) => {
-                let mangled = mangle_fn(name, &arg_types);
-                if self.signatures.contains_key(mangled.deref()) {
-                    mangled.into()
-                } else {
-                    let mut sorted: Vec<_> = self.signatures.keys().collect();
-                    sorted.sort();
-                    println!("{}", self.signatures.contains_key(mangled.deref()));
-                    panic!(
-                        "Function '{name}' (or '{mangled}') does not exist. \n\n{:#?}",
-                        sorted
+                    // TODO: store the expression here to reuse it instead of duplicating
+                    let left_store = vars.push(left.ty.clone());
+                    let store_optional = Expression::var_set(left_store, left.clone());
+                    let condition = Expression::call(
+                        "is_some".to_owned(),
+                        vec![Expression::var_get(left_store, left.ty.clone())],
+                        Type::Bool,
                     );
+
+                    let result_store = vars.push(*inner_ty.clone());
+                    let left = Expression::var_set(
+                        result_store,
+                        Expression::call(
+                            "unwrap_unsafe".to_owned(),
+                            vec![Expression::var_get(left_store, left.ty.clone())],
+                            left.ty.clone(),
+                        ),
+                    );
+                    let right = Expression::var_set(result_store, right);
+
+                    return Expression::multiple([
+                        store_optional,
+                        Expression::if_(condition, left.into(), right.into(), *inner_ty.clone()),
+                        Expression::var_get(result_store, *inner_ty),
+                    ]);
                 }
+            };
+
+            compile_call(vars, visible, signatures, &[left, right], name, Vec::new())
+        }
+        ast::Expression::UnaryExpression { operator, operand } => {
+            let operand = compile_expression(operand, vars, visible, signatures);
+            let operand_ty = operand.ty.clone();
+            match operator {
+                UnaryOperator::Negate => {
+                    // TODO: allow tuples
+                    match operand_ty {
+                        Type::Never => panic!("negated never"),
+                        Type::Int { signed, bits } => {
+                            if !signed {
+                                panic!("negating unsigned int")
+                            }
+                            let zero = Expression {
+                                kind: ExpressionKind::Int(0),
+                                ty: Type::Int { signed, bits },
+                            };
+                            Expression::call(
+                                format!("sub__{}_{}", operand_ty, operand_ty).to_owned(),
+                                vec![zero, operand],
+                                operand_ty,
+                            )
+                        }
+                        Type::Float { bits } => {
+                            Expression::call(format!("neg__f{bits}"), vec![operand], operand_ty)
+                        }
+                        _ => panic!("negating unsupported type"),
+                    }
+                }
+                UnaryOperator::Not => todo!("unary not: xor(x, -1)"),
             }
-            _ => panic!("You can only call names."),
-        };
-        self.push(
-            Instruction::Call {
-                function,
-                num_arguments: arguments.len(),
-            },
-            block,
-        );
+        }
+        ast::Expression::YeetExpression { .. } => todo!("yeet"),
+        ast::Expression::FunctionCall {
+            function,
+            arguments,
+        } => {
+            let function = match function.deref() {
+                ast::Expression::Identifier(name) => name.clone(),
+                _ => todo!("call of non-name"),
+            };
+
+            compile_call(vars, visible, signatures, arguments, &function, Vec::new())
+        }
+        ast::Expression::MethodCall {
+            receiver,
+            method,
+            arguments,
+            safe,
+        } => {
+            // TODO: Check if receiver is a resource first and insert a dynamic method call in this case
+            if *safe {
+                todo!("Safe calls");
+            }
+
+            // TODO: handle calls on resources separately
+
+            let receiver = compile_expression(receiver, vars, visible, signatures);
+
+            compile_call(vars, visible, signatures, arguments, method, vec![receiver])
+        }
+        ast::Expression::FieldAccess {
+            object,
+            field,
+            // TODO: Desugar safe calls to if condition
+            safe,
+        } => {
+            if *safe {
+                todo!("Desugar safe calls to if condition");
+            }
+            let object = compile_expression(object, vars, visible, signatures);
+            let object_ty = object.ty.clone();
+            match object_ty {
+                Type::Never => ExpressionKind::Member {
+                    of: object.into(),
+                    name: field.clone(),
+                }
+                .typed(Type::Never),
+                Type::Record(fields) => {
+                    let member_type = fields
+                        .get(field)
+                        .expect("No field named {field} on {ty}.")
+                        .clone();
+
+                    ExpressionKind::Member {
+                        of: object.into(),
+                        name: field.clone(),
+                    }
+                    .typed(member_type)
+                }
+                Type::Meta(ty) => match *ty {
+                    Type::Enum { ref cases } => {
+                        let index = cases
+                            .iter()
+                            .position(|case| case == field)
+                            .expect(format!("Enum has no case '{field}'").as_str());
+
+                        ExpressionKind::Enum { case: index }.typed(*ty)
+                    }
+                    Type::Variant { cases: _ } => todo!(),
+                    ty => panic!("Cannot use member access syntax on type {ty}"),
+                },
+                ty => panic!("field access on non-struct and non-type: {ty}"),
+            }
+        }
+        ast::Expression::IndexAccess { collection, index } => {
+            let collection = compile_expression(&collection, vars, visible, signatures);
+            let index = compile_expression(index, vars, visible, signatures);
+            let collection_ty = collection.ty.clone();
+            match collection_ty {
+                Type::Never => Expression::unreachable(),
+                Type::String => panic!("index access on string"),
+                Type::List(item_ty) => Expression::index_access(collection, index, *item_ty),
+                Type::Tuple(item_tys) => {
+                    let index = match index.kind {
+                        ExpressionKind::Int(int) => int,
+                        _ => panic!("index access on tuple has to be with an int literal"),
+                    } as usize;
+                    let item_ty = item_tys[index].clone();
+                    Expression::tuple_access(collection, index, item_ty)
+                }
+                _ => panic!("index access on collection"),
+            }
+        }
+        ast::Expression::Record { name, members } => {
+            let mut fields = HashMap::new();
+            for member in members {
+                let name = member.name.clone();
+                let value = compile_expression(&member.element, vars, visible, signatures);
+                fields.insert(name, value);
+            }
+            let ty = match name {
+                Some(name) => todo!("get type {name}"),
+                None => {
+                    let mut field_types = HashMap::new();
+                    for (name, value) in &fields {
+                        field_types.insert(name.clone(), value.ty.clone());
+                    }
+                    Type::Record(field_types)
+                }
+            };
+            Expression::record(fields, ty)
+        }
+        ast::Expression::ListLiteral(items) => {
+            let mut compiled_items = vec![];
+            for item in items.iter().rev() {
+                let item = compile_expression(item, vars, visible, signatures);
+                compiled_items.push(item);
+            }
+            let item_ty = if compiled_items.is_empty() {
+                Type::Blank
+            } else {
+                let mut ty = compiled_items[0].ty.clone();
+                for item in &compiled_items[1..] {
+                    ty = unify(&ty, &item.ty);
+                }
+                ty
+            };
+            Expression::list(compiled_items, Type::List(Box::new(item_ty)))
+        }
+    }
+}
+
+fn compile_call<Expr>(
+    vars: &mut VarCollector,
+    visible: &mut Visible<'_>,
+    signatures: &HashMap<String, FunctionSignature>,
+    arguments: &[Expr],
+    function: &str,
+    mut args: Vec<Expression>,
+) -> Expression
+where
+    Expr: AsRef<ast::Expression>,
+{
+    for arg in arguments {
+        args.push(compile_expression(arg.as_ref(), vars, visible, signatures));
     }
 
-    fn push_op(
-        &mut self,
-        left: &Expression,
-        right: &Expression,
-        op: BinaryOperator,
-        block: &mut Block,
-    ) {
-        let name = match op {
-            BinaryOperator::Logic(op) => match op {
-                // TODO: handling this as a function does not allow short-circuiting
-                ast::LogicOperator::And => "and",
-                ast::LogicOperator::Or => "or",
-            },
-            BinaryOperator::Arithmetic(op) => match op {
-                ast::ArithmeticOperator::Add => "add",
-                ast::ArithmeticOperator::Subtract => "sub",
-                ast::ArithmeticOperator::Multiply => "mul",
-                ast::ArithmeticOperator::Divide => "div",
-            },
-            BinaryOperator::Equal => "eq",
-            BinaryOperator::NotEqual => "ne",
-            BinaryOperator::GreaterThan => "greater_eq",
-            BinaryOperator::LessThan => "less_than",
-            BinaryOperator::GreaterEqual => "greater_eq",
-            BinaryOperator::LessEqual => "less_eq",
-            BinaryOperator::Contains => todo!(),
-            BinaryOperator::NullCoalesce => todo!("lower to if expression"),
-        };
-        // TODO: Append argument types from inferred expression types
-        let typed_name = format!("{name}"); // __s32_s32");
-        let ident = Expression::Identifier(typed_name.into());
+    let (function, signature) = find_signature(&function, &args, signatures);
 
-        // TODO: Avoid cloning
-        self.push_fn(&ident, &[left.clone(), right.clone()], block)
+    for (arg, expected) in args.iter_mut().zip(signature.param_types.iter()) {
+        *arg = try_cast(expected, arg.clone(), signatures);
     }
+
+    Expression::call(function.clone(), args, signature.return_type.clone())
+}
+
+/// Tries to add an implicit cast that converts the given expression to the annotated type
+fn try_cast(
+    annotation: &Type,
+    mut actual: Expression,
+    signatures: &HashMap<String, FunctionSignature>,
+) -> Expression {
+    match (annotation, &actual.ty) {
+        // No cast needed
+        (a, b) if a == b => actual,
+        (list @ Type::List(_), Type::List(b)) if **b == Type::Blank => {
+            actual.ty = list.clone();
+            actual
+        }
+        (option @ Type::Option(_), Type::Option(b)) if **b == Type::Blank => {
+            actual.ty = option.clone();
+            actual
+        }
+        (
+            target @ Type::Int { signed, bits },
+            Type::Int {
+                signed: sign_actual,
+                bits: bits_actual,
+            },
+        ) if (signed == sign_actual && bits >= bits_actual)
+            || (*signed && *bits >= bits_actual / 2) =>
+        {
+            cast_int(actual, *bits, *signed, signatures)
+        }
+        // TODO: Decide if we want this behavior for enums... my (Antonius) sense is, ultimately no, but it is convenient for now, so let's keep it until we have operators for enums and structs implemented
+        (Type::Int { signed: _, bits: _ }, Type::Enum { cases: _ }) => actual,
+        // TODO: put in more auto-conversions, e.g. casting from non-optional to optional should insert an explicit call to "some"
+        (Type::Option(inner), Type::None) => Expression::none(*inner.clone()),
+        (Type::Option(_), _) => Expression::some(actual),
+        (a, b) => panic!("Cannot implicitly cast {b} into {a}"),
+    }
+}
+
+fn cast_int(
+    actual: Expression,
+    bits: usize,
+    signed: bool,
+    signatures: &HashMap<String, FunctionSignature>,
+) -> Expression {
+    let name = format!("{}{bits}", if signed { "s" } else { "u" });
+
+    let args = [actual];
+    let (func, signature) = find_signature(&name, &args, signatures);
+
+    Expression::call(func, args.into(), signature.return_type)
+}
+
+fn find_signature(
+    name: &str,
+    args: &[Expression],
+    signatures: &HashMap<String, FunctionSignature>,
+) -> (String, FunctionSignature) {
+    let mut mangled = format!("{name}_");
+
+    fn type_name(ty: &Type) -> String {
+        match ty {
+            Type::List(elem) => format!("list___{}", type_name(elem)),
+            Type::Option(some) => format!("option___{}", type_name(some)),
+            Type::Result { ok, err } => format!("result___{}___{}", type_name(ok), type_name(err)),
+            // TODO: this is a hack to make enums work right now
+            Type::Enum { cases: _ } => "s32".to_owned(),
+            _ => ty.to_string(),
+        }
+    }
+
+    let (function_name, signature) = signatures
+        .get_key_value(name)
+        .or_else(|| {
+            for arg in args {
+                mangled.push('_');
+                mangled.push_str(&type_name(&arg.ty));
+            }
+
+            signatures.get_key_value(&mangled)
+        })
+        .unwrap_or_else(|| panic!("Signature not found for name: {mangled}"));
+
+    (function_name.clone(), signature.clone())
 }

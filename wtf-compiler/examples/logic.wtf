@@ -5,9 +5,9 @@ export func main() -> s64 {
     let val = 1
 
     if val == 0 or val != 1 {
-        return s64(1)
+        return 1
     } else {
-        return s64(0)
+        return 0
     }
 }
 

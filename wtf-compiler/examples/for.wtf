@@ -8,5 +8,5 @@ func main() -> s64 {
         result = i
     }
 
-    return s64(result)
+    return result
 }
