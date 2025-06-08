@@ -1,12 +1,67 @@
 package wtf:example@0.1.0
 
-func main() -> s64 {
-    let arr = [1, 2, 0]
-    var result = 42
+export func main() -> s64 {
+    let arr = [1, 2, 7]
+    var result = 0
+    let expected = 10
+
+    for i in arr {
+        result += i
+    }
+
+    return result - expected
+}
+
+test "Loop through list and assign last item" {
+    let arr = [2, 5, 7, 42]
+    var result = 21
 
     for i in arr {
         result = i
     }
 
-    return result
+    assert result == 42
+}
+
+test "Last item from for each loop is non-zero" {
+    let arr = [2, 5, 7, 42]
+    var result = 21
+
+    for i in arr {
+        result = i
+    }
+
+    assert result != 0
+}
+
+test "Sum over elements is correct" {
+    let arr = [2, 5, 7, 42]
+    var sum = 0
+
+    for i in arr {
+        sum += i
+    }
+
+    assert sum == 56
+}
+
+test "Counting array elements works" {
+    let arr = [1, 2, 3, 4, 5, 6, 7, 8]
+    var count = 0
+
+    for i in arr {
+        count += 1
+    }
+
+    assert count == 8
+}
+
+test "For loop on empty array never runs" {
+    let arr: [s32] = []
+
+    for i in arr {
+        assert false
+    }
+
+    assert true
 }

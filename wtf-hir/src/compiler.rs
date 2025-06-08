@@ -535,8 +535,81 @@ fn compile_statement(
             };
             Expression::loop_(complete_body.into(), Type::None)
         }
-        ast::Statement::ForStatement(_) => todo!("impl for"),
-        wtf_ast::Statement::Assertion(assert_statement) => {
+        ast::Statement::ForStatement(for_statement) => {
+            let iterable = compile_expression(&for_statement.iterable, vars, visible, signatures);
+            let body: Body = match &iterable.ty {
+                Type::List(elem) => {
+                    let list_elem = vars.push(*elem.clone());
+                    visible.bind(for_statement.variable.clone(), list_elem, false);
+
+                    // WASM locals are zero initialized by default
+                    let index = vars.push(Type::u32());
+
+                    let condition = Expression::call(
+                        "less_than__u32_u32".to_owned(),
+                        [
+                            Expression::var_get(index, Type::u32()),
+                            Expression::call(
+                                format!("len__list___{}", elem),
+                                [iterable.clone()].into(),
+                                Type::u32(),
+                            ),
+                        ]
+                        .into(),
+                        Type::Bool,
+                    );
+
+                    let elem = *elem.clone();
+                    let mut inner =
+                        compile_block(&for_statement.body, vars, visible, signatures, ast_types);
+                    // Write list elem in iterator variable
+                    inner.statements = [
+                        vec![Expression::var_set(
+                            list_elem,
+                            Expression::index_access(
+                                // TODO: don't clone expression here, write into local
+                                iterable,
+                                Expression::var_get(index, Type::u32()),
+                                elem,
+                            ),
+                        )],
+                        inner.statements,
+                    ]
+                    .concat();
+
+                    [
+                        Expression::if_(
+                            condition,
+                            inner,
+                            Expression::break_(Expression::void()).into(),
+                            Type::None,
+                        ),
+                        Expression::var_set(
+                            index,
+                            Expression::call(
+                                "add__u32_u32".into(),
+                                [
+                                    Expression {
+                                        kind: ExpressionKind::Int(1),
+                                        ty: Type::u32(),
+                                    },
+                                    Expression::var_get(index, Type::u32()),
+                                ]
+                                .into(),
+                                Type::u32(),
+                            ),
+                        ),
+                    ]
+                    .into()
+                }
+                Type::Resource { methods: _ } => todo!("Allow resources with a 'next' "),
+                // TODO: allow ranges
+                ty => panic!("Non-iterable type {ty}"),
+            };
+
+            Expression::loop_(body, Type::None)
+        }
+        ast::Statement::Assertion(assert_statement) => {
             let condition =
                 compile_expression(&assert_statement.condition, vars, visible, signatures);
             Expression::if_(

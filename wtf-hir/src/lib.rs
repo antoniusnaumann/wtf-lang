@@ -79,9 +79,14 @@ impl From<Expression> for Body {
     }
 }
 
-impl From<Vec<Expression>> for Body {
-    fn from(value: Vec<Expression>) -> Self {
-        Body { statements: value }
+impl<T> From<T> for Body
+where
+    T: Into<Vec<Expression>>,
+{
+    fn from(value: T) -> Self {
+        Body {
+            statements: value.into(),
+        }
     }
 }
 

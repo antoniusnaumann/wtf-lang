@@ -38,6 +38,15 @@ pub enum Type {
     Meta(Box<Type>),
 }
 
+impl Type {
+    pub const fn u32() -> Type {
+        Type::Int {
+            signed: false,
+            bits: 32,
+        }
+    }
+}
+
 impl Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
