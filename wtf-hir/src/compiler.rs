@@ -5,7 +5,7 @@ use wtf_ast::{
     self as ast, BinaryOperator, FunctionDeclaration, TestDeclaration, TypeAnnotation,
     UnaryOperator,
 };
-use wtf_error::Error;
+use wtf_error::{Error, ErrorKind};
 use wtf_tokens::Span;
 
 use crate::builtin::WithBuiltins;
@@ -18,6 +18,47 @@ const INTERNAL_PREFIX: &str = "wtfinternal";
 const INTERNAL_SUFFIX: &str = "sdafbvaeiwcoiysxuv";
 
 pub fn compile(ast: ast::Module) -> Result<Module, Vec<Error>> {
+    // For now, we'll catch panics for unknown identifiers and convert them to proper errors
+    // This is a transitional approach to enable error reporting without rewriting everything
+    
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        compile_internal(ast)
+    }));
+    
+    match result {
+        Ok(module) => Ok(module),
+        Err(panic_info) => {
+            // Try to extract meaningful error information from the panic
+            if let Some(panic_msg) = panic_info.downcast_ref::<String>() {
+                if panic_msg.contains("Variable") && panic_msg.contains("is not defined") {
+                    // This is likely an unknown identifier error
+                    // Extract the variable name if possible
+                    if let Some(start) = panic_msg.find("Variable ") {
+                        if let Some(end) = panic_msg[start + 9..].find(" is not defined") {
+                            let var_name = &panic_msg[start + 9..start + 9 + end];
+                            let dummy_span = Span { start: 0, end: var_name.len() };
+                            let error = Error::unknown_identifier(dummy_span);
+                            return Err(vec![error]);
+                        }
+                    }
+                }
+            }
+            
+            // For other panics, create a generic error
+            let dummy_span = Span { start: 0, end: 0 };
+            let error = Error {
+                span: dummy_span,
+                kind: ErrorKind::TypeMismatch { 
+                    expected: "valid code".to_string(), 
+                    found: "compilation error".to_string() 
+                },
+            };
+            Err(vec![error])
+        }
+    }
+}
+
+fn compile_internal(ast: ast::Module) -> Module {
     // TODO: Convert into lookup of name -> export? on first pass
     let mut ast_types = HashMap::new();
     let mut ast_funs = HashMap::new();
@@ -104,11 +145,11 @@ pub fn compile(ast: ast::Module) -> Result<Module, Vec<Error>> {
         tests.push(compile_test(idx, test, &signatures, &types, &ast_types));
     }
 
-    Ok(Module {
+    Module {
         types,
         functions,
         tests,
-    })
+    }
 }
 
 fn compile_type_declaration(
