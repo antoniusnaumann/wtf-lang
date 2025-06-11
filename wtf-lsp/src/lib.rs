@@ -42,20 +42,16 @@ impl Backend {
             diagnostics.push(diagnostic);
         } else if let Ok(ast) = parse_result {
             // If parsing succeeded, try HIR compilation to find HIR-level errors
-            // Note: The current HIR compiler doesn't return errors, it panics on them
-            // For now, we'll catch any panics and convert them to diagnostics
-            // In a real implementation, we'd need to modify the HIR compiler to return errors
-            match std::panic::catch_unwind(|| wtf_hir::compile(ast)) {
+            match wtf_hir::compile(ast) {
                 Ok(_hir) => {
                     // HIR compilation succeeded, no additional errors
                 }
-                Err(_) => {
-                    // HIR compilation panicked, add a generic error
-                    let diagnostic = Diagnostic::new_simple(
-                        Range::new(Position::new(0, 0), Position::new(0, 0)),
-                        "HIR compilation failed".to_string(),
-                    );
-                    diagnostics.push(diagnostic);
+                Err(hir_errors) => {
+                    // Convert HIR errors to diagnostics
+                    for hir_error in hir_errors {
+                        let diagnostic = self.wtf_error_to_diagnostic(&hir_error, source_chars);
+                        diagnostics.push(diagnostic);
+                    }
                 }
             }
         }

@@ -5,6 +5,8 @@ use wtf_ast::{
     self as ast, BinaryOperator, FunctionDeclaration, TestDeclaration, TypeAnnotation,
     UnaryOperator,
 };
+use wtf_error::Error;
+use wtf_tokens::Span;
 
 use crate::builtin::WithBuiltins;
 use crate::{
@@ -15,7 +17,7 @@ use crate::{
 const INTERNAL_PREFIX: &str = "wtfinternal";
 const INTERNAL_SUFFIX: &str = "sdafbvaeiwcoiysxuv";
 
-pub fn compile(ast: ast::Module) -> Module {
+pub fn compile(ast: ast::Module) -> Result<Module, Vec<Error>> {
     // TODO: Convert into lookup of name -> export? on first pass
     let mut ast_types = HashMap::new();
     let mut ast_funs = HashMap::new();
@@ -102,11 +104,11 @@ pub fn compile(ast: ast::Module) -> Module {
         tests.push(compile_test(idx, test, &signatures, &types, &ast_types));
     }
 
-    Module {
+    Ok(Module {
         types,
         functions,
         tests,
-    }
+    })
 }
 
 fn compile_type_declaration(

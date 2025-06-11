@@ -6,3 +6,4 @@ version.workspace = true
 license.workspace = true
 
 [dependencies]
+wtf-tokens = { path = "../wtf-tokens" }
