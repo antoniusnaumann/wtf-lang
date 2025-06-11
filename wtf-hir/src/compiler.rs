@@ -5,7 +5,7 @@ use wtf_ast::{
     self as ast, BinaryOperator, FunctionDeclaration, TestDeclaration, TypeAnnotation,
     UnaryOperator,
 };
-use wtf_error::{Error, ErrorKind};
+use wtf_error::Error;
 use wtf_tokens::Span;
 
 use crate::builtin::WithBuiltins;
@@ -18,69 +18,17 @@ const INTERNAL_PREFIX: &str = "wtfinternal";
 const INTERNAL_SUFFIX: &str = "sdafbvaeiwcoiysxuv";
 
 pub fn compile(ast: ast::Module) -> Result<Module, Vec<Error>> {
-    // For now, we'll catch panics for unknown identifiers and convert them to proper errors
-    // This is a transitional approach to enable error reporting without rewriting everything
+    let mut errors = Vec::new();
+    let module = compile_internal(ast, &mut errors);
     
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        compile_internal(ast)
-    }));
-    
-    match result {
-        Ok(module) => Ok(module),
-        Err(panic_info) => {
-            // Try to extract meaningful error information from the panic
-            if let Some(panic_msg) = panic_info.downcast_ref::<String>() {
-                let dummy_span = Span { start: 0, end: 0 };
-                
-                // Handle unknown identifier errors
-                if panic_msg.contains("Variable") && panic_msg.contains("is not defined") {
-                    if let Some(start) = panic_msg.find("Variable ") {
-                        if let Some(end) = panic_msg[start + 9..].find(" is not defined") {
-                            let var_name = &panic_msg[start + 9..start + 9 + end];
-                            let span = Span { start: 0, end: var_name.len() };
-                            let error = Error::unknown_identifier(span);
-                            return Err(vec![error]);
-                        }
-                    }
-                    let error = Error::unknown_identifier(dummy_span);
-                    return Err(vec![error]);
-                }
-                
-                // Handle function signature not found errors
-                if panic_msg.contains("Signature not found for name:") {
-                    if let Some(start) = panic_msg.find("Signature not found for name: ") {
-                        let func_name_part = &panic_msg[start + 31..];
-                        let func_name = func_name_part.split('_').next().unwrap_or("unknown");
-                        let span = Span { start: 0, end: func_name.len() };
-                        let error = Error::unknown_function(func_name.to_string(), span);
-                        return Err(vec![error]);
-                    }
-                    let error = Error::unknown_function("unknown".to_string(), dummy_span);
-                    return Err(vec![error]);
-                }
-                
-                // Handle field access errors
-                if panic_msg.contains("No field named") {
-                    let error = Error::unknown_field("unknown".to_string(), "unknown".to_string(), dummy_span);
-                    return Err(vec![error]);
-                }
-            }
-            
-            // For other panics, create a generic error
-            let dummy_span = Span { start: 0, end: 0 };
-            let error = Error {
-                span: dummy_span,
-                kind: ErrorKind::TypeMismatch { 
-                    expected: "valid code".to_string(), 
-                    found: "compilation error".to_string() 
-                },
-            };
-            Err(vec![error])
-        }
+    if errors.is_empty() {
+        Ok(module)
+    } else {
+        Err(errors)
     }
 }
 
-fn compile_internal(ast: ast::Module) -> Module {
+fn compile_internal(ast: ast::Module, errors: &mut Vec<Error>) -> Module {
     // TODO: Convert into lookup of name -> export? on first pass
     let mut ast_types = HashMap::new();
     let mut ast_funs = HashMap::new();
@@ -122,7 +70,12 @@ fn compile_internal(ast: ast::Module) -> Module {
                 );
             }
             ast::Declaration::Export(_) => {
-                panic!("TODO: error: double export is not permitted!")
+                let dummy_span = Span { start: 0, end: 0 };
+                errors.push(Error::type_mismatch(
+                    "single export declaration".to_string(),
+                    "double export declaration".to_string(),
+                    dummy_span,
+                ));
             }
             ast::Declaration::Test(test) => {
                 ast_tests.push(test);
