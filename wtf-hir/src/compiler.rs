@@ -17,43 +17,51 @@ use crate::{
 const INTERNAL_PREFIX: &str = "wtfinternal";
 const INTERNAL_SUFFIX: &str = "sdafbvaeiwcoiysxuv";
 
-use std::cell::RefCell;
-use std::rc::Rc;
-
-// Thread-local error collector for simple error reporting
-thread_local! {
-    static ERROR_COLLECTOR: RefCell<Vec<Error>> = RefCell::new(Vec::new());
+/// Internal compiler struct that holds error state and compilation methods
+struct HirCompiler {
+    errors: Vec<Error>,
 }
 
-fn add_error(error: Error) {
-    ERROR_COLLECTOR.with(|errors| {
-        errors.borrow_mut().push(error);
-    });
-}
+impl HirCompiler {
+    fn new() -> Self {
+        Self {
+            errors: Vec::new(),
+        }
+    }
 
-fn take_errors() -> Vec<Error> {
-    ERROR_COLLECTOR.with(|errors| {
-        std::mem::take(&mut *errors.borrow_mut())
-    })
-}
+    fn add_error(&mut self, error: Error) {
+        self.errors.push(error);
+    }
 
-pub fn compile(ast: ast::Module) -> Result<Module, Vec<Error>> {
-    // Clear any previous errors
-    ERROR_COLLECTOR.with(|errors| {
-        errors.borrow_mut().clear();
-    });
-    
-    let module = compile_internal(ast);
-    let errors = take_errors();
-    
-    if errors.is_empty() {
-        Ok(module)
-    } else {
-        Err(errors)
+    fn has_errors(&self) -> bool {
+        !self.errors.is_empty()
+    }
+
+    fn take_errors(self) -> Vec<Error> {
+        self.errors
+    }
+
+    fn compile_internal(&mut self, ast: ast::Module) -> Module {
+        compile_internal_impl(ast, &mut self.errors)
+    }
+
+    fn compile_type_annotation(&mut self, annotation: &ast::TypeAnnotation, ast_types: &HashMap<String, (ast::Declaration, bool)>) -> Type {
+        compile_type_annotation_impl(annotation, ast_types, &mut self.errors)
     }
 }
 
-fn compile_internal(ast: ast::Module) -> Module {
+pub fn compile(ast: ast::Module) -> Result<Module, Vec<Error>> {
+    let mut compiler = HirCompiler::new();
+    let module = compiler.compile_internal(ast);
+    
+    if compiler.has_errors() {
+        Err(compiler.take_errors())
+    } else {
+        Ok(module)
+    }
+}
+
+fn compile_internal_impl(ast: ast::Module, errors: &mut Vec<Error>) -> Module {
     // TODO: Convert into lookup of name -> export? on first pass
     let mut ast_types = HashMap::new();
     let mut ast_funs = HashMap::new();
@@ -96,7 +104,7 @@ fn compile_internal(ast: ast::Module) -> Module {
             }
             ast::Declaration::Export(_) => {
                 let dummy_span = Span { start: 0, end: 0 };
-                add_error(Error::type_mismatch(
+                errors.push(Error::type_mismatch(
                     "single export declaration".to_string(),
                     "double export declaration".to_string(),
                     dummy_span,
@@ -224,6 +232,14 @@ fn compile_type_annotation(
     annotation: &ast::TypeAnnotation,
     ast_types: &HashMap<String, (ast::Declaration, bool)>,
 ) -> Type {
+    compile_type_annotation_impl(annotation, ast_types, &mut Vec::new())
+}
+
+fn compile_type_annotation_impl(
+    annotation: &ast::TypeAnnotation,
+    ast_types: &HashMap<String, (ast::Declaration, bool)>,
+    errors: &mut Vec<Error>,
+) -> Type {
     match annotation {
         ast::TypeAnnotation::Simple(name) => match name.as_str() {
             "bool" => Type::Bool,
@@ -270,27 +286,27 @@ fn compile_type_annotation(
                     }
                     None => {
                         let dummy_span = Span { start: 0, end: name.len() };
-                        add_error(Error::unknown_identifier(dummy_span)); // Using unknown_identifier since there's no unknown_type
-                        // Return a dummy type to continue compilation
+                        errors.push(Error::unknown_identifier(dummy_span));
+                        // Return a fallback type to continue compilation
                         Type::None
                     }
                 }
             }
         },
         ast::TypeAnnotation::List(item) => {
-            Type::List(Box::new(compile_type_annotation(item, ast_types)))
+            Type::List(Box::new(compile_type_annotation_impl(item, ast_types, errors)))
         }
         ast::TypeAnnotation::Option(payload) => {
-            Type::Option(Box::new(compile_type_annotation(payload, ast_types)))
+            Type::Option(Box::new(compile_type_annotation_impl(payload, ast_types, errors)))
         }
         ast::TypeAnnotation::Result { ok, err } => Type::Result {
-            ok: Box::new(compile_type_annotation(ok, ast_types)),
-            err: Box::new(compile_type_annotation(err, ast_types)),
+            ok: Box::new(compile_type_annotation_impl(ok, ast_types, errors)),
+            err: Box::new(compile_type_annotation_impl(err, ast_types, errors)),
         },
         ast::TypeAnnotation::Tuple(fields) => Type::Tuple(
             fields
                 .into_iter()
-                .map(|field| compile_type_annotation(field, ast_types))
+                .map(|field| compile_type_annotation_impl(field, ast_types, errors))
                 .collect(),
         ),
     }
@@ -512,29 +528,11 @@ fn compile_statement(
             let value = compile_expression(value, vars, visible, signatures);
             let name = match target {
                 ast::Expression::Identifier(name) => name,
-                _ => {
-                    let dummy_span = Span { start: 0, end: 0 };
-                    add_error(Error::unsupported_operation(
-                        "assignment to complex expression".to_string(),
-                        "assignment target".to_string(),
-                        dummy_span,
-                    ));
-                    return Expression::void();
-                }
+                _ => panic!("Can only assign to names (for now)"), // TODO
             };
-            let binding = match visible.lookup(name) {
-                Some(binding) => binding,
-                None => {
-                    let dummy_span = Span { start: 0, end: name.len() };
-                    add_error(Error::unknown_identifier(dummy_span));
-                    // Return a dummy expression to continue compilation
-                    return Expression::void();
-                }
-            };
+            let binding = visible.lookup(name).expect("Name {name} not defined");
             if !binding.mutable {
-                let dummy_span = Span { start: 0, end: name.len() };
-                add_error(Error::immutable_assignment(name.clone(), dummy_span));
-                return Expression::void();
+                panic!("Tried assigning to a mutable variable.");
             }
             let annotated_type = &vars[binding.id];
             let value = try_cast(annotated_type, value, signatures);
@@ -714,15 +712,11 @@ fn compile_expression(
                 }
                 // The name might be an enum or other type instead, so look it up as a type
                 None => {
-                    match visible.lookup_type(name) {
-                        Some(ty) => ExpressionKind::Type(ty.clone()).typed(Type::Meta(ty.clone().into())),
-                        None => {
-                            let dummy_span = Span { start: 0, end: name.len() };
-                            add_error(Error::unknown_identifier(dummy_span));
-                            // Return a dummy expression to continue compilation
-                            Expression::void()
-                        }
-                    }
+                    let ty = visible
+                        .lookup_type(name)
+                        .expect(&format!("Variable {} is not defined.", name));
+
+                    ExpressionKind::Type(ty.clone()).typed(Type::Meta(ty.clone().into()))
                 }
             }
         }
@@ -1054,17 +1048,7 @@ fn find_signature(
 
             signatures.get_key_value(&mangled)
         })
-        .unwrap_or_else(|| {
-            let dummy_span = Span { start: 0, end: mangled.len() };
-            add_error(Error::unknown_function(name.to_string(), dummy_span));
-            // Return the first available signature as a fallback to continue compilation
-            if let Some((first_name, first_sig)) = signatures.iter().next() {
-                (first_name, first_sig)
-            } else {
-                // This should never happen since there are builtin signatures
-                panic!("No signatures available at all, including builtins")
-            }
-        });
+        .unwrap_or_else(|| panic!("Signature not found for name: {mangled}"));
 
     (function_name.clone(), signature.clone())
 }
