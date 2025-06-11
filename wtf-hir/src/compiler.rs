@@ -17,9 +17,34 @@ use crate::{
 const INTERNAL_PREFIX: &str = "wtfinternal";
 const INTERNAL_SUFFIX: &str = "sdafbvaeiwcoiysxuv";
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
+// Thread-local error collector for simple error reporting
+thread_local! {
+    static ERROR_COLLECTOR: RefCell<Vec<Error>> = RefCell::new(Vec::new());
+}
+
+fn add_error(error: Error) {
+    ERROR_COLLECTOR.with(|errors| {
+        errors.borrow_mut().push(error);
+    });
+}
+
+fn take_errors() -> Vec<Error> {
+    ERROR_COLLECTOR.with(|errors| {
+        std::mem::take(&mut *errors.borrow_mut())
+    })
+}
+
 pub fn compile(ast: ast::Module) -> Result<Module, Vec<Error>> {
-    let mut errors = Vec::new();
-    let module = compile_internal(ast, &mut errors);
+    // Clear any previous errors
+    ERROR_COLLECTOR.with(|errors| {
+        errors.borrow_mut().clear();
+    });
+    
+    let module = compile_internal(ast);
+    let errors = take_errors();
     
     if errors.is_empty() {
         Ok(module)
@@ -28,7 +53,7 @@ pub fn compile(ast: ast::Module) -> Result<Module, Vec<Error>> {
     }
 }
 
-fn compile_internal(ast: ast::Module, errors: &mut Vec<Error>) -> Module {
+fn compile_internal(ast: ast::Module) -> Module {
     // TODO: Convert into lookup of name -> export? on first pass
     let mut ast_types = HashMap::new();
     let mut ast_funs = HashMap::new();
@@ -71,7 +96,7 @@ fn compile_internal(ast: ast::Module, errors: &mut Vec<Error>) -> Module {
             }
             ast::Declaration::Export(_) => {
                 let dummy_span = Span { start: 0, end: 0 };
-                errors.push(Error::type_mismatch(
+                add_error(Error::type_mismatch(
                     "single export declaration".to_string(),
                     "double export declaration".to_string(),
                     dummy_span,
@@ -239,10 +264,17 @@ fn compile_type_annotation(
             "char" => Type::Char,
             "string" => Type::String,
             _ => {
-                let (declaration, is_export) = ast_types
-                    .get(name)
-                    .unwrap_or_else(|| panic!("unknown type {name}"));
-                compile_type_declaration(declaration, *is_export, ast_types)
+                match ast_types.get(name) {
+                    Some((declaration, is_export)) => {
+                        compile_type_declaration(declaration, *is_export, ast_types)
+                    }
+                    None => {
+                        let dummy_span = Span { start: 0, end: name.len() };
+                        add_error(Error::unknown_identifier(dummy_span)); // Using unknown_identifier since there's no unknown_type
+                        // Return a dummy type to continue compilation
+                        Type::None
+                    }
+                }
             }
         },
         ast::TypeAnnotation::List(item) => {
@@ -480,11 +512,29 @@ fn compile_statement(
             let value = compile_expression(value, vars, visible, signatures);
             let name = match target {
                 ast::Expression::Identifier(name) => name,
-                _ => panic!("Can only assign to names (for now)"), // TODO
+                _ => {
+                    let dummy_span = Span { start: 0, end: 0 };
+                    add_error(Error::unsupported_operation(
+                        "assignment to complex expression".to_string(),
+                        "assignment target".to_string(),
+                        dummy_span,
+                    ));
+                    return Expression::void();
+                }
             };
-            let binding = visible.lookup(name).expect("Name {name} not defined");
+            let binding = match visible.lookup(name) {
+                Some(binding) => binding,
+                None => {
+                    let dummy_span = Span { start: 0, end: name.len() };
+                    add_error(Error::unknown_identifier(dummy_span));
+                    // Return a dummy expression to continue compilation
+                    return Expression::void();
+                }
+            };
             if !binding.mutable {
-                panic!("Tried assigning to a mutable variable.");
+                let dummy_span = Span { start: 0, end: name.len() };
+                add_error(Error::immutable_assignment(name.clone(), dummy_span));
+                return Expression::void();
             }
             let annotated_type = &vars[binding.id];
             let value = try_cast(annotated_type, value, signatures);
@@ -664,11 +714,15 @@ fn compile_expression(
                 }
                 // The name might be an enum or other type instead, so look it up as a type
                 None => {
-                    let ty = visible
-                        .lookup_type(name)
-                        .expect(&format!("Variable {} is not defined.", name));
-
-                    ExpressionKind::Type(ty.clone()).typed(Type::Meta(ty.clone().into()))
+                    match visible.lookup_type(name) {
+                        Some(ty) => ExpressionKind::Type(ty.clone()).typed(Type::Meta(ty.clone().into())),
+                        None => {
+                            let dummy_span = Span { start: 0, end: name.len() };
+                            add_error(Error::unknown_identifier(dummy_span));
+                            // Return a dummy expression to continue compilation
+                            Expression::void()
+                        }
+                    }
                 }
             }
         }
@@ -1000,7 +1054,17 @@ fn find_signature(
 
             signatures.get_key_value(&mangled)
         })
-        .unwrap_or_else(|| panic!("Signature not found for name: {mangled}"));
+        .unwrap_or_else(|| {
+            let dummy_span = Span { start: 0, end: mangled.len() };
+            add_error(Error::unknown_function(name.to_string(), dummy_span));
+            // Return the first available signature as a fallback to continue compilation
+            if let Some((first_name, first_sig)) = signatures.iter().next() {
+                (first_name, first_sig)
+            } else {
+                // This should never happen since there are builtin signatures
+                panic!("No signatures available at all, including builtins")
+            }
+        });
 
     (function_name.clone(), signature.clone())
 }
