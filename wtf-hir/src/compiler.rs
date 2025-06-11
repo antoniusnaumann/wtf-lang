@@ -30,17 +30,39 @@ pub fn compile(ast: ast::Module) -> Result<Module, Vec<Error>> {
         Err(panic_info) => {
             // Try to extract meaningful error information from the panic
             if let Some(panic_msg) = panic_info.downcast_ref::<String>() {
+                let dummy_span = Span { start: 0, end: 0 };
+                
+                // Handle unknown identifier errors
                 if panic_msg.contains("Variable") && panic_msg.contains("is not defined") {
-                    // This is likely an unknown identifier error
-                    // Extract the variable name if possible
                     if let Some(start) = panic_msg.find("Variable ") {
                         if let Some(end) = panic_msg[start + 9..].find(" is not defined") {
                             let var_name = &panic_msg[start + 9..start + 9 + end];
-                            let dummy_span = Span { start: 0, end: var_name.len() };
-                            let error = Error::unknown_identifier(dummy_span);
+                            let span = Span { start: 0, end: var_name.len() };
+                            let error = Error::unknown_identifier(span);
                             return Err(vec![error]);
                         }
                     }
+                    let error = Error::unknown_identifier(dummy_span);
+                    return Err(vec![error]);
+                }
+                
+                // Handle function signature not found errors
+                if panic_msg.contains("Signature not found for name:") {
+                    if let Some(start) = panic_msg.find("Signature not found for name: ") {
+                        let func_name_part = &panic_msg[start + 31..];
+                        let func_name = func_name_part.split('_').next().unwrap_or("unknown");
+                        let span = Span { start: 0, end: func_name.len() };
+                        let error = Error::unknown_function(func_name.to_string(), span);
+                        return Err(vec![error]);
+                    }
+                    let error = Error::unknown_function("unknown".to_string(), dummy_span);
+                    return Err(vec![error]);
+                }
+                
+                // Handle field access errors
+                if panic_msg.contains("No field named") {
+                    let error = Error::unknown_field("unknown".to_string(), "unknown".to_string(), dummy_span);
+                    return Err(vec![error]);
                 }
             }
             
