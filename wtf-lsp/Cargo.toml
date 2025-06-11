@@ -1,0 +1,15 @@
+[package]
+name = "wtf-lsp"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+tower-lsp = "0.20"
+tokio = { version = "1.0", features = ["full"] }
+serde_json = "1.0"
+wtf-parser = { path = "../wtf-parser" }
+wtf-hir = { path = "../wtf-hir" }  
+wtf-error = { path = "../wtf-error" }
+wtf-tokens = { path = "../wtf-tokens" }
