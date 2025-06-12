@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::ops::Index;
 
 use wtf_ast::{
-    self as ast, BinaryOperator, FunctionDeclaration, TestDeclaration, TypeAnnotation,
+    self as ast, BinaryOperator, FunctionDeclaration, Node, TestDeclaration, TypeAnnotation,
     UnaryOperator,
 };
 use wtf_error::Error;
@@ -88,11 +88,10 @@ impl HirCompiler {
                     );
                 }
                 ast::Declaration::Export(_) => {
-                    let dummy_span = Span { start: 0, end: 0 };
                     self.errors.push(Error::type_mismatch(
                         "single export declaration".to_string(),
                         "double export declaration".to_string(),
-                        dummy_span,
+                        declaration.span(),
                     ));
                 }
                 ast::Declaration::Test(test) => {
@@ -263,11 +262,7 @@ impl HirCompiler {
                             self.compile_type_declaration(declaration, *is_export, ast_types)
                         }
                         None => {
-                            let dummy_span = Span {
-                                start: 0,
-                                end: name.len(),
-                            };
-                            self.errors.push(Error::unknown_identifier(dummy_span));
+                            self.errors.push(Error::unknown_identifier(annotation.span));
                             // Return a fallback type to continue compilation
                             Type::None
                         }
@@ -466,7 +461,7 @@ impl HirCompiler {
 
                 let expression = if let Some(anno) = &variable_declaration.type_annotation {
                     let annotated_type = self.compile_type_annotation(&anno, ast_types);
-                    self.try_cast(&annotated_type, initial_value, signatures)
+                    self.try_cast(&annotated_type, initial_value, signatures, variable_declaration.span)
                 } else {
                     initial_value
                 };
@@ -507,7 +502,7 @@ impl HirCompiler {
                     return Expression::void();
                 }
                 let annotated_type = &vars[binding.id];
-                let value = self.try_cast(annotated_type, comp_val, signatures);
+                let value = self.try_cast(annotated_type, comp_val, signatures, target.span.to(value.span));
                 Expression::var_set(binding.id, value)
             }
             ast::Statement::ExpressionStatement(expression) => {
@@ -520,7 +515,8 @@ impl HirCompiler {
                     }
                     None => Expression::void(),
                 };
-                let returned = self.try_cast(&vars.result, returned, signatures);
+                let span = expression.as_ref().map(|e| e.span).unwrap_or(Span { start: 0, end: 0 });
+                let returned = self.try_cast(&vars.result, returned, signatures, span);
                 Expression::return_(returned)
             }
             ast::Statement::BreakStatement(expression) => {
@@ -658,11 +654,10 @@ impl HirCompiler {
                     Type::Resource { methods: _ } => todo!("Allow resources with a 'next' "),
                     // TODO: allow ranges
                     ty => {
-                        let dummy_span = Span { start: 0, end: 0 };
                         self.errors.push(Error::type_mismatch(
                             "iterable type".to_string(),
                             format!("non-iterable type {ty}"),
-                            dummy_span,
+                            for_statement.span,
                         ));
                         EMPTY_BODY
                     }
@@ -712,11 +707,7 @@ impl HirCompiler {
                             ExpressionKind::Type(ty.clone()).typed(Type::Meta(ty.clone().into()))
                         }
                         None => {
-                            let dummy_span = Span {
-                                start: 0,
-                                end: name.len(),
-                            };
-                            self.errors.push(Error::unknown_identifier(dummy_span));
+                            self.errors.push(Error::unknown_identifier(expression.span));
                             Expression::void()
                         }
                     },
@@ -752,11 +743,10 @@ impl HirCompiler {
                             self.compile_expression(right, vars, visible, signatures),
                         );
                         let Type::Option(inner_ty) = left.ty.clone() else {
-                            let dummy_span = Span { start: 0, end: 0 };
                             self.errors.push(Error::unsupported_operation(
                                 "null coalesce operator".to_string(),
                                 "non-optional".to_string(),
-                                dummy_span,
+                                expression.span,
                             ));
                             return Expression::void();
                         };
@@ -794,7 +784,7 @@ impl HirCompiler {
                     }
                 };
 
-                self.compile_call(vars, visible, signatures, &[left, right], name, Vec::new())
+                self.compile_call(vars, visible, signatures, &[left, right], name, Vec::new(), expression.span)
             }
             ast::ExpressionKind::UnaryExpression { operator, operand } => {
                 let operand = self.compile_expression(operand, vars, visible, signatures);
@@ -804,21 +794,19 @@ impl HirCompiler {
                         // TODO: allow tuples
                         match operand_ty {
                             Type::Never => {
-                                let dummy_span = Span { start: 0, end: 0 };
                                 self.errors.push(Error::unsupported_operation(
                                     "negation".to_string(),
                                     "never type".to_string(),
-                                    dummy_span,
+                                    expression.span,
                                 ));
                                 Expression::unreachable()
                             }
                             Type::Int { signed, bits } => {
                                 if !signed {
-                                    let dummy_span = Span { start: 0, end: 0 };
                                     self.errors.push(Error::unsupported_operation(
                                         "negation".to_string(),
                                         "unsigned int".to_string(),
-                                        dummy_span,
+                                        expression.span,
                                     ));
                                     return Expression::void();
                                 }
@@ -836,11 +824,10 @@ impl HirCompiler {
                                 Expression::call(format!("neg__f{bits}"), vec![operand], operand_ty)
                             }
                             _ => {
-                                let dummy_span = Span { start: 0, end: 0 };
                                 self.errors.push(Error::unsupported_operation(
                                     "negation".to_string(),
                                     "unsupported type".to_string(),
-                                    dummy_span,
+                                    expression.span,
                                 ));
                                 Expression::void()
                             }
@@ -859,7 +846,7 @@ impl HirCompiler {
                     _ => todo!("call of non-name"),
                 };
 
-                self.compile_call(vars, visible, signatures, arguments, &function, Vec::new())
+                self.compile_call(vars, visible, signatures, arguments, &function, Vec::new(), expression.span)
             }
             ast::ExpressionKind::MethodCall {
                 receiver,
@@ -876,7 +863,7 @@ impl HirCompiler {
 
                 let receiver = self.compile_expression(receiver, vars, visible, signatures);
 
-                self.compile_call(vars, visible, signatures, arguments, method, vec![receiver])
+                self.compile_call(vars, visible, signatures, arguments, method, vec![receiver], expression.span)
             }
             ast::ExpressionKind::FieldAccess {
                 object,
@@ -905,14 +892,10 @@ impl HirCompiler {
                             .typed(member_type)
                         }
                         None => {
-                            let dummy_span = Span {
-                                start: 0,
-                                end: field.len(),
-                            };
                             self.errors.push(Error::unknown_field(
                                 field.clone(),
                                 object_ty.to_string(),
-                                dummy_span,
+                                expression.span,
                             ));
                             Expression::void()
                         }
@@ -922,14 +905,10 @@ impl HirCompiler {
                             match cases.iter().position(|case| case == field) {
                                 Some(index) => ExpressionKind::Enum { case: index }.typed(*ty),
                                 None => {
-                                    let dummy_span = Span {
-                                        start: 0,
-                                        end: field.len(),
-                                    };
                                     self.errors.push(Error::unknown_field(
                                         field.clone(),
                                         "enum".to_string(),
-                                        dummy_span,
+                                        expression.span,
                                     ));
                                     Expression::void()
                                 }
@@ -937,27 +916,19 @@ impl HirCompiler {
                         }
                         Type::Variant { cases: _ } => todo!(),
                         ty => {
-                            let dummy_span = Span {
-                                start: 0,
-                                end: field.len(),
-                            };
                             self.errors.push(Error::unsupported_operation(
                                 "member access".to_string(),
                                 format!("type {ty}"),
-                                dummy_span,
+                                expression.span,
                             ));
                             Expression::void()
                         }
                     },
                     ty => {
-                        let dummy_span = Span {
-                            start: 0,
-                            end: field.len(),
-                        };
                         self.errors.push(Error::unknown_field(
                             field.clone(),
                             ty.to_string(),
-                            dummy_span,
+                            expression.span,
                         ));
                         Expression::void()
                     }
@@ -970,11 +941,10 @@ impl HirCompiler {
                 match collection_ty {
                     Type::Never => Expression::unreachable(),
                     Type::String => {
-                        let dummy_span = Span { start: 0, end: 0 };
                         self.errors.push(Error::unsupported_operation(
                             "index access".to_string(),
                             "string".to_string(),
-                            dummy_span,
+                            expression.span,
                         ));
                         Expression::void()
                     }
@@ -983,11 +953,10 @@ impl HirCompiler {
                         let index = match index.kind {
                             ExpressionKind::Int(int) => int,
                             _ => {
-                                let dummy_span = Span { start: 0, end: 0 };
                                 self.errors.push(Error::type_mismatch(
                                     "integer literal".to_string(),
                                     "non-integer expression".to_string(),
-                                    dummy_span,
+                                    expression.span,
                                 ));
                                 return Expression::void();
                             }
@@ -996,11 +965,10 @@ impl HirCompiler {
                         Expression::tuple_access(collection, index, item_ty)
                     }
                     _ => {
-                        let dummy_span = Span { start: 0, end: 0 };
                         self.errors.push(Error::unsupported_operation(
                             "index access".to_string(),
                             "non-collection".to_string(),
-                            dummy_span,
+                            expression.span,
                         ));
                         Expression::void()
                     }
@@ -1053,6 +1021,7 @@ impl HirCompiler {
         arguments: &[Expr],
         function: &str,
         mut args: Vec<Expression>,
+        span: Span,
     ) -> Expression
     where
         Expr: AsRef<ast::Expression>,
@@ -1061,10 +1030,10 @@ impl HirCompiler {
             args.push(self.compile_expression(arg.as_ref(), vars, visible, signatures));
         }
 
-        let (function, signature) = self.find_signature(&function, &args, signatures);
+        let (function, signature) = self.find_signature(&function, &args, signatures, span);
 
         for (arg, expected) in args.iter_mut().zip(signature.param_types.iter()) {
-            *arg = self.try_cast(expected, arg.clone(), signatures);
+            *arg = self.try_cast(expected, arg.clone(), signatures, span);
         }
 
         Expression::call(function.clone(), args, signature.return_type.clone())
@@ -1075,6 +1044,7 @@ impl HirCompiler {
         annotation: &Type,
         mut actual: Expression,
         signatures: &HashMap<String, FunctionSignature>,
+        span: Span,
     ) -> Expression {
         match (annotation, &actual.ty) {
             // No cast needed
@@ -1096,7 +1066,7 @@ impl HirCompiler {
             ) if (signed == sign_actual && bits >= bits_actual)
                 || (*signed && *bits >= bits_actual / 2) =>
             {
-                self.cast_int(actual, *bits, *signed, signatures)
+                self.cast_int(actual, *bits, *signed, signatures, span)
             }
             // TODO: Decide if we want this behavior for enums... my (Antonius) sense is, ultimately no, but it is convenient for now, so let's keep it until we have operators for enums and structs implemented
             (Type::Int { signed: _, bits: _ }, Type::Enum { cases: _ }) => actual,
@@ -1104,11 +1074,10 @@ impl HirCompiler {
             (Type::Option(inner), Type::None) => Expression::none(*inner.clone()),
             (Type::Option(_), _) => Expression::some(actual),
             (a, b) => {
-                let dummy_span = Span { start: 0, end: 0 };
                 self.errors.push(Error::type_mismatch(
                     a.to_string(),
                     b.to_string(),
-                    dummy_span,
+                    span,
                 ));
                 actual
             }
@@ -1121,11 +1090,12 @@ impl HirCompiler {
         bits: usize,
         signed: bool,
         signatures: &HashMap<String, FunctionSignature>,
+        span: Span,
     ) -> Expression {
         let name = format!("{}{bits}", if signed { "s" } else { "u" });
 
         let args = [actual];
-        let (func, signature) = self.find_signature(&name, &args, signatures);
+        let (func, signature) = self.find_signature(&name, &args, signatures, span);
 
         Expression::call(func, args.into(), signature.return_type)
     }
@@ -1135,6 +1105,7 @@ impl HirCompiler {
         name: &str,
         args: &[Expression],
         signatures: &HashMap<String, FunctionSignature>,
+        span: Span,
     ) -> (String, FunctionSignature) {
         let mut mangled = format!("{name}_");
 
@@ -1167,12 +1138,8 @@ impl HirCompiler {
         }
 
         // Function not found - report error and return dummy signature
-        let dummy_span = Span {
-            start: 0,
-            end: name.len(),
-        };
         self.errors
-            .push(Error::unknown_function(mangled.clone(), dummy_span));
+            .push(Error::unknown_function(mangled.clone(), span));
 
         let dummy_signature = FunctionSignature {
             param_types: args.iter().map(|a| a.ty.clone()).collect(),
@@ -1456,5 +1423,39 @@ mod tests {
 
         // Even with errors, we should have tried to compile both functions
         // (though the result is Err, the valid parts should have been processed)
+    }
+
+    #[test]
+    fn test_errors_use_actual_spans_not_dummy_spans() {
+        let source = r#"
+func example() {
+    unknown_identifier
+}
+        "#;
+
+        let result = parse_and_compile(source);
+        assert!(result.is_err(), "Should detect unknown identifier error");
+
+        let errors = result.unwrap_err();
+        assert!(!errors.is_empty());
+
+        // Check that errors use actual spans from AST, not dummy spans (0, 0)
+        for error in &errors {
+            // The error should have a non-dummy span
+            assert!(
+                error.span.start != 0 || error.span.end != 0,
+                "Error span should not be a dummy span (0, 0), got ({}, {})",
+                error.span.start,
+                error.span.end
+            );
+            
+            // The span should be reasonable (within the source length)
+            assert!(
+                error.span.end <= source.len(),
+                "Error span end ({}) should not exceed source length ({})",
+                error.span.end,
+                source.len()
+            );
+        }
     }
 }
