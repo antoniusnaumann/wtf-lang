@@ -8,3 +8,6 @@ edition.workspace = true
 wtf-ast = { path = "../wtf-ast" }
 wtf-error = { path = "../wtf-error" }
 wtf-tokens = { path = "../wtf-tokens" }
+
+[dev-dependencies]
+wtf-parser = { path = "../wtf-parser" }
