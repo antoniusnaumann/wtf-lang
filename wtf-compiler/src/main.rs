@@ -107,7 +107,16 @@ impl Compiler {
             println!();
             println!("===== HIR =====");
         }
-        let hir = wtf_hir::compile(ast);
+        let hir = match wtf_hir::compile(ast) {
+            Ok(hir) => hir,
+            Err(errors) => {
+                for error in errors {
+                    println!("{}\n", error.with_source(parser.chars()));
+                }
+                println!("HIR compilation failed with errors");
+                return Err(-1);
+            }
+        };
         let tests = hir.tests.clone();
         if self.verbose {
             println!("{hir}");
