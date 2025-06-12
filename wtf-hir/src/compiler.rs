@@ -480,15 +480,14 @@ impl HirCompiler {
                 Expression::var_set(var, expression)
             }
             ast::Statement::Assignment { target, value } => {
-                let value = self.compile_expression(value, vars, visible, signatures);
+                let comp_val = self.compile_expression(value, vars, visible, signatures);
                 let name = match &target.kind {
                     ast::ExpressionKind::Identifier(name) => name,
                     _ => {
-                        let dummy_span = Span { start: 0, end: 0 };
                         self.errors.push(Error::unsupported_operation(
                             "assignment to non-identifier".to_string(),
                             "expression".to_string(),
-                            dummy_span,
+                            target.span,
                         ));
                         return Expression::void();
                     }
@@ -496,25 +495,19 @@ impl HirCompiler {
                 let binding = match visible.lookup(name) {
                     Some(binding) => binding,
                     None => {
-                        let dummy_span = Span {
-                            start: 0,
-                            end: name.len(),
-                        };
-                        self.errors.push(Error::unknown_identifier(dummy_span));
+                        self.errors.push(Error::unknown_identifier(target.span));
                         return Expression::void();
                     }
                 };
                 if !binding.mutable {
-                    let dummy_span = Span {
-                        start: 0,
-                        end: name.len(),
-                    };
-                    self.errors
-                        .push(Error::immutable_assignment(name.clone(), dummy_span));
+                    self.errors.push(Error::immutable_assignment(
+                        name.clone(),
+                        target.span.to(value.span),
+                    ));
                     return Expression::void();
                 }
                 let annotated_type = &vars[binding.id];
-                let value = self.try_cast(annotated_type, value, signatures);
+                let value = self.try_cast(annotated_type, comp_val, signatures);
                 Expression::var_set(binding.id, value)
             }
             ast::Statement::ExpressionStatement(expression) => {
