@@ -17,5 +17,12 @@ impl<T> Spanned<T> {
     }
 }
 
-/// A convenience type alias for spanned expressions
-pub type SpannedExpression = Spanned<Expression>;
+pub trait WithSpan<T> {
+    fn spanned(self, span: Span) -> Spanned<T>;
+}
+
+impl<T: Sized> WithSpan<T> for T {
+    fn spanned(self, span: Span) -> Spanned<T> {
+        Spanned::new(self, span)
+    }
+}
