@@ -111,7 +111,7 @@ impl Compiler {
             Ok(hir) => hir,
             Err(errors) => {
                 for error in errors {
-                    println!("HIR Error: {}", error.with_source(parser.chars()));
+                    println!("{}\n", error.with_source(parser.chars()));
                 }
                 println!("HIR compilation failed with errors");
                 return Err(-1);
