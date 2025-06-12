@@ -1030,7 +1030,20 @@ impl HirCompiler {
             args.push(self.compile_expression(arg.as_ref(), vars, visible, signatures));
         }
 
-        let (function, signature) = self.find_signature(&function, &args, signatures, span);
+        let (function, signature) = match self.find_signature(&function, &args, signatures) {
+            Ok((func, sig)) => (func, sig),
+            Err(mangled_name) => {
+                self.errors
+                    .push(Error::unknown_function(mangled_name, span));
+                
+                let dummy_signature = FunctionSignature {
+                    param_types: args.iter().map(|a| a.ty.clone()).collect(),
+                    return_type: Type::None,
+                    is_export: false,
+                };
+                (function.to_string(), dummy_signature)
+            }
+        };
 
         for (arg, expected) in args.iter_mut().zip(signature.param_types.iter()) {
             *arg = self.try_cast(expected, arg.clone(), signatures, span);
@@ -1066,7 +1079,14 @@ impl HirCompiler {
             ) if (signed == sign_actual && bits >= bits_actual)
                 || (*signed && *bits >= bits_actual / 2) =>
             {
-                self.cast_int(actual, *bits, *signed, signatures, span)
+                match self.cast_int(actual.clone(), *bits, *signed, signatures) {
+                    Ok(casted) => casted,
+                    Err(mangled_name) => {
+                        self.errors
+                            .push(Error::unknown_function(mangled_name, span));
+                        actual
+                    }
+                }
             }
             // TODO: Decide if we want this behavior for enums... my (Antonius) sense is, ultimately no, but it is convenient for now, so let's keep it until we have operators for enums and structs implemented
             (Type::Int { signed: _, bits: _ }, Type::Enum { cases: _ }) => actual,
@@ -1085,28 +1105,26 @@ impl HirCompiler {
     }
 
     fn cast_int(
-        &mut self,
+        &self,
         actual: Expression,
         bits: usize,
         signed: bool,
         signatures: &HashMap<String, FunctionSignature>,
-        span: Span,
-    ) -> Expression {
+    ) -> Result<Expression, String> {
         let name = format!("{}{bits}", if signed { "s" } else { "u" });
 
         let args = [actual];
-        let (func, signature) = self.find_signature(&name, &args, signatures, span);
+        let (func, signature) = self.find_signature(&name, &args, signatures)?;
 
-        Expression::call(func, args.into(), signature.return_type)
+        Ok(Expression::call(func, args.into(), signature.return_type))
     }
 
     fn find_signature(
-        &mut self,
+        &self,
         name: &str,
         args: &[Expression],
         signatures: &HashMap<String, FunctionSignature>,
-        span: Span,
-    ) -> (String, FunctionSignature) {
+    ) -> Result<(String, FunctionSignature), String> {
         let mut mangled = format!("{name}_");
 
         fn type_name(ty: &Type) -> String {
@@ -1124,7 +1142,7 @@ impl HirCompiler {
 
         // Try exact name match first
         if let Some((function_name, signature)) = signatures.get_key_value(name) {
-            return (function_name.clone(), signature.clone());
+            return Ok((function_name.clone(), signature.clone()));
         }
 
         // Try mangled name match
@@ -1134,20 +1152,11 @@ impl HirCompiler {
         }
 
         if let Some((function_name, signature)) = signatures.get_key_value(&mangled) {
-            return (function_name.clone(), signature.clone());
+            return Ok((function_name.clone(), signature.clone()));
         }
 
-        // Function not found - report error and return dummy signature
-        self.errors
-            .push(Error::unknown_function(mangled.clone(), span));
-
-        let dummy_signature = FunctionSignature {
-            param_types: args.iter().map(|a| a.ty.clone()).collect(),
-            return_type: Type::None,
-            is_export: false,
-        };
-
-        (name.to_string(), dummy_signature)
+        // Function not found - return error
+        Err(mangled)
     }
 }
 
