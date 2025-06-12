@@ -2,10 +2,11 @@ use std::{borrow::Cow, ops::Deref};
 
 use wtf_ast::{
     ArithmeticOperator, BinaryOperator, Block, Declaration, EnumDeclaration, ExportDeclaration,
-    Expression, Field, FieldAssignment, FunctionDeclaration, IfStatement, Literal, LogicOperator,
-    Module, ModulePath, OverloadDeclaration, PackageDeclaration, Parameter, RecordDeclaration,
-    ResourceDeclaration, Statement, TestDeclaration, TypeAnnotation, UnaryOperator, UseDeclaration,
-    VariantCase, VariantDeclaration, Version, WhileStatement,
+    Expression, ExpressionKind, Field, FieldAssignment, FunctionDeclaration, IfStatement, Literal,
+    LiteralKind, LogicOperator, Module, ModulePath, OverloadDeclaration, PackageDeclaration,
+    Parameter, RecordDeclaration, ResourceDeclaration, Statement, TestDeclaration,
+    TypeAnnotationKind, UnaryOperator, UseDeclaration, VariantCase, VariantDeclaration, Version,
+    WhileStatement,
 };
 
 pub trait FormatPrint {
@@ -84,7 +85,7 @@ impl FormatPrint for FunctionDeclaration {
             self.parameters.format_print(", ", 0),
             self.return_type
                 .as_ref()
-                .map_or_else(String::new, |t| t.format_print(0)),
+                .map_or_else(String::new, |t| t.kind.format_print(0)),
             self.body.format_print(indent)
         )
     }
@@ -96,7 +97,7 @@ impl FormatPrint for Parameter {
             "{}{}: {}",
             tab(indent),
             self.name,
-            self.type_annotation.format_print(0)
+            self.type_annotation.kind.format_print(0)
         )
     }
 }
@@ -132,7 +133,7 @@ impl FormatPrint for Field {
             "{}{}: {}",
             tab(indent),
             self.name,
-            self.type_annotation.format_print(0)
+            self.type_annotation.kind.format_print(0)
         )
     }
 }
@@ -148,20 +149,20 @@ impl FormatPrint for FieldAssignment {
     }
 }
 
-impl FormatPrint for TypeAnnotation {
+impl FormatPrint for TypeAnnotationKind {
     fn format_print(&self, indent: usize) -> String {
         let ty = match self {
-            TypeAnnotation::Simple(s) => s.clone(),
-            TypeAnnotation::List(type_annotation) => {
-                format!("[{}]", type_annotation.format_print(0))
+            TypeAnnotationKind::Simple(s) => s.clone(),
+            TypeAnnotationKind::List(type_annotation) => {
+                format!("[{}]", type_annotation.kind.format_print(0))
             }
-            TypeAnnotation::Option(type_annotation) => {
-                format!("{}?", type_annotation.format_print(0))
+            TypeAnnotationKind::Option(type_annotation) => {
+                format!("{}?", type_annotation.kind.format_print(0))
             }
-            TypeAnnotation::Result { ok, err } => {
-                format!("{}!{}", ok.format_print(0), err.format_print(0))
+            TypeAnnotationKind::Result { ok, err } => {
+                format!("{}!{}", ok.kind.format_print(0), err.kind.format_print(0))
             }
-            TypeAnnotation::Tuple(_vec) => todo!(),
+            TypeAnnotationKind::Tuple(_vec) => todo!(),
         };
 
         format!("{}{ty}", tab(indent))
@@ -259,7 +260,7 @@ impl FormatPrint for Statement {
                     variable_declaration
                         .type_annotation
                         .as_ref()
-                        .map_or_else(String::new, |ty| format!(": {}", ty.format_print(0))),
+                        .map_or_else(String::new, |ty| format!(": {}", ty.kind.format_print(0))),
                     variable_declaration
                         .value
                         .as_ref()
@@ -268,8 +269,8 @@ impl FormatPrint for Statement {
             }
             Statement::Assignment { target, value } => {
                 // TODO: should we even re-sort commutative operations, e.g. i = 1 + i to i += 1 ?
-                match value {
-                    Expression::BinaryExpression {
+                match &value.kind {
+                    ExpressionKind::BinaryExpression {
                         left,
                         operator,
                         right,
@@ -348,10 +349,10 @@ impl FormatPrint for WhileStatement {
 
 impl FormatPrint for Expression {
     fn format_print(&self, indent: usize) -> String {
-        let expr: Cow<str> = match self {
-            Expression::Literal(literal) => literal.format_print(0).into(),
-            Expression::Identifier(ident) => ident.into(),
-            Expression::BinaryExpression {
+        let expr: Cow<str> = match &self.kind {
+            ExpressionKind::Literal(literal) => literal.format_print(0).into(),
+            ExpressionKind::Identifier(ident) => ident.into(),
+            ExpressionKind::BinaryExpression {
                 left,
                 operator,
                 right,
@@ -362,13 +363,13 @@ impl FormatPrint for Expression {
                 right.format_print(0)
             )
             .into(),
-            Expression::UnaryExpression { operator, operand } => {
+            ExpressionKind::UnaryExpression { operator, operand } => {
                 format!("{}{}", operator.format_print(0), operand.format_print(0)).into()
             }
-            Expression::YeetExpression { expression } => {
+            ExpressionKind::YeetExpression { expression } => {
                 format!("{}!", expression.format_print(0)).into()
             }
-            Expression::FunctionCall {
+            ExpressionKind::FunctionCall {
                 function,
                 arguments,
             } => format!(
@@ -377,7 +378,7 @@ impl FormatPrint for Expression {
                 arguments.format_print(", ", 0)
             )
             .into(),
-            Expression::MethodCall {
+            ExpressionKind::MethodCall {
                 receiver,
                 method,
                 arguments,
@@ -393,7 +394,7 @@ impl FormatPrint for Expression {
                 )
                 .into()
             }
-            Expression::FieldAccess {
+            ExpressionKind::FieldAccess {
                 object,
                 field,
                 safe,
@@ -403,10 +404,10 @@ impl FormatPrint for Expression {
                 if *safe { "?." } else { "." },
             )
             .into(),
-            Expression::IndexAccess { collection, index } => {
+            ExpressionKind::IndexAccess { collection, index } => {
                 format!("{}[{}]", collection.format_print(0), index.format_print(0)).into()
             }
-            Expression::Record { name, members } => {
+            ExpressionKind::Record { name, members } => {
                 let name = name
                     .as_ref()
                     .map_or_else(|| String::new(), |n| format!("{n} "));
@@ -417,7 +418,7 @@ impl FormatPrint for Expression {
                 )
                 .into()
             }
-            Expression::ListLiteral(elements) => {
+            ExpressionKind::ListLiteral(elements) => {
                 format!("[{}]", elements.format_print(", ", 0)).into()
             }
         };
@@ -466,12 +467,12 @@ impl FormatPrint for UnaryOperator {
 
 impl FormatPrint for Literal {
     fn format_print(&self, indent: usize) -> String {
-        let lit: Cow<str> = match self {
-            Literal::Integer(i) => format!("{i}").into(),
-            Literal::Float(f) => format!("{f}").into(),
-            Literal::String(s) => s.into(),
-            Literal::Boolean(b) => format!("{b}").into(),
-            Literal::None => "none".into(),
+        let lit: Cow<str> = match &self.kind {
+            LiteralKind::Integer(i) => format!("{i}").into(),
+            LiteralKind::Float(f) => format!("{f}").into(),
+            LiteralKind::String(s) => s.into(),
+            LiteralKind::Boolean(b) => format!("{b}").into(),
+            LiteralKind::None => "none".into(),
         };
 
         format!("{}{}", tab(indent), lit)

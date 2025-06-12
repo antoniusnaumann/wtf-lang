@@ -23,7 +23,7 @@ fn test_parse_if_statement() -> Result<()> {
             name: "check_value".to_string(),
             parameters: vec![Parameter {
                 name: "x".to_string(),
-                type_annotation: TypeAnnotation::Simple("s32".to_string()),
+                type_annotation: TypeAnnotationKind::Simple("s32".to_string()),
             }],
             return_type: None,
             body: Block {
@@ -81,7 +81,7 @@ fn test_parse_return_statement() -> Result<()> {
         declarations: vec![Declaration::Function(FunctionDeclaration {
             name: "get_value".to_string(),
             parameters: vec![],
-            return_type: Some(TypeAnnotation::Simple("s32".to_string())),
+            return_type: Some(TypeAnnotationKind::Simple("s32".to_string())),
             body: Block {
                 statements: vec![Statement::ReturnStatement(Some(Expression::Literal(
                     Literal::Integer(42),
@@ -113,9 +113,9 @@ fn test_parse_throw_statement() -> Result<()> {
         declarations: vec![Declaration::Function(FunctionDeclaration {
             name: "get_value".to_string(),
             parameters: vec![],
-            return_type: Some(TypeAnnotation::Result {
-                ok: TypeAnnotation::Simple("s32".to_owned()).into(),
-                err: TypeAnnotation::Simple("error".to_owned()).into(),
+            return_type: Some(TypeAnnotationKind::Result {
+                ok: TypeAnnotationKind::Simple("s32".to_owned()).into(),
+                err: TypeAnnotationKind::Simple("error".to_owned()).into(),
             }),
             body: Block {
                 statements: vec![Statement::ThrowStatement(Expression::Literal(

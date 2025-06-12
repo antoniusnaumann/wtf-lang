@@ -63,7 +63,7 @@ fn test_parse_null_coalescing_operator() -> Result<()> {
                 statements: vec![Statement::VariableDeclaration(VariableDeclaration {
                     mutable: false,
                     name: "value".to_string(),
-                    type_annotation: Some(TypeAnnotation::Simple("s32".to_string())),
+                    type_annotation: Some(TypeAnnotationKind::Simple("s32".to_string())),
                     value: Some(Expression::BinaryExpression {
                         left: Box::new(Expression::Identifier("maybe_number".to_string())),
                         operator: BinaryOperator::NullCoalesce,
@@ -139,8 +139,8 @@ fn test_parse_optional_type_with_init() -> Result<()> {
                 statements: vec![Statement::VariableDeclaration(VariableDeclaration {
                     mutable: true,
                     name: "value".to_string(),
-                    type_annotation: Some(TypeAnnotation::Option(Box::new(
-                        TypeAnnotation::Simple("s32".to_string()),
+                    type_annotation: Some(TypeAnnotationKind::Option(Box::new(
+                        TypeAnnotationKind::Simple("s32".to_string()),
                     ))),
                     value: Some(Expression::Literal(Literal::None)),
                 })],
@@ -177,8 +177,8 @@ fn test_parse_optional_type() -> Result<()> {
                 statements: vec![Statement::VariableDeclaration(VariableDeclaration {
                     mutable: true,
                     name: "value".to_string(),
-                    type_annotation: Some(TypeAnnotation::Option(Box::new(
-                        TypeAnnotation::Simple("s32".to_string()),
+                    type_annotation: Some(TypeAnnotationKind::Option(Box::new(
+                        TypeAnnotationKind::Simple("s32".to_string()),
                     ))),
                     value: None, // Default initialization to 'none'
                 })],
@@ -214,8 +214,8 @@ fn test_parse_optional_type_with_init_shorthand() -> Result<()> {
                 statements: vec![Statement::VariableDeclaration(VariableDeclaration {
                     mutable: true,
                     name: "value".to_string(),
-                    type_annotation: Some(TypeAnnotation::Option(Box::new(
-                        TypeAnnotation::Simple("s32".to_string()),
+                    type_annotation: Some(TypeAnnotationKind::Option(Box::new(
+                        TypeAnnotationKind::Simple("s32".to_string()),
                     ))),
                     value: Some(Expression::Literal(Literal::None)),
                 })],
@@ -251,8 +251,8 @@ fn test_parse_optional_type_shorthand() -> Result<()> {
                 statements: vec![Statement::VariableDeclaration(VariableDeclaration {
                     mutable: true,
                     name: "value".to_string(),
-                    type_annotation: Some(TypeAnnotation::Option(Box::new(
-                        TypeAnnotation::Simple("s32".to_string()),
+                    type_annotation: Some(TypeAnnotationKind::Option(Box::new(
+                        TypeAnnotationKind::Simple("s32".to_string()),
                     ))),
                     value: None,
                 })],

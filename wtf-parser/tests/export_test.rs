@@ -27,9 +27,9 @@ mod tests {
                     name: "greet".to_owned(),
                     parameters: vec![Parameter {
                         name: "name".to_owned(),
-                        type_annotation: TypeAnnotation::Simple("string".to_owned()),
+                        type_annotation: TypeAnnotationKind::Simple("string".to_owned()),
                     }],
-                    return_type: Some(TypeAnnotation::Simple("string".to_owned())),
+                    return_type: Some(TypeAnnotationKind::Simple("string".to_owned())),
                     body: Block {
                         statements: vec![Statement::ReturnStatement(Some(
                             Expression::BinaryExpression {
@@ -69,11 +69,11 @@ mod tests {
                     fields: vec![
                         Field {
                             name: "name".to_owned(),
-                            type_annotation: TypeAnnotation::Simple("string".to_owned()),
+                            type_annotation: TypeAnnotationKind::Simple("string".to_owned()),
                         },
                         Field {
                             name: "age".to_owned(),
-                            type_annotation: TypeAnnotation::Simple("u32".to_owned()),
+                            type_annotation: TypeAnnotationKind::Simple("u32".to_owned()),
                         },
                     ],
                 })),
@@ -111,12 +111,12 @@ mod tests {
                     name: "file".to_owned(),
                     fields: vec![Field {
                         name: "path".to_owned(),
-                        type_annotation: TypeAnnotation::Simple("string".to_owned()),
+                        type_annotation: TypeAnnotationKind::Simple("string".to_owned()),
                     }],
                     constructor: Some(ConstructorDeclaration {
                         parameters: vec![Parameter {
                             name: "path".to_owned(),
-                            type_annotation: TypeAnnotation::Simple("string".to_owned()),
+                            type_annotation: TypeAnnotationKind::Simple("string".to_owned()),
                         }],
                         body: Block {
                             statements: vec![Statement::Assignment {
@@ -132,7 +132,7 @@ mod tests {
                     methods: vec![FunctionDeclaration {
                         name: "read".to_owned(),
                         parameters: vec![],
-                        return_type: Some(TypeAnnotation::Simple("string".to_owned())),
+                        return_type: Some(TypeAnnotationKind::Simple("string".to_owned())),
                         body: Block {
                             statements: vec![
                                 // Placeholder for actual logic
@@ -199,7 +199,7 @@ mod tests {
                             name: "circle".to_owned(),
                             associated_types: vec![Field {
                                 name: "radius".to_owned(),
-                                type_annotation: TypeAnnotation::Simple("f64".to_owned()),
+                                type_annotation: TypeAnnotationKind::Simple("f64".to_owned()),
                             }],
                         },
                         VariantCase {
@@ -207,11 +207,11 @@ mod tests {
                             associated_types: vec![
                                 Field {
                                     name: "width".to_owned(),
-                                    type_annotation: TypeAnnotation::Simple("f64".to_owned()),
+                                    type_annotation: TypeAnnotationKind::Simple("f64".to_owned()),
                                 },
                                 Field {
                                     name: "height".to_owned(),
-                                    type_annotation: TypeAnnotation::Simple("f64".to_owned()),
+                                    type_annotation: TypeAnnotationKind::Simple("f64".to_owned()),
                                 },
                             ],
                         },

@@ -280,6 +280,15 @@ pub struct Span {
     pub end: usize,
 }
 
+impl Span {
+    pub fn to(self, other: Span) -> Span {
+        Span {
+            start: self.start,
+            end: other.end,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SpannedToken {
     pub token: Token,

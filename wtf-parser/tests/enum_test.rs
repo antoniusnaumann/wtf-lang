@@ -92,14 +92,14 @@ fn test_parse_variant_declaration_with_associated_types() -> Result<()> {
                     name: "ok".to_string(),
                     associated_types: vec![Field {
                         name: "value".to_owned(),
-                        type_annotation: TypeAnnotation::Simple("s32".to_string()),
+                        type_annotation: TypeAnnotationKind::Simple("s32".to_string()),
                     }],
                 },
                 VariantCase {
                     name: "err".to_string(),
                     associated_types: vec![Field {
                         name: "error".to_owned(),
-                        type_annotation: TypeAnnotation::Simple("string".to_string()),
+                        type_annotation: TypeAnnotationKind::Simple("string".to_string()),
                     }],
                 },
             ],
@@ -141,11 +141,11 @@ fn test_parse_variant_declaration_with_mixed_cases() -> Result<()> {
                     associated_types: vec![
                         Field {
                             name: "code".to_owned(),
-                            type_annotation: TypeAnnotation::Simple("s32".to_string()),
+                            type_annotation: TypeAnnotationKind::Simple("s32".to_string()),
                         },
                         Field {
                             name: "message".to_owned(),
-                            type_annotation: TypeAnnotation::Simple("string".to_string()),
+                            type_annotation: TypeAnnotationKind::Simple("string".to_string()),
                         },
                     ],
                 },

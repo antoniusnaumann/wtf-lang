@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::ops::{Deref, Index};
+use std::ops::Index;
 
 use wtf_ast::{
     self as ast, BinaryOperator, FunctionDeclaration, TestDeclaration, TypeAnnotation,
@@ -165,7 +165,12 @@ impl HirCompiler {
                             .return_type
                             .as_ref()
                             .map(|it| it.clone())
-                            .unwrap_or_else(|| TypeAnnotation::Simple("none".to_string()));
+                            .unwrap_or_else(|| {
+                                TypeAnnotation::simple(
+                                    "none".to_string(),
+                                    Span { start: 0, end: 0 },
+                                )
+                            });
                         self.compile_type_annotation(&annotation, ast_types)
                     };
                     methods.insert(
@@ -213,8 +218,8 @@ impl HirCompiler {
         annotation: &ast::TypeAnnotation,
         ast_types: &HashMap<String, (ast::Declaration, bool)>,
     ) -> Type {
-        match annotation {
-            ast::TypeAnnotation::Simple(name) => match name.as_str() {
+        match &annotation.kind {
+            ast::TypeAnnotationKind::Simple(name) => match name.as_str() {
                 "bool" => Type::Bool,
                 "s8" => Type::Int {
                     signed: true,
@@ -269,17 +274,17 @@ impl HirCompiler {
                     }
                 }
             },
-            ast::TypeAnnotation::List(item) => {
+            ast::TypeAnnotationKind::List(item) => {
                 Type::List(Box::new(self.compile_type_annotation(item, ast_types)))
             }
-            ast::TypeAnnotation::Option(payload) => {
+            ast::TypeAnnotationKind::Option(payload) => {
                 Type::Option(Box::new(self.compile_type_annotation(payload, ast_types)))
             }
-            ast::TypeAnnotation::Result { ok, err } => Type::Result {
+            ast::TypeAnnotationKind::Result { ok, err } => Type::Result {
                 ok: Box::new(self.compile_type_annotation(ok, ast_types)),
                 err: Box::new(self.compile_type_annotation(err, ast_types)),
             },
-            ast::TypeAnnotation::Tuple(fields) => Type::Tuple(
+            ast::TypeAnnotationKind::Tuple(fields) => Type::Tuple(
                 fields
                     .into_iter()
                     .map(|field| self.compile_type_annotation(field, ast_types))
@@ -397,6 +402,7 @@ impl HirCompiler {
                 parameters: vec![],
                 return_type: None,
                 body: test.body,
+                span: test.span,
             },
             true,
             ast_types,
@@ -475,8 +481,8 @@ impl HirCompiler {
             }
             ast::Statement::Assignment { target, value } => {
                 let value = self.compile_expression(value, vars, visible, signatures);
-                let name = match target {
-                    ast::Expression::Identifier(name) => name,
+                let name = match &target.kind {
+                    ast::ExpressionKind::Identifier(name) => name,
                     _ => {
                         let dummy_span = Span { start: 0, end: 0 };
                         self.errors.push(Error::unsupported_operation(
@@ -691,15 +697,15 @@ impl HirCompiler {
         visible: &mut Visible,
         signatures: &HashMap<String, FunctionSignature>,
     ) -> Expression {
-        match expression {
-            ast::Expression::Literal(literal) => match literal {
-                ast::Literal::Integer(int) => Expression::int(*int),
-                ast::Literal::Float(float) => Expression::float(*float),
-                ast::Literal::String(string) => Expression::string(string.clone()),
-                ast::Literal::Boolean(bool) => Expression::bool(*bool),
-                ast::Literal::None => Expression::void(),
+        match &expression.kind {
+            ast::ExpressionKind::Literal(literal) => match &literal.kind {
+                ast::LiteralKind::Integer(int) => Expression::int(*int),
+                ast::LiteralKind::Float(float) => Expression::float(*float),
+                ast::LiteralKind::String(string) => Expression::string(string.clone()),
+                ast::LiteralKind::Boolean(bool) => Expression::bool(*bool),
+                ast::LiteralKind::None => Expression::void(),
             },
-            ast::Expression::Identifier(name) => {
+            ast::ExpressionKind::Identifier(name) => {
                 let binding = visible.lookup(&name);
 
                 match binding {
@@ -723,7 +729,7 @@ impl HirCompiler {
                     },
                 }
             }
-            ast::Expression::BinaryExpression {
+            ast::ExpressionKind::BinaryExpression {
                 left,
                 operator,
                 right,
@@ -797,7 +803,7 @@ impl HirCompiler {
 
                 self.compile_call(vars, visible, signatures, &[left, right], name, Vec::new())
             }
-            ast::Expression::UnaryExpression { operator, operand } => {
+            ast::ExpressionKind::UnaryExpression { operator, operand } => {
                 let operand = self.compile_expression(operand, vars, visible, signatures);
                 let operand_ty = operand.ty.clone();
                 match operator {
@@ -850,19 +856,19 @@ impl HirCompiler {
                     UnaryOperator::Not => todo!("unary not: xor(x, -1)"),
                 }
             }
-            ast::Expression::YeetExpression { .. } => todo!("yeet"),
-            ast::Expression::FunctionCall {
+            ast::ExpressionKind::YeetExpression { .. } => todo!("yeet"),
+            ast::ExpressionKind::FunctionCall {
                 function,
                 arguments,
             } => {
-                let function = match function.deref() {
-                    ast::Expression::Identifier(name) => name.clone(),
+                let function = match &function.kind {
+                    ast::ExpressionKind::Identifier(name) => name.clone(),
                     _ => todo!("call of non-name"),
                 };
 
                 self.compile_call(vars, visible, signatures, arguments, &function, Vec::new())
             }
-            ast::Expression::MethodCall {
+            ast::ExpressionKind::MethodCall {
                 receiver,
                 method,
                 arguments,
@@ -879,7 +885,7 @@ impl HirCompiler {
 
                 self.compile_call(vars, visible, signatures, arguments, method, vec![receiver])
             }
-            ast::Expression::FieldAccess {
+            ast::ExpressionKind::FieldAccess {
                 object,
                 field,
                 // TODO: Desugar safe calls to if condition
@@ -964,7 +970,7 @@ impl HirCompiler {
                     }
                 }
             }
-            ast::Expression::IndexAccess { collection, index } => {
+            ast::ExpressionKind::IndexAccess { collection, index } => {
                 let collection = self.compile_expression(&collection, vars, visible, signatures);
                 let index = self.compile_expression(index, vars, visible, signatures);
                 let collection_ty = collection.ty.clone();
@@ -1007,7 +1013,7 @@ impl HirCompiler {
                     }
                 }
             }
-            ast::Expression::Record { name, members } => {
+            ast::ExpressionKind::Record { name, members } => {
                 let mut fields = HashMap::new();
                 for member in members {
                     let name = member.name.clone();
@@ -1026,7 +1032,7 @@ impl HirCompiler {
                 };
                 Expression::record(fields, ty)
             }
-            ast::Expression::ListLiteral(items) => {
+            ast::ExpressionKind::ListLiteral(items) => {
                 let mut compiled_items = vec![];
                 for item in items.iter().rev() {
                     let item = self.compile_expression(item, vars, visible, signatures);

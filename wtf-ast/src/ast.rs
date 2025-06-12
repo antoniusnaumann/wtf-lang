@@ -1,3 +1,9 @@
+use wtf_tokens::Span;
+
+pub trait Node {
+    fn span(&self) -> Span;
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Module {
     pub package: Option<PackageDeclaration>,
@@ -15,6 +21,21 @@ pub enum Declaration {
     Variant(VariantDeclaration),
     Export(ExportDeclaration),
     Test(TestDeclaration),
+}
+
+impl Node for Declaration {
+    fn span(&self) -> Span {
+        match self {
+            Declaration::Function(inner) => inner.span,
+            Declaration::Overload(inner) => inner.span,
+            Declaration::Record(inner) => inner.span,
+            Declaration::Resource(inner) => inner.span,
+            Declaration::Enum(inner) => inner.span,
+            Declaration::Variant(inner) => inner.span,
+            Declaration::Export(inner) => inner.span,
+            Declaration::Test(inner) => inner.span,
+        }
+    }
 }
 
 impl Declaration {
@@ -44,6 +65,7 @@ pub struct FunctionDeclaration {
     pub parameters: Vec<Parameter>,
     pub return_type: Option<TypeAnnotation>,
     pub body: Block,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -51,18 +73,21 @@ pub struct OverloadDeclaration {
     pub name: String,
     /// names of all functions this overload might resolve to
     pub overloads: Vec<String>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConstructorDeclaration {
     pub parameters: Vec<Parameter>,
     pub body: Block,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecordDeclaration {
     pub name: String,
     pub fields: Vec<Field>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -71,41 +96,48 @@ pub struct ResourceDeclaration {
     pub fields: Vec<Field>,
     pub constructor: Option<ConstructorDeclaration>,
     pub methods: Vec<FunctionDeclaration>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnumDeclaration {
     pub name: String,
     pub cases: Vec<String>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VariantDeclaration {
     pub name: String,
     pub cases: Vec<VariantCase>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VariantCase {
     pub name: String,
     pub associated_types: Vec<Field>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExportDeclaration {
     pub item: Box<Declaration>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TestDeclaration {
     pub name: Option<String>,
     pub body: Block,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PackageDeclaration {
     pub path: ModulePath,
     pub version: Option<Version>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -113,12 +145,14 @@ pub struct UseDeclaration {
     pub module_path: ModulePath,
     pub interface: String,
     pub types: Vec<String>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModulePath {
     pub owner: String,
     pub package: String,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -127,16 +161,64 @@ pub struct Version {
     pub minor: u64,
     pub patch: u64,
     pub extras: Option<String>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Parameter {
     pub name: String,
     pub type_annotation: TypeAnnotation,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TypeAnnotation {
+pub struct TypeAnnotation {
+    pub kind: TypeAnnotationKind,
+    pub span: Span,
+}
+
+impl TypeAnnotation {
+    pub fn simple(name: String, span: Span) -> TypeAnnotation {
+        Self {
+            kind: TypeAnnotationKind::Simple(name),
+            span,
+        }
+    }
+
+    pub fn list(inner: TypeAnnotation, span: Span) -> TypeAnnotation {
+        Self {
+            kind: TypeAnnotationKind::List(inner.into()),
+            span,
+        }
+    }
+
+    pub fn option(inner: TypeAnnotation, span: Span) -> TypeAnnotation {
+        Self {
+            kind: TypeAnnotationKind::Option(inner.into()),
+            span,
+        }
+    }
+
+    pub fn result(ok: TypeAnnotation, err: TypeAnnotation, span: Span) -> TypeAnnotation {
+        Self {
+            kind: TypeAnnotationKind::Result {
+                ok: ok.into(),
+                err: err.into(),
+            },
+            span,
+        }
+    }
+
+    pub fn tuple(items: Vec<TypeAnnotation>, span: Span) -> TypeAnnotation {
+        Self {
+            kind: TypeAnnotationKind::Tuple(items),
+            span,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TypeAnnotationKind {
     Simple(String),
     List(Box<TypeAnnotation>),
     Option(Box<TypeAnnotation>),
@@ -150,12 +232,14 @@ pub enum TypeAnnotation {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Block {
     pub statements: Vec<Statement>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Field {
     pub name: String,
     pub type_annotation: TypeAnnotation,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -184,6 +268,7 @@ pub struct VariableDeclaration {
     pub name: String,
     pub type_annotation: Option<TypeAnnotation>,
     pub value: Option<Expression>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -191,24 +276,28 @@ pub struct IfStatement {
     pub condition: Expression,
     pub then_branch: Block,
     pub else_branch: Option<Block>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchStatement {
     pub expression: Expression,
     pub arms: Vec<MatchArm>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchArm {
     pub pattern: Pattern,
     pub body: Block,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct WhileStatement {
     pub condition: Expression,
     pub body: Block,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -216,15 +305,23 @@ pub struct ForStatement {
     pub variable: String,
     pub iterable: Expression,
     pub body: Block,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AssertStatement {
     pub condition: Expression,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Pattern {
+pub struct Pattern {
+    pub kind: PatternKind,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum PatternKind {
     Identifier(String),
     Literal(Literal),
     VariantPattern {
@@ -233,8 +330,30 @@ pub enum Pattern {
     },
 }
 
+impl PatternKind {
+    pub fn spanned(self, span: Span) -> Pattern {
+        Pattern { kind: self, span }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
-pub enum Expression {
+pub struct Expression {
+    pub kind: ExpressionKind,
+    pub span: Span,
+}
+
+impl Node for [Expression] {
+    fn span(&self) -> Span {
+        let mut span = Span { start: 0, end: 0 };
+        for expr in self {
+            span = expr.span;
+        }
+        span
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExpressionKind {
     Literal(Literal),
     Identifier(String),
     BinaryExpression {
@@ -277,19 +396,38 @@ pub enum Expression {
     ListLiteral(Vec<Expression>),
 }
 
+impl ExpressionKind {
+    pub fn spanned(self, span: Span) -> Expression {
+        Expression { kind: self, span }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct FieldAssignment {
     pub name: String,
     pub element: Expression,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Literal {
+pub struct Literal {
+    pub kind: LiteralKind,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum LiteralKind {
     Integer(i64),
     Float(f64),
     String(String),
     Boolean(bool),
     None,
+}
+
+impl LiteralKind {
+    pub fn spanned(self, span: Span) -> Literal {
+        Literal { kind: self, span }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

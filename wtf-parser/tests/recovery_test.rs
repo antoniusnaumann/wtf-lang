@@ -20,14 +20,14 @@ fn test_recover_function_declaration() {
             parameters: vec![
                 Parameter {
                     name: "a".to_string(),
-                    type_annotation: TypeAnnotation::Simple("s32".to_string()),
+                    type_annotation: TypeAnnotationKind::Simple("s32".to_string()),
                 },
                 Parameter {
                     name: "b".to_string(),
-                    type_annotation: TypeAnnotation::Simple("s32".to_string()),
+                    type_annotation: TypeAnnotationKind::Simple("s32".to_string()),
                 },
             ],
-            return_type: Some(TypeAnnotation::Simple("s32".to_string())),
+            return_type: Some(TypeAnnotationKind::Simple("s32".to_string())),
             body: Block {
                 statements: vec![Statement::ReturnStatement(Some(
                     Expression::BinaryExpression {

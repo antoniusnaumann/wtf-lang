@@ -20,14 +20,14 @@ fn test_parse_function_declaration() {
             parameters: vec![
                 Parameter {
                     name: "a".to_string(),
-                    type_annotation: TypeAnnotation::Simple("s32".to_string()),
+                    type_annotation: TypeAnnotationKind::Simple("s32".to_string()),
                 },
                 Parameter {
                     name: "b".to_string(),
-                    type_annotation: TypeAnnotation::Simple("s32".to_string()),
+                    type_annotation: TypeAnnotationKind::Simple("s32".to_string()),
                 },
             ],
-            return_type: Some(TypeAnnotation::Simple("s32".to_string())),
+            return_type: Some(TypeAnnotationKind::Simple("s32".to_string())),
             body: Block {
                 statements: vec![Statement::ReturnStatement(Some(
                     Expression::BinaryExpression {
@@ -74,7 +74,7 @@ fn test_parse_variable_declaration() -> Result<()> {
                     Statement::VariableDeclaration(VariableDeclaration {
                         mutable: true,
                         name: "y".to_string(),
-                        type_annotation: Some(TypeAnnotation::Simple("s32".to_string())),
+                        type_annotation: Some(TypeAnnotationKind::Simple("s32".to_string())),
                         value: Some(Expression::BinaryExpression {
                             left: Box::new(Expression::Identifier("x".to_string())),
                             operator: ArithmeticOperator::Add.into(),
@@ -118,12 +118,12 @@ fn test_parse_resource_declaration() -> Result<()> {
             name: "counter".to_string(),
             fields: vec![Field {
                 name: "value".to_string(),
-                type_annotation: TypeAnnotation::Simple("s32".to_string()),
+                type_annotation: TypeAnnotationKind::Simple("s32".to_string()),
             }],
             constructor: Some(ConstructorDeclaration {
                 parameters: vec![Parameter {
                     name: "initial".to_string(),
-                    type_annotation: TypeAnnotation::Simple("s32".to_string()),
+                    type_annotation: TypeAnnotationKind::Simple("s32".to_string()),
                 }],
                 body: Block {
                     statements: vec![Statement::Assignment {

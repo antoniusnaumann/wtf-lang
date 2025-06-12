@@ -2,6 +2,7 @@ use crate::lexer::{Lexer, SpannedToken, Token};
 
 use wtf_ast::*;
 use wtf_error::{Error, ErrorKind};
+use wtf_tokens::Span;
 
 pub type Result<Ok> = std::result::Result<Ok, Error>;
 
@@ -43,10 +44,11 @@ impl Parser {
         self.current = self.lexer.next_token();
     }
 
-    fn expect_token(&mut self, expected: Token) -> Result<()> {
+    fn expect_token(&mut self, expected: Token) -> Result<Span> {
+        let span = self.current.span;
         if self.has(expected.clone()) {
             self.advance_tokens();
-            Ok(())
+            Ok(span)
         } else {
             Err(self.unexpected(vec![expected]))
         }
@@ -190,7 +192,7 @@ impl Parser {
     }
 
     fn parse_function_declaration(&mut self) -> Result<FunctionDeclaration> {
-        self.expect_token(Token::Func)?;
+        let start = self.expect_token(Token::Func)?;
 
         let name = self.expect_identifier()?;
 
@@ -209,16 +211,19 @@ impl Parser {
 
         let body = self.parse_block()?;
 
+        let end = self.current.span;
+
         Ok(FunctionDeclaration {
             name,
             parameters,
             return_type,
             body,
+            span: start.to(end),
         })
     }
 
     fn parse_overload_declaration(&mut self) -> Result<OverloadDeclaration> {
-        self.expect_token(Token::Overload)?;
+        let start = self.expect_token(Token::Overload)?;
         self.skip_linebreaks();
 
         let name = self.expect_identifier()?;
@@ -245,9 +250,13 @@ impl Parser {
             }
         }
 
-        self.expect_token(Token::RightBrace)?;
+        let end = self.expect_token(Token::RightBrace)?;
 
-        Ok(OverloadDeclaration { name, overloads })
+        Ok(OverloadDeclaration {
+            name,
+            overloads,
+            span: start.to(end),
+        })
     }
 
     fn parse_parameters(&mut self) -> Result<Vec<Parameter>> {
@@ -258,12 +267,15 @@ impl Parser {
         }
 
         loop {
+            let start = self.current.span;
             let name = self.expect_identifier()?;
             self.expect_token(Token::Colon)?;
             let type_annotation = self.parse_type_annotation()?;
+            let end = type_annotation.span;
             parameters.push(Parameter {
                 name,
                 type_annotation,
+                span: start.to(end),
             });
 
             if self.has(Token::Comma) {
@@ -293,18 +305,20 @@ impl Parser {
     ) -> Result<TypeAnnotation> {
         // Handle syntactic sugar for list types ('[T]') first
         if self.current.token == Token::LeftBracket {
+            let start = self.current.span;
             self.advance_tokens();
             self.skip_linebreaks();
 
             let inner = self.parse_type_annotation()?;
 
             self.skip_linebreaks();
-            self.expect_token(Token::RightBracket)?;
+            let end = self.expect_token(Token::RightBracket)?;
 
-            return Ok(TypeAnnotation::List(inner.into()));
+            return Ok(TypeAnnotation::list(inner.into(), start.to(end)));
         }
 
         if let Token::Identifier(name) = self.current.token.clone() {
+            let begin = self.current.span;
             let type_name = name.clone();
             self.advance_tokens();
 
@@ -312,35 +326,33 @@ impl Parser {
                 "list" => {
                     self.expect_token(Token::LessThan)?;
                     let inner_type = self.parse_type_annotation()?;
-                    self.expect_token(Token::GreaterThan)?;
-                    TypeAnnotation::List(Box::new(inner_type))
+                    let end = self.expect_token(Token::GreaterThan)?;
+                    TypeAnnotation::list(inner_type, begin.to(end))
                 }
                 "option" => {
                     self.expect_token(Token::LessThan)?;
                     let inner_type = self.parse_type_annotation()?;
-                    self.expect_token(Token::GreaterThan)?;
-                    TypeAnnotation::Option(Box::new(inner_type))
+                    let end = self.expect_token(Token::GreaterThan)?;
+                    TypeAnnotation::option(inner_type, begin.to(end))
                 }
                 "result" => {
                     self.expect_token(Token::LessThan)?;
                     let ok = self.parse_type_annotation()?;
                     self.expect_token(Token::Comma)?;
                     let err = self.parse_type_annotation()?;
-                    self.expect_token(Token::GreaterThan)?;
-                    TypeAnnotation::Result {
-                        ok: Box::new(ok),
-                        err: Box::new(err),
-                    }
+                    let end = self.expect_token(Token::GreaterThan)?;
+                    TypeAnnotation::result(ok, err, begin.to(end))
                 }
-                _ => TypeAnnotation::Simple(type_name),
+                _ => TypeAnnotation::simple(type_name, begin),
             };
 
             if allow_postfix {
                 loop {
                     match self.current.token {
                         Token::QuestionMark => {
+                            let end = self.current.span;
                             self.advance_tokens();
-                            ty = TypeAnnotation::Option(ty.into());
+                            ty = TypeAnnotation::option(ty.into(), begin.to(end));
                         }
                         Token::Bang => {
                             self.advance_tokens();
@@ -349,13 +361,17 @@ impl Parser {
                                 Token::Identifier(_) | Token::LeftBracket => {
                                     self.parse_type_annotation_with_postfix(false)?
                                 }
-                                _ => TypeAnnotation::Simple("error".to_owned()),
+                                _ => TypeAnnotation::simple(
+                                    "error".to_owned(),
+                                    Span {
+                                        start: self.current.span.end,
+                                        end: self.current.span.end,
+                                    },
+                                ),
                             };
 
-                            ty = TypeAnnotation::Result {
-                                ok: ty.into(),
-                                err: err.into(),
-                            }
+                            let end = err.span;
+                            ty = TypeAnnotation::result(ty.into(), err.into(), begin.to(end))
                         }
                         // TODO: Allow grouping with parens? would clash with tuple type annotations though
                         _ => break,
@@ -371,7 +387,7 @@ impl Parser {
     }
 
     fn parse_block(&mut self) -> Result<Block> {
-        self.expect_token(Token::LeftBrace)?;
+        let begin = self.expect_token(Token::LeftBrace)?;
         self.skip_newline();
 
         let mut statements = Vec::new();
@@ -389,6 +405,7 @@ impl Parser {
                 Err(err) => {
                     self.errors.push(err);
                     self.recover(BraceType::Brace);
+
                     break;
                 }
             };
@@ -396,9 +413,12 @@ impl Parser {
             self.skip_newline();
         }
 
-        self.expect_token(Token::RightBrace)?;
+        let end = self.expect_token(Token::RightBrace)?;
 
-        Ok(Block { statements })
+        Ok(Block {
+            statements,
+            span: begin.to(end),
+        })
     }
 
     fn parse_statement(&mut self) -> Result<Statement> {
@@ -448,15 +468,18 @@ impl Parser {
                         self.advance_tokens();
                         self.expect_token(Token::Equal)?;
 
-                        let right = self.parse_expression()?.into();
+                        let right = self.parse_expression()?;
 
                         let target = expr.clone();
                         let operator = t.try_as_binary_op().expect("TODO: Error if there is another token than a binary operation as operator assignment");
-                        let value = Expression::BinaryExpression {
+                        let begin = expr.span;
+                        let end = right.span;
+                        let value = ExpressionKind::BinaryExpression {
                             left: expr.into(),
                             operator,
-                            right,
-                        };
+                            right: right.into(),
+                        }
+                        .spanned(begin.to(end));
 
                         Statement::Assignment { target, value }
                     }
@@ -475,13 +498,17 @@ impl Parser {
             Token::Let => false,
             _ => return Err(self.unexpected(vec![Token::Var, Token::Let])),
         };
+        let begin = self.current.span;
         self.advance_tokens();
 
+        let mut end = self.current.span;
         let name = self.expect_identifier()?;
 
         let type_annotation = if self.has(Token::Colon) {
             self.advance_tokens();
-            Some(self.parse_type_annotation()?)
+            let anno = self.parse_type_annotation()?;
+            end = anno.span;
+            Some(anno)
         } else {
             None
         };
@@ -490,7 +517,9 @@ impl Parser {
         let value = if self.current.token == Token::Equal {
             self.advance_tokens();
             self.skip_linebreaks();
-            Some(self.parse_expression()?)
+            let expr = self.parse_expression()?;
+            end = expr.span;
+            Some(expr)
         } else {
             None
         };
@@ -500,21 +529,25 @@ impl Parser {
             name,
             type_annotation,
             value,
+            span: begin.to(end),
         })
     }
 
     fn parse_if_statement(&mut self) -> Result<IfStatement> {
-        self.expect_token(Token::If)?;
+        let begin = self.expect_token(Token::If)?;
 
         self.allow_left_brace = false;
         let condition = self.parse_expression()?;
         self.allow_left_brace = true;
 
         let then_branch = self.parse_block()?;
+        let mut end = then_branch.span;
 
         let else_branch = if self.has(Token::Else) {
             self.advance_tokens();
-            Some(self.parse_block()?)
+            let else_ = self.parse_block()?;
+            end = else_.span;
+            Some(else_)
         } else {
             None
         };
@@ -523,21 +556,27 @@ impl Parser {
             condition,
             then_branch,
             else_branch,
+            span: begin.to(end),
         })
     }
 
     fn parse_while_statement(&mut self) -> Result<WhileStatement> {
-        self.expect_token(Token::While)?;
+        let begin = self.expect_token(Token::While)?;
 
         let condition = self.parse_expression()?;
 
         let body = self.parse_block()?;
+        let end = body.span;
 
-        Ok(WhileStatement { condition, body })
+        Ok(WhileStatement {
+            condition,
+            body,
+            span: begin.to(end),
+        })
     }
 
     fn parse_for_statement(&mut self) -> Result<ForStatement> {
-        self.expect_token(Token::For)?;
+        let begin = self.expect_token(Token::For)?;
 
         let variable = self.expect_identifier()?;
 
@@ -548,16 +587,18 @@ impl Parser {
         self.allow_left_brace = true;
 
         let body = self.parse_block()?;
+        let end = body.span;
 
         Ok(ForStatement {
             variable,
             iterable,
             body,
+            span: begin.to(end),
         })
     }
 
     fn parse_match_statement(&mut self) -> Result<MatchStatement> {
-        self.expect_token(Token::Match)?;
+        let begin = self.expect_token(Token::Match)?;
 
         let expression = self.parse_expression()?;
 
@@ -568,50 +609,67 @@ impl Parser {
         // TODO: error recovery
         while !self.has(Token::RightBrace) && !self.has(Token::Eof) {
             let pattern = self.parse_pattern()?;
+            let begin = pattern.span;
             self.expect_token(Token::Arrow)?;
             let body = if self.has(Token::LeftBrace) {
                 self.parse_block()?
             } else {
                 let expr = self.parse_expression()?;
+                let span = expr.span;
                 Block {
                     statements: vec![Statement::ExpressionStatement(expr)],
+                    span,
                 }
             };
-            arms.push(MatchArm { pattern, body });
+            let end = body.span;
+            arms.push(MatchArm {
+                pattern,
+                body,
+                span: begin.to(end),
+            });
             // Optional: Handle comma or semicolon between arms
         }
 
-        self.expect_token(Token::RightBrace)?;
+        let end = self.expect_token(Token::RightBrace)?;
 
-        Ok(MatchStatement { expression, arms })
+        Ok(MatchStatement {
+            expression,
+            arms,
+            span: begin.to(end),
+        })
     }
 
     fn parse_assert_statement(&mut self) -> Result<AssertStatement> {
-        self.expect_token(Token::Assert)?;
+        let begin = self.expect_token(Token::Assert)?;
 
         let expression = self.parse_expression()?;
+        let end = expression.span;
 
         Ok(AssertStatement {
             condition: expression,
+            span: begin.to(end),
         })
     }
 
     fn parse_pattern(&mut self) -> Result<Pattern> {
+        let begin = self.current.span;
         if let Some(name) = self.current_token_as_identifier() {
             self.advance_tokens();
             if self.has(Token::LeftParen) {
                 self.advance_tokens();
                 let sub_pattern = self.parse_pattern()?;
-                self.expect_token(Token::RightParen)?;
-                Ok(Pattern::VariantPattern {
+                let end = self.expect_token(Token::RightParen)?;
+                Ok(PatternKind::VariantPattern {
                     variant_name: name.into(),
                     sub_pattern: Some(Box::new(sub_pattern)),
-                })
+                }
+                .spanned(begin.to(end)))
             } else {
-                Ok(Pattern::Identifier(name.into()))
+                Ok(PatternKind::Identifier(name.into()).spanned(begin))
             }
         } else if let Ok(literal) = self.parse_literal() {
-            Ok(Pattern::Literal(literal))
+            let span = literal.span;
+            Ok(PatternKind::Literal(literal).spanned(span))
         } else {
             // TODO: Add similar parser error where AST nodes can be expected
             Err(self.unexpected(vec![
@@ -667,33 +725,41 @@ impl Parser {
             self.advance_tokens();
 
             let right = self.parse_binary_expression(op_precedence + 1)?;
-            left = Expression::BinaryExpression {
+            let begin = left.span;
+            let end = right.span;
+            left = ExpressionKind::BinaryExpression {
                 left: Box::new(left),
                 operator,
                 right: Box::new(right),
-            };
+            }
+            .spanned(begin.to(end));
         }
 
         Ok(left)
     }
 
     fn parse_unary_expression(&mut self) -> Result<Expression> {
+        let begin = self.current.span;
         if let Some(operator) = self.current_token_as_unary_operator() {
             self.advance_tokens();
             let operand = self.parse_unary_expression()?;
-            Ok(Expression::UnaryExpression {
+            let end = operand.span;
+            Ok(ExpressionKind::UnaryExpression {
                 operator,
                 operand: Box::new(operand),
-            })
+            }
+            .spanned(begin.to(end)))
         } else {
             let mut expr = self.parse_primary_expression()?;
 
             // Handle postfix operators: '!' (yeet operator)
             if self.has(Token::Bang) {
+                let end = self.current.span;
                 self.advance_tokens();
-                expr = Expression::YeetExpression {
+                expr = ExpressionKind::YeetExpression {
                     expression: Box::new(expr),
-                };
+                }
+                .spanned(begin.to(end));
             }
 
             Ok(expr)
@@ -701,6 +767,7 @@ impl Parser {
     }
 
     fn parse_primary_expression(&mut self) -> Result<Expression> {
+        let begin = self.current.span;
         match &self.current.token {
             Token::Identifier(name) => {
                 let name = name.clone();
@@ -709,7 +776,7 @@ impl Parser {
                 let expr = if self.current.token == Token::LeftBrace && self.allow_left_brace {
                     self.parse_record_lit(Some(name))?
                 } else {
-                    Expression::Identifier(name)
+                    ExpressionKind::Identifier(name).spanned(begin)
                 };
 
                 self.parse_postfix_expression(expr)
@@ -739,22 +806,22 @@ impl Parser {
                     }
                 }
 
-                self.expect_token(Token::RightBracket)?;
+                let end = self.expect_token(Token::RightBracket)?;
 
-                Ok(Expression::ListLiteral(elements))
+                Ok(ExpressionKind::ListLiteral(elements).spanned(begin.to(end)))
             }
             Token::LeftBrace => {
                 let record = self.parse_record_lit(None)?;
 
                 self.parse_postfix_expression(record)
             }
-            _ => Ok(Expression::Literal(self.parse_literal()?)),
+            _ => Ok(ExpressionKind::Literal(self.parse_literal()?).spanned(begin)),
         }
     }
 
     /// This function assumes that the name was already parsed and is supplied if it exists
     fn parse_record_lit(&mut self, name: Option<String>) -> Result<Expression> {
-        self.expect_token(Token::LeftBrace)?;
+        let begin = self.expect_token(Token::LeftBrace)?;
 
         let mut members = Vec::new();
         loop {
@@ -780,12 +847,13 @@ impl Parser {
             }
             self.advance_tokens();
         }
-        self.expect_token(Token::RightBrace)?;
+        let end = self.expect_token(Token::RightBrace)?;
 
-        Ok(Expression::Record { name, members })
+        Ok(ExpressionKind::Record { name, members }.spanned(begin.to(end)))
     }
 
     fn parse_field_assignment(&mut self) -> Result<FieldAssignment> {
+        let begin = self.current.span;
         let name = self
             .current_token_as_identifier()
             .ok_or_else(|| self.unexpected(vec![Token::Identifier("".to_owned())]))?;
@@ -795,10 +863,16 @@ impl Parser {
             self.advance_tokens();
             self.parse_expression()?
         } else {
-            Expression::Identifier(name.clone())
+            ExpressionKind::Identifier(name.clone()).spanned(begin)
         };
 
-        Ok(FieldAssignment { name, element })
+        let end = element.span;
+
+        Ok(FieldAssignment {
+            name,
+            element,
+            span: begin.to(end),
+        })
     }
 
     fn parse_postfix_expression(&mut self, expr: Expression) -> Result<Expression> {
@@ -812,29 +886,34 @@ impl Parser {
                 self.advance_tokens();
                 let field = self.expect_identifier()?;
                 // TODO: Parse parameter
+                let begin = self.current.span;
                 result = if self.has(Token::LeftParen) {
-                    let arguments = self.parse_arguments()?;
-                    Expression::MethodCall {
+                    let (arguments, end) = self.parse_arguments()?;
+                    ExpressionKind::MethodCall {
                         receiver: result.into(),
                         method: field,
                         arguments,
                         safe,
                     }
+                    .spanned(begin.to(end))
                 } else {
-                    Expression::FieldAccess {
+                    ExpressionKind::FieldAccess {
                         object: Box::new(result),
                         field,
                         safe,
                     }
+                    .spanned(begin)
                 };
             } else if self.has(Token::LeftBracket) {
                 self.advance_tokens();
                 let index = self.parse_expression()?;
-                self.expect_token(Token::RightBracket)?;
-                result = Expression::IndexAccess {
+                let begin = result.span;
+                let end = self.expect_token(Token::RightBracket)?;
+                result = ExpressionKind::IndexAccess {
                     collection: Box::new(result),
                     index: Box::new(index),
-                };
+                }
+                .spanned(begin.to(end));
             } else {
                 break;
             }
@@ -844,16 +923,18 @@ impl Parser {
     }
 
     fn parse_function_call(&mut self, function: Expression) -> Result<Expression> {
-        let arguments = self.parse_arguments()?;
+        let begin = function.span;
+        let (arguments, end) = self.parse_arguments()?;
 
-        Ok(Expression::FunctionCall {
+        Ok(ExpressionKind::FunctionCall {
             function: Box::new(function),
             arguments,
-        })
+        }
+        .spanned(begin.to(end)))
     }
 
-    fn parse_arguments(&mut self) -> Result<Vec<Expression>> {
-        self.expect_token(Token::LeftParen)?;
+    fn parse_arguments(&mut self) -> Result<(Vec<Expression>, Span)> {
+        let begin = self.expect_token(Token::LeftParen)?;
 
         let mut arguments = Vec::new();
 
@@ -872,19 +953,20 @@ impl Parser {
             }
         }
 
-        self.expect_token(Token::RightParen)?;
+        let end = self.expect_token(Token::RightParen)?;
 
-        Ok(arguments)
+        Ok((arguments, begin.to(end)))
     }
 
     fn parse_literal(&mut self) -> Result<Literal> {
+        let span = self.current.span;
         let lit = match &self.current.token {
-            Token::IntegerLiteral(value) => Literal::Integer(*value),
-            Token::FloatLiteral(value) => Literal::Float(*value),
-            Token::StringLiteral(value) => Literal::String(value.clone()),
-            Token::True => Literal::Boolean(true),
-            Token::False => Literal::Boolean(false),
-            Token::None => Literal::None,
+            Token::IntegerLiteral(value) => LiteralKind::Integer(*value),
+            Token::FloatLiteral(value) => LiteralKind::Float(*value),
+            Token::StringLiteral(value) => LiteralKind::String(value.clone()),
+            Token::True => LiteralKind::Boolean(true),
+            Token::False => LiteralKind::Boolean(false),
+            Token::None => LiteralKind::None,
             _ => {
                 return Err(self.unexpected(vec![
                     Token::IntegerLiteral(0),
@@ -894,7 +976,8 @@ impl Parser {
                     Token::False,
                 ]));
             }
-        };
+        }
+        .spanned(span);
         self.advance_tokens();
 
         Ok(lit)
@@ -956,7 +1039,7 @@ impl Parser {
     }
 
     fn parse_record_declaration(&mut self) -> Result<RecordDeclaration> {
-        self.expect_token(Token::Record)?;
+        let begin = self.expect_token(Token::Record)?;
         let name = self.expect_identifier()?;
         self.expect_token(Token::LeftBrace)?;
         self.skip_linebreaks();
@@ -986,24 +1069,31 @@ impl Parser {
         }
 
         self.skip_linebreaks();
-        self.expect_token(Token::RightBrace)?;
+        let end = self.expect_token(Token::RightBrace)?;
 
-        Ok(RecordDeclaration { name, fields })
+        Ok(RecordDeclaration {
+            name,
+            fields,
+            span: begin.to(end),
+        })
     }
 
     fn parse_field(&mut self) -> Result<Field> {
+        let begin = self.current.span;
         let field_name = self.expect_identifier()?;
         self.expect_token(Token::Colon)?;
         let type_annotation = self.parse_type_annotation()?;
+        let end = type_annotation.span;
 
         Ok(Field {
             name: field_name,
             type_annotation,
+            span: begin.to(end),
         })
     }
 
     fn parse_resource_declaration(&mut self) -> Result<ResourceDeclaration> {
-        self.expect_token(Token::Resource)?;
+        let begin = self.expect_token(Token::Resource)?;
         let name = self.expect_identifier()?;
         self.expect_token(Token::LeftBrace)?;
 
@@ -1023,30 +1113,34 @@ impl Parser {
                 let method = self.parse_function_declaration()?;
                 methods.push(method);
             } else {
+                let begin = self.current.span;
                 let field_name = self.expect_identifier()?;
                 self.expect_token(Token::Colon)?;
                 let type_annotation = self.parse_type_annotation()?;
+                let end = type_annotation.span;
                 fields.push(Field {
                     name: field_name,
                     type_annotation,
+                    span: begin.to(end),
                 });
                 // Optional: Handle commas or newlines between fields
             }
             self.skip_linebreaks();
         }
 
-        self.expect_token(Token::RightBrace)?;
+        let end = self.expect_token(Token::RightBrace)?;
 
         Ok(ResourceDeclaration {
             name,
             fields,
             constructor,
             methods,
+            span: begin.to(end),
         })
     }
 
     fn parse_constructor_declaration(&mut self) -> Result<ConstructorDeclaration> {
-        self.expect_token(Token::Constructor)?;
+        let begin = self.expect_token(Token::Constructor)?;
 
         self.expect_token(Token::LeftParen)?;
 
@@ -1055,12 +1149,17 @@ impl Parser {
         self.expect_token(Token::RightParen)?;
 
         let body = self.parse_block()?;
+        let end = body.span;
 
-        Ok(ConstructorDeclaration { parameters, body })
+        Ok(ConstructorDeclaration {
+            parameters,
+            body,
+            span: begin.to(end),
+        })
     }
 
     fn parse_enum_declaration(&mut self) -> Result<EnumDeclaration> {
-        self.expect_token(Token::Enum)?;
+        let begin = self.expect_token(Token::Enum)?;
         let name = self.expect_identifier()?;
         self.expect_token(Token::LeftBrace)?;
         self.skip_linebreaks();
@@ -1079,16 +1178,17 @@ impl Parser {
         }
 
         self.skip_linebreaks();
-        self.expect_token(Token::RightBrace)?;
+        let end = self.expect_token(Token::RightBrace)?;
 
         Ok(EnumDeclaration {
             name,
             cases: variants,
+            span: begin.to(end),
         })
     }
 
     fn parse_variant_declaration(&mut self) -> Result<VariantDeclaration> {
-        self.expect_token(Token::Variant)?;
+        let begin = self.expect_token(Token::Variant)?;
         let name = self.expect_identifier()?;
         self.expect_token(Token::LeftBrace)?;
         self.skip_linebreaks();
@@ -1097,6 +1197,8 @@ impl Parser {
 
         // TODO: error recovery
         while !self.has(Token::RightBrace) && !self.has(Token::Eof) {
+            let begin = self.current.span;
+            let mut end = begin;
             let case_name = self.expect_identifier()?;
             let mut associated_types = Vec::new();
 
@@ -1105,12 +1207,15 @@ impl Parser {
                 self.skip_linebreaks();
 
                 while !self.has(Token::RightParen) && !self.has(Token::Eof) {
+                    let begin = self.current.span;
                     let field_name = self.expect_identifier()?;
                     self.expect_token(Token::Colon)?;
                     let type_annotation = self.parse_type_annotation()?;
+                    let end = type_annotation.span;
                     associated_types.push(Field {
                         name: field_name,
                         type_annotation,
+                        span: begin.to(end),
                     });
 
                     if self.parse_delimiter().is_none() {
@@ -1118,11 +1223,12 @@ impl Parser {
                     }
                     self.skip_linebreaks();
                 }
-                self.expect_token(Token::RightParen)?;
+                end = self.expect_token(Token::RightParen)?;
             }
             cases.push(VariantCase {
                 name: case_name,
                 associated_types,
+                span: begin.to(end),
             });
 
             if self.parse_delimiter().is_none() {
@@ -1131,20 +1237,28 @@ impl Parser {
         }
 
         self.skip_linebreaks();
-        self.expect_token(Token::RightBrace)?;
+        let end = self.expect_token(Token::RightBrace)?;
 
-        Ok(VariantDeclaration { name, cases })
+        Ok(VariantDeclaration {
+            name,
+            cases,
+            span: begin.to(end),
+        })
     }
 
     fn parse_export_declaration(&mut self) -> Result<ExportDeclaration> {
-        self.expect_token(Token::Export)?;
-        let item = self.parse_declaration()?.into();
+        let begin = self.expect_token(Token::Export)?;
+        let item = self.parse_declaration()?;
+        let end = item.span();
 
-        Ok(ExportDeclaration { item })
+        Ok(ExportDeclaration {
+            item: item.into(),
+            span: begin.to(end),
+        })
     }
 
     fn parse_test_declaration(&mut self) -> Result<TestDeclaration> {
-        self.expect_token(Token::Test)?;
+        let begin = self.expect_token(Token::Test)?;
         self.skip_linebreaks();
         let name = match self.current.token {
             Token::StringLiteral(ref name) => {
@@ -1158,28 +1272,40 @@ impl Parser {
         };
         self.skip_linebreaks();
         let body = self.parse_block()?;
+        let end = body.span;
 
-        Ok(TestDeclaration { name, body })
+        Ok(TestDeclaration {
+            name,
+            body,
+            span: begin.to(end),
+        })
     }
 
     fn parse_package_declaration(&mut self) -> Result<PackageDeclaration> {
-        self.expect_token(Token::Package)?;
+        let begin = self.expect_token(Token::Package)?;
         let path = self.parse_path()?;
+        let mut end = path.span;
 
         let version = if self.current.token == Token::At {
             self.advance_tokens();
-            Some(self.parse_version()?)
+            let version = self.parse_version()?;
+            end = version.span;
+            Some(version)
         } else {
             None
         };
 
         self.skip_semicolons();
 
-        Ok(PackageDeclaration { path, version })
+        Ok(PackageDeclaration {
+            path,
+            version,
+            span: begin.to(end),
+        })
     }
 
     fn parse_use_declaration(&mut self) -> Result<UseDeclaration> {
-        self.expect_token(Token::Use)?;
+        let begin = self.expect_token(Token::Use)?;
         let module_path = self.parse_path()?;
 
         self.expect_token(Token::Slash)?;
@@ -1196,24 +1322,32 @@ impl Parser {
             types.push(ty);
         }
 
-        self.expect_token(Token::RightBrace)?;
+        let end = self.expect_token(Token::RightBrace)?;
 
         Ok(UseDeclaration {
             module_path,
             interface,
             types,
+            span: begin.to(end),
         })
     }
 
     fn parse_path(&mut self) -> Result<ModulePath> {
+        let begin = self.current.span;
         let owner = self.expect_identifier()?;
         self.expect_token(Token::Colon)?;
+        let end = self.current.span;
         let package = self.expect_identifier()?;
 
-        Ok(ModulePath { owner, package })
+        Ok(ModulePath {
+            owner,
+            package,
+            span: begin.to(end),
+        })
     }
 
     fn parse_version(&mut self) -> Result<Version> {
+        let span = self.current.span;
         let version_string = match &self.current.token {
             Token::VersionLiteral(s) => s.to_owned(),
             t @ Token::FloatLiteral(_) => {
@@ -1255,6 +1389,7 @@ impl Parser {
                 })
                 .unwrap_or_default(),
             extras: extras.map(str::to_owned),
+            span,
         })
     }
 }

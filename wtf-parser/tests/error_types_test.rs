@@ -18,9 +18,9 @@ fn test_parse_function_return_type_with_result() -> Result<()> {
         declarations: vec![Declaration::Function(FunctionDeclaration {
             name: "test_function".to_string(),
             parameters: vec![],
-            return_type: Some(TypeAnnotation::Result {
-                ok: Box::new(TypeAnnotation::Simple("mytype".to_string())),
-                err: Box::new(TypeAnnotation::Simple("myerror".to_string())),
+            return_type: Some(TypeAnnotationKind::Result {
+                ok: Box::new(TypeAnnotationKind::Simple("mytype".to_string())),
+                err: Box::new(TypeAnnotationKind::Simple("myerror".to_string())),
             }),
             body: Block { statements: vec![] },
         })],
@@ -50,9 +50,9 @@ fn test_parse_record_field_with_result_type() -> Result<()> {
             name: "myrecord".to_string(),
             fields: vec![Field {
                 name: "field".to_string(),
-                type_annotation: TypeAnnotation::Result {
-                    ok: Box::new(TypeAnnotation::Simple("mytype".to_string())),
-                    err: Box::new(TypeAnnotation::Simple("myerror".to_string())),
+                type_annotation: TypeAnnotationKind::Result {
+                    ok: Box::new(TypeAnnotationKind::Simple("mytype".to_string())),
+                    err: Box::new(TypeAnnotationKind::Simple("myerror".to_string())),
                 },
             }],
         })],
@@ -81,9 +81,9 @@ fn test_parse_function_return_type_with_result_default_error() -> Result<()> {
         declarations: vec![Declaration::Function(FunctionDeclaration {
             name: "test_function".to_string(),
             parameters: vec![],
-            return_type: Some(TypeAnnotation::Result {
-                ok: Box::new(TypeAnnotation::Simple("mytype".to_string())),
-                err: Box::new(TypeAnnotation::Simple("error".to_string())),
+            return_type: Some(TypeAnnotationKind::Result {
+                ok: Box::new(TypeAnnotationKind::Simple("mytype".to_string())),
+                err: Box::new(TypeAnnotationKind::Simple("error".to_string())),
             }),
             body: Block { statements: vec![] },
         })],
@@ -114,9 +114,9 @@ fn test_parse_record_field_with_result_type_default_error() -> Result<()> {
             name: "my_record".to_string(),
             fields: vec![Field {
                 name: "field1".to_string(),
-                type_annotation: TypeAnnotation::Result {
-                    ok: Box::new(TypeAnnotation::Simple("mytype".to_string())),
-                    err: Box::new(TypeAnnotation::Simple("error".to_string())), // Default error type
+                type_annotation: TypeAnnotationKind::Result {
+                    ok: Box::new(TypeAnnotationKind::Simple("mytype".to_string())),
+                    err: Box::new(TypeAnnotationKind::Simple("error".to_string())), // Default error type
                 },
             }],
         })],
@@ -146,10 +146,12 @@ fn test_parse_function_return_type_result_optional() -> Result<()> {
         declarations: vec![Declaration::Function(FunctionDeclaration {
             name: "test_function".to_string(),
             parameters: vec![],
-            return_type: Some(TypeAnnotation::Option(Box::new(TypeAnnotation::Result {
-                ok: Box::new(TypeAnnotation::Simple("mytype".to_string())),
-                err: Box::new(TypeAnnotation::Simple("myerror".to_string())),
-            }))),
+            return_type: Some(TypeAnnotationKind::Option(Box::new(
+                TypeAnnotationKind::Result {
+                    ok: Box::new(TypeAnnotationKind::Simple("mytype".to_string())),
+                    err: Box::new(TypeAnnotationKind::Simple("myerror".to_string())),
+                },
+            ))),
             body: Block { statements: vec![] }, // Empty function body
         })],
         package: None,
@@ -179,9 +181,9 @@ fn test_parse_record_field_with_result_optional_type() -> Result<()> {
             name: "my_record".to_string(),
             fields: vec![Field {
                 name: "field1".to_string(),
-                type_annotation: TypeAnnotation::Option(Box::new(TypeAnnotation::Result {
-                    ok: Box::new(TypeAnnotation::Simple("mytype".to_string())),
-                    err: Box::new(TypeAnnotation::Simple("myerror".to_string())),
+                type_annotation: TypeAnnotationKind::Option(Box::new(TypeAnnotationKind::Result {
+                    ok: Box::new(TypeAnnotationKind::Simple("mytype".to_string())),
+                    err: Box::new(TypeAnnotationKind::Simple("myerror".to_string())),
                 })),
             }],
         })],

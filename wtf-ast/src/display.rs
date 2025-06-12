@@ -210,21 +210,27 @@ impl Print for Parameter {
     }
 }
 
-impl Print for TypeAnnotation {
+impl Print for TypeAnnotationKind {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
         match self {
-            TypeAnnotation::Simple(v) => v.print(f, indent, c),
-            TypeAnnotation::List(elem) => node!(f, indent, c, "list", elem),
-            TypeAnnotation::Option(inner) => {
+            TypeAnnotationKind::Simple(v) => v.print(f, indent, c),
+            TypeAnnotationKind::List(elem) => node!(f, indent, c, "list", elem),
+            TypeAnnotationKind::Option(inner) => {
                 node!(f, indent, c, "option", inner)
             }
-            TypeAnnotation::Result { ok, err } => {
+            TypeAnnotationKind::Result { ok, err } => {
                 node!(f, indent, c, "result", ok, err)
             }
-            TypeAnnotation::Tuple(members) => {
+            TypeAnnotationKind::Tuple(members) => {
                 todo!()
             }
         }
+    }
+}
+
+impl Print for TypeAnnotation {
+    fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
+        self.kind.print(f, indent, c)
     }
 }
 
@@ -302,27 +308,27 @@ impl Print for AssertStatement {
 
 impl Print for Expression {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
-        match self {
-            Expression::Literal(v) => v.print(f, indent, c),
-            Expression::Identifier(v) => write!(f, "\n{c:indent$}(ident {v})"),
-            Expression::BinaryExpression {
+        match &self.kind {
+            ExpressionKind::Literal(v) => v.print(f, indent, c),
+            ExpressionKind::Identifier(v) => write!(f, "\n{c:indent$}(ident {v})"),
+            ExpressionKind::BinaryExpression {
                 left,
                 operator,
                 right,
             } => {
                 node!(f, indent, c, "binary", left, operator, right)
             }
-            Expression::UnaryExpression { operator, operand } => {
+            ExpressionKind::UnaryExpression { operator, operand } => {
                 node!(f, indent, c, "unary", operator, operand)
             }
-            Expression::YeetExpression { expression } => todo!(),
-            Expression::FunctionCall {
+            ExpressionKind::YeetExpression { expression } => todo!(),
+            ExpressionKind::FunctionCall {
                 function,
                 arguments,
             } => {
                 node!(f, indent, c, "call", function, Args(arguments))
             }
-            Expression::MethodCall {
+            ExpressionKind::MethodCall {
                 receiver,
                 method,
                 arguments,
@@ -350,7 +356,7 @@ impl Print for Expression {
                     )
                 }
             }
-            Expression::FieldAccess {
+            ExpressionKind::FieldAccess {
                 object,
                 field,
                 safe,
@@ -361,13 +367,13 @@ impl Print for Expression {
                     node!(f, indent, c, "access", object, field)
                 }
             }
-            Expression::IndexAccess { collection, index } => {
+            ExpressionKind::IndexAccess { collection, index } => {
                 node!(f, indent, c, "indexaccess", collection, index)
             }
-            Expression::Record { name, members } => {
+            ExpressionKind::Record { name, members } => {
                 node!(f, indent, c, "record", name, members)
             }
-            Expression::ListLiteral(elements) => node!(f, indent, c, "list", elements),
+            ExpressionKind::ListLiteral(elements) => node!(f, indent, c, "list", elements),
         }
     }
 }
@@ -388,12 +394,12 @@ impl Print for Receiver<'_> {
 
 impl Print for Literal {
     fn print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize, c: char) -> std::fmt::Result {
-        match self {
-            Literal::Integer(v) => write!(f, "\n{c:indent$}(int {v})"),
-            Literal::Float(v) => write!(f, "\n{c:indent$}(float {v})"),
-            Literal::String(v) => write!(f, "\n{c:indent$}(string \"{v}\")"),
-            Literal::Boolean(v) => write!(f, "\n{c:indent$}(bool {v})"),
-            Literal::None => write!(f, "\n{c:indent$}(none)"),
+        match &self.kind {
+            LiteralKind::Integer(v) => write!(f, "\n{c:indent$}(int {v})"),
+            LiteralKind::Float(v) => write!(f, "\n{c:indent$}(float {v})"),
+            LiteralKind::String(v) => write!(f, "\n{c:indent$}(string \"{v}\")"),
+            LiteralKind::Boolean(v) => write!(f, "\n{c:indent$}(bool {v})"),
+            LiteralKind::None => write!(f, "\n{c:indent$}(none)"),
         }
     }
 }
