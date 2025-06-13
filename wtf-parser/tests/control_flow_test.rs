@@ -60,3 +60,26 @@ fn test_parse_return_statement() {
     
     assert_eq!(module.to_string(), expected);
 }
+
+#[test]
+fn test_parse_method_call() {
+    let input = r#"
+        func test_method() {
+            obj.method()
+        }
+        "#;
+
+    let lexer = Lexer::new(input);
+    let mut parser = Parser::with_lexer(lexer);
+    let module = parser.parse_module().unwrap();
+
+    let expected = r#"(module
+  (func "test_method"
+    (block
+      (call "method"
+        (receiver
+          (ident obj))
+        (args)))))"#;
+    
+    assert_eq!(module.to_string(), expected);
+}

@@ -88,3 +88,55 @@ fn test_parse_use_declaration() {
     
     assert_eq!(module.to_string(), expected);
 }
+
+#[test]
+fn test_parse_assignment() {
+    let input = r#"
+        func increment() {
+            self.value = self.value + 1
+        }
+        "#;
+
+    let lexer = Lexer::new(input);
+    let mut parser = Parser::with_lexer(lexer);
+    let module = parser.parse_module().unwrap();
+
+    let expected = r#"(module
+  (func "increment"
+    (block
+      (assign
+        (access
+          (ident self) "value")
+        (binary
+          (access
+            (ident self) "value")
+          (op +)
+          (int 1))))))"#;
+    
+    assert_eq!(module.to_string(), expected);
+}
+
+#[test]
+fn test_parse_list_literal() {
+    let input = r#"
+        func test_list() {
+            let numbers = [1, 2, 3, 4]
+        }
+        "#;
+
+    let lexer = Lexer::new(input);
+    let mut parser = Parser::with_lexer(lexer);
+    let module = parser.parse_module().unwrap();
+
+    let expected = r#"(module
+  (func "test_list"
+    (block
+      (let "numbers"
+        (list
+          (int 1)
+          (int 2)
+          (int 3)
+          (int 4))))))"#;
+    
+    assert_eq!(module.to_string(), expected);
+}
