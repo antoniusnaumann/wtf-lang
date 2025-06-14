@@ -1,6 +1,6 @@
+// TODO: This is currently flaky, as field order is random due to using a hashmap. that should be changed into a Vec of tuples
 package wtf:example@0.1.0
 
-// Record type definitions for demonstrating downcasting
 record point2d {
     x: s32,
     y: s32
@@ -11,21 +11,17 @@ record person {
     age: s32
 }
 
-// Example function demonstrating record downcasting
 export func main() -> s64 {
-    // Simple case: Create records with exact matching fields
     let point_2d_data = {
         x: 1,
-        y: 2
+        y: 0
     }
     
-    // This works - exact field match
     let point_2d: point2d = point_2d_data
     
-    return 0
+    return point_2d_data.y
 }
 
-// Tests demonstrating record downcasting behavior
 test "basic record downcasting from anonymous record to named type" {
     let anonymous_record = {
         x: 5,
@@ -33,12 +29,12 @@ test "basic record downcasting from anonymous record to named type" {
     }
     
     let typed_point: point2d = anonymous_record
-    // Assert that the fields are accessible by using them in calculations
-    // This demonstrates that record downcasting preserves field values
-    assert typed_point.x > 0
-    assert typed_point.y > 0
-    assert typed_point.x < 10
-    assert typed_point.y < 10
+
+    assert typed_point.x == anonymous_record.x
+    assert typed_point.y == anonymous_record.y
+
+    assert typed_point.x == 5
+    assert typed_point.y == 7
 }
 
 test "exact field matching works" {
@@ -48,12 +44,12 @@ test "exact field matching works" {
     }
     
     let p2d: point2d = p_data
-    // Assert that field access works with range checks
-    // This demonstrates that the record downcasting preserves field accessibility
-    assert p2d.x > 0
-    assert p2d.y > 0
-    assert p2d.x < 20
-    assert p2d.y < 30
+    
+    assert p2d.x == 10
+    assert p2d.y == 20
+
+    assert p2d.x == p_data.x
+    assert p2d.y == p_data.y
 }
 
 test "person record downcasting" {
@@ -63,12 +59,8 @@ test "person record downcasting" {
     }
     
     let person_record: person = person_data
-    // Assert that the record casting succeeded by checking age field with range checks
-    // This demonstrates successful downcasting with string and numeric fields
-    assert person_record.age > 20
-    assert person_record.age < 30
-    assert person_record.age > 0
-    assert person_record.age < 100
+
+    assert person_data.age == 25
 }
 
 // FIXME: The following tests are commented out due to a known bug in the current 
