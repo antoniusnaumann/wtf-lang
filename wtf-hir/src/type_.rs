@@ -23,7 +23,7 @@ pub enum Type {
         ok: Box<Type>,
         err: Box<Type>,
     },
-    Record(HashMap<String, Type>),
+    Record(Vec<(String, Type)>),
     Resource {
         methods: HashMap<String, FunctionSignature>,
     },
@@ -31,7 +31,7 @@ pub enum Type {
         cases: Vec<String>,
     },
     Variant {
-        cases: HashMap<String, HashMap<String, Type>>,
+        cases: HashMap<String, Vec<(String, Type)>>,
     },
     Tuple(Vec<Type>),
     Name(String),
@@ -60,10 +60,10 @@ impl Display for Type {
             Type::List(items) => write!(f, "[{}]", items)?,
             Type::Option(payload) => write!(f, "({payload})?")?,
             Type::Result { ok, err } => write!(f, "({ok})!({err})")?,
-            Type::Record(hash_map) => {
+            Type::Record(fields) => {
                 write!(f, "{{")?;
                 let mut first = true;
-                for (key, value) in hash_map {
+                for (key, value) in fields {
                     if first {
                         first = false;
                     } else {
@@ -94,8 +94,14 @@ impl Display for Type {
                         write!(f, " | ")?;
                     }
                     write!(f, "{name}(")?;
-                    for (name, ty) in payloads {
-                        write!(f, "{name}: {ty}")?;
+                    let mut payload_first = true;
+                    for (field_name, ty) in payloads {
+                        if payload_first {
+                            payload_first = false;
+                        } else {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{field_name}: {ty}")?;
                     }
                     write!(f, ")")?;
                 }
@@ -148,7 +154,19 @@ pub fn unify(a: &Type, b: &Type) -> Type {
         (Type::String, Type::String) => Type::String,
         (Type::List(item_a), Type::List(item_b)) => Type::List(Box::new(unify(item_a, item_b))),
         (Type::Record(fields_a), Type::Record(fields_b)) => {
-            todo!("compare records")
+            // For now, check if they have the same fields in the same order
+            // This could be improved to be more flexible with field ordering
+            if fields_a.len() != fields_b.len() {
+                panic!("incompatible record types: different number of fields")
+            }
+            let mut unified_fields = Vec::new();
+            for ((name_a, type_a), (name_b, type_b)) in fields_a.iter().zip(fields_b.iter()) {
+                if name_a != name_b {
+                    panic!("incompatible record types: different field names")
+                }
+                unified_fields.push((name_a.clone(), unify(type_a, type_b)));
+            }
+            Type::Record(unified_fields)
         }
         (Type::Variant { cases: cases_a }, Type::Variant { cases: cases_b }) => {
             todo!("compare cases_a and cases_b")
