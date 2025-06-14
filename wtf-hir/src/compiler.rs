@@ -457,11 +457,12 @@ impl HirCompiler {
                     vars,
                     visible,
                     signatures,
+                    ast_types,
                 );
 
                 let expression = if let Some(anno) = &variable_declaration.type_annotation {
                     let annotated_type = self.compile_type_annotation(&anno, ast_types);
-                    self.try_cast(&annotated_type, initial_value, signatures, variable_declaration.span)
+                    self.try_cast(&annotated_type, initial_value, signatures, ast_types, variable_declaration.span)
                 } else {
                     initial_value
                 };
@@ -475,7 +476,7 @@ impl HirCompiler {
                 Expression::var_set(var, expression)
             }
             ast::Statement::Assignment { target, value } => {
-                let comp_val = self.compile_expression(value, vars, visible, signatures);
+                let comp_val = self.compile_expression(value, vars, visible, signatures, ast_types);
                 let name = match &target.kind {
                     ast::ExpressionKind::Identifier(name) => name,
                     _ => {
@@ -502,27 +503,27 @@ impl HirCompiler {
                     return Expression::void();
                 }
                 let annotated_type = &vars[binding.id];
-                let value = self.try_cast(annotated_type, comp_val, signatures, target.span.to(value.span));
+                let value = self.try_cast(annotated_type, comp_val, signatures, ast_types, target.span.to(value.span));
                 Expression::var_set(binding.id, value)
             }
             ast::Statement::ExpressionStatement(expression) => {
-                self.compile_expression(expression, vars, visible, signatures)
+                self.compile_expression(expression, vars, visible, signatures, ast_types)
             }
             ast::Statement::ReturnStatement(expression) => {
                 let returned = match expression {
                     Some(expression) => {
-                        self.compile_expression(expression, vars, visible, signatures)
+                        self.compile_expression(expression, vars, visible, signatures, ast_types)
                     }
                     None => Expression::void(),
                 };
                 let span = expression.as_ref().map(|e| e.span).unwrap_or(Span { start: 0, end: 0 });
-                let returned = self.try_cast(&vars.result, returned, signatures, span);
+                let returned = self.try_cast(&vars.result, returned, signatures, ast_types, span);
                 Expression::return_(returned)
             }
             ast::Statement::BreakStatement(expression) => {
                 let value = match expression {
                     Some(expression) => {
-                        self.compile_expression(expression, vars, visible, signatures)
+                        self.compile_expression(expression, vars, visible, signatures, ast_types)
                     }
                     None => Expression::void(),
                 };
@@ -530,12 +531,12 @@ impl HirCompiler {
             }
             ast::Statement::ContinueStatement => Expression::continue_(),
             ast::Statement::ThrowStatement(value) => {
-                let value = self.compile_expression(value, vars, visible, signatures);
+                let value = self.compile_expression(value, vars, visible, signatures, ast_types);
                 Expression::throw(value)
             }
             ast::Statement::IfStatement(if_statement) => {
                 let condition =
-                    self.compile_expression(&if_statement.condition, vars, visible, signatures);
+                    self.compile_expression(&if_statement.condition, vars, visible, signatures, ast_types);
                 let then = self.compile_block(
                     &if_statement.then_branch,
                     vars,
@@ -563,6 +564,7 @@ impl HirCompiler {
                         vars,
                         visible,
                         signatures,
+                        ast_types,
                     );
                     body.push(Expression::if_(
                         condition,
@@ -580,7 +582,7 @@ impl HirCompiler {
             }
             ast::Statement::ForStatement(for_statement) => {
                 let iterable =
-                    self.compile_expression(&for_statement.iterable, vars, visible, signatures);
+                    self.compile_expression(&for_statement.iterable, vars, visible, signatures, ast_types);
                 let body: Body = match &iterable.ty {
                     Type::List(elem) => {
                         let list_elem = vars.push(*elem.clone());
@@ -667,7 +669,7 @@ impl HirCompiler {
             }
             ast::Statement::Assertion(assert_statement) => {
                 let condition =
-                    self.compile_expression(&assert_statement.condition, vars, visible, signatures);
+                    self.compile_expression(&assert_statement.condition, vars, visible, signatures, ast_types);
                 Expression::if_(
                     condition,
                     EMPTY_BODY,
@@ -684,6 +686,7 @@ impl HirCompiler {
         vars: &mut VarCollector,
         visible: &mut Visible,
         signatures: &HashMap<String, FunctionSignature>,
+        ast_types: &HashMap<String, (ast::Declaration, bool)>,
     ) -> Expression {
         match &expression.kind {
             ast::ExpressionKind::Literal(literal) => match &literal.kind {
@@ -739,8 +742,8 @@ impl HirCompiler {
                     ast::BinaryOperator::Contains => "contains",
                     ast::BinaryOperator::NullCoalesce => {
                         let (left, right) = (
-                            self.compile_expression(left, vars, visible, signatures),
-                            self.compile_expression(right, vars, visible, signatures),
+                            self.compile_expression(left, vars, visible, signatures, ast_types),
+                            self.compile_expression(right, vars, visible, signatures, ast_types),
                         );
                         let Type::Option(inner_ty) = left.ty.clone() else {
                             self.errors.push(Error::unsupported_operation(
@@ -784,10 +787,10 @@ impl HirCompiler {
                     }
                 };
 
-                self.compile_call(vars, visible, signatures, &[left, right], name, Vec::new(), expression.span)
+                self.compile_call(vars, visible, signatures, ast_types, &[left, right], name, Vec::new(), expression.span)
             }
             ast::ExpressionKind::UnaryExpression { operator, operand } => {
-                let operand = self.compile_expression(operand, vars, visible, signatures);
+                let operand = self.compile_expression(operand, vars, visible, signatures, ast_types);
                 let operand_ty = operand.ty.clone();
                 match operator {
                     UnaryOperator::Negate => {
@@ -846,7 +849,7 @@ impl HirCompiler {
                     _ => todo!("call of non-name"),
                 };
 
-                self.compile_call(vars, visible, signatures, arguments, &function, Vec::new(), expression.span)
+                self.compile_call(vars, visible, signatures, ast_types, arguments, &function, Vec::new(), expression.span)
             }
             ast::ExpressionKind::MethodCall {
                 receiver,
@@ -861,9 +864,9 @@ impl HirCompiler {
 
                 // TODO: handle calls on resources separately
 
-                let receiver = self.compile_expression(receiver, vars, visible, signatures);
+                let receiver = self.compile_expression(receiver, vars, visible, signatures, ast_types);
 
-                self.compile_call(vars, visible, signatures, arguments, method, vec![receiver], expression.span)
+                self.compile_call(vars, visible, signatures, ast_types, arguments, method, vec![receiver], expression.span)
             }
             ast::ExpressionKind::FieldAccess {
                 object,
@@ -874,7 +877,7 @@ impl HirCompiler {
                 if *safe {
                     todo!("Desugar safe calls to if condition");
                 }
-                let object = self.compile_expression(object, vars, visible, signatures);
+                let object = self.compile_expression(object, vars, visible, signatures, ast_types);
                 let object_ty = object.ty.clone();
                 match object_ty {
                     Type::Never => ExpressionKind::Member {
@@ -935,8 +938,8 @@ impl HirCompiler {
                 }
             }
             ast::ExpressionKind::IndexAccess { collection, index } => {
-                let collection = self.compile_expression(&collection, vars, visible, signatures);
-                let index = self.compile_expression(index, vars, visible, signatures);
+                let collection = self.compile_expression(&collection, vars, visible, signatures, ast_types);
+                let index = self.compile_expression(index, vars, visible, signatures, ast_types);
                 let collection_ty = collection.ty.clone();
                 match collection_ty {
                     Type::Never => Expression::unreachable(),
@@ -978,7 +981,7 @@ impl HirCompiler {
                 let mut fields = HashMap::new();
                 for member in members {
                     let name = member.name.clone();
-                    let value = self.compile_expression(&member.element, vars, visible, signatures);
+                    let value = self.compile_expression(&member.element, vars, visible, signatures, ast_types);
                     fields.insert(name, value);
                 }
                 let ty = match name {
@@ -996,7 +999,7 @@ impl HirCompiler {
             ast::ExpressionKind::ListLiteral(items) => {
                 let mut compiled_items = vec![];
                 for item in items.iter().rev() {
-                    let item = self.compile_expression(item, vars, visible, signatures);
+                    let item = self.compile_expression(item, vars, visible, signatures, ast_types);
                     compiled_items.push(item);
                 }
                 let item_ty = if compiled_items.is_empty() {
@@ -1018,6 +1021,7 @@ impl HirCompiler {
         vars: &mut VarCollector,
         visible: &mut Visible<'_>,
         signatures: &HashMap<String, FunctionSignature>,
+        ast_types: &HashMap<String, (ast::Declaration, bool)>,
         arguments: &[Expr],
         function: &str,
         mut args: Vec<Expression>,
@@ -1027,7 +1031,7 @@ impl HirCompiler {
         Expr: AsRef<ast::Expression>,
     {
         for arg in arguments {
-            args.push(self.compile_expression(arg.as_ref(), vars, visible, signatures));
+            args.push(self.compile_expression(arg.as_ref(), vars, visible, signatures, ast_types));
         }
 
         let (function, signature) = match self.find_signature(&function, &args, signatures) {
@@ -1046,7 +1050,7 @@ impl HirCompiler {
         };
 
         for (arg, expected) in args.iter_mut().zip(signature.param_types.iter()) {
-            *arg = self.try_cast(expected, arg.clone(), signatures, span);
+            *arg = self.try_cast(expected, arg.clone(), signatures, ast_types, span);
         }
 
         Expression::call(function.clone(), args, signature.return_type.clone())
@@ -1057,6 +1061,7 @@ impl HirCompiler {
         annotation: &Type,
         mut actual: Expression,
         signatures: &HashMap<String, FunctionSignature>,
+        ast_types: &HashMap<String, (ast::Declaration, bool)>,
         span: Span,
     ) -> Expression {
         match (annotation, &actual.ty) {
@@ -1093,13 +1098,33 @@ impl HirCompiler {
             // TODO: put in more auto-conversions, e.g. casting from non-optional to optional should insert an explicit call to "some"
             (Type::Option(inner), Type::None) => Expression::none(*inner.clone()),
             (Type::Option(_), _) => Expression::some(actual),
-            (a, b) => {
-                self.errors.push(Error::type_mismatch(
-                    a.to_string(),
-                    b.to_string(),
-                    span,
-                ));
-                actual
+            // Try record casting for any remaining cases
+            (_, _) => {
+                // Check if this could be a record cast
+                let is_record_cast = matches!(annotation, Type::Record(_) | Type::Name(_)) 
+                    && matches!(actual.ty, Type::Record(_) | Type::Name(_));
+                
+                if is_record_cast {
+                    let actual_ty = actual.ty.clone();
+                    match self.cast_record(annotation, annotation, actual, &actual_ty, ast_types, span) {
+                        Ok(casted) => casted,
+                        Err(_) => {
+                            self.errors.push(Error::type_mismatch(
+                                annotation.to_string(),
+                                actual_ty.to_string(),
+                                span,
+                            ));
+                            Expression { kind: ExpressionKind::None, ty: actual_ty }
+                        }
+                    }
+                } else {
+                    self.errors.push(Error::type_mismatch(
+                        annotation.to_string(),
+                        actual.ty.to_string(),
+                        span,
+                    ));
+                    actual
+                }
             }
         }
     }
@@ -1117,6 +1142,76 @@ impl HirCompiler {
         let (func, signature) = self.find_signature(&name, &args, signatures)?;
 
         Ok(Expression::call(func, args.into(), signature.return_type))
+    }
+
+    fn cast_record(
+        &mut self,
+        expected_annotation: &Type,
+        expected_ty: &Type,
+        actual: Expression,
+        actual_ty: &Type,
+        ast_types: &HashMap<String, (ast::Declaration, bool)>,
+        _span: Span,
+    ) -> Result<Expression, String> {
+        // Helper function to resolve type to fields
+        let mut resolve_fields = |ty: &Type| -> Result<HashMap<String, Type>, String> {
+            match ty {
+                Type::Record(fields) => Ok(fields.clone()),
+                Type::Name(name) => {
+                    // Look up the named type definition
+                    match ast_types.get(name) {
+                        Some((ast::Declaration::Record(record), _)) => {
+                            // Convert AST record to Type::Record
+                            let mut fields = HashMap::new();
+                            for field in &record.fields {
+                                fields.insert(
+                                    field.name.clone(),
+                                    self.compile_type_annotation(&field.type_annotation, ast_types),
+                                );
+                            }
+                            Ok(fields)
+                        }
+                        _ => Err(format!("Unknown record type: {}", name)),
+                    }
+                }
+                _ => Err("Not a record type".to_string()),
+            }
+        };
+
+        // Get the actual and expected record fields
+        let actual_fields = resolve_fields(actual_ty)?;
+        let expected_fields = resolve_fields(expected_ty)?;
+
+        // Check if the actual record has all required fields
+        for (field_name, expected_field_type) in &expected_fields {
+            match actual_fields.get(field_name) {
+                Some(actual_field_type) => {
+                    // Check if the field types are compatible
+                    if actual_field_type != expected_field_type {
+                        return Err(format!(
+                            "Field {} type mismatch: expected {}, found {}",
+                            field_name, expected_field_type, actual_field_type
+                        ));
+                    }
+                }
+                None => {
+                    return Err(format!("Missing required field: {}", field_name));
+                }
+            }
+        }
+
+        // If we get here, the casting is valid. Create a new record with only the required fields.
+        if let ExpressionKind::Record(actual_field_exprs) = actual.kind {
+            let mut new_fields = HashMap::new();
+            for (field_name, _) in &expected_fields {
+                if let Some(field_expr) = actual_field_exprs.get(field_name) {
+                    new_fields.insert(field_name.clone(), field_expr.clone());
+                }
+            }
+            Ok(Expression::record(new_fields, expected_annotation.clone()))
+        } else {
+            Err("Expected record expression".to_string())
+        }
     }
 
     fn find_signature(
@@ -1466,5 +1561,75 @@ func example() {
                 source.len()
             );
         }
+    }
+
+    #[test]
+    fn test_record_casting_compatible_fields() {
+        let source = r#"
+record point {
+    x: f32,
+    y: f32
+}
+
+func test_cast() {
+    let p3d = {
+        x: 1.0,
+        y: 2.0
+    }
+    
+    let p: point = p3d
+}
+        "#;
+
+        let result = parse_and_compile(source);
+        assert!(result.is_ok(), "Record casting should succeed when source has all required fields: {:?}", result);
+    }
+
+    #[test]
+    fn test_record_casting_missing_fields() {
+        let source = r#"
+            record point {
+                x: f32,
+                y: f32
+            }
+            
+            record point1d {
+                x: f32
+            }
+            
+            func test_cast() {
+                let p1d = {
+                    x: 1.0
+                }
+                
+                let p: point = p1d
+            }
+        "#;
+
+        let result = parse_and_compile(source);
+        assert!(result.is_err(), "Record casting should fail when source lacks required fields");
+    }
+
+    #[test]
+    fn test_record_casting_extra_fields() {
+        let source = r#"
+            record point {
+                x: f32,
+                y: f32
+            }
+            
+            func test_cast() {
+                let p3d = {
+                    x: 1.0,
+                    y: 2.0,
+                    z: 3.0
+                }
+                
+                let p: point = p3d
+            }
+        "#;
+
+        let result = parse_and_compile(source);
+        assert!(result.is_ok(), "Record casting should succeed when source has extra fields: {:?}", result);
     }
 }

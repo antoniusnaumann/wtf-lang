@@ -1,0 +1,23 @@
+// Test case for record casting
+
+record Point {
+    x: f64,
+    y: f64
+}
+
+record Point3D {
+    x: f64,
+    y: f64,
+    z: f64
+}
+
+func test_cast() {
+    let p3d = Point3D {
+        x: 1.0,
+        y: 2.0,
+        z: 3.0
+    }
+    
+    // This should work - Point3D has all fields that Point needs
+    let p: Point = p3d
+}
