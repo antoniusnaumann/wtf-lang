@@ -1099,49 +1099,7 @@ impl HirCompiler {
             (Type::Option(inner), Type::None) => Expression::none(*inner.clone()),
             (Type::Option(_), _) => Expression::some(actual),
             // Record casting
-            (Type::Record(_), Type::Record(_)) => {
-                let actual_ty = actual.ty.clone();
-                match self.cast_record(annotation, annotation, actual, &actual_ty, ast_types, span) {
-                    Ok(casted) => casted,
-                    Err(_) => {
-                        self.errors.push(Error::type_mismatch(
-                            annotation.to_string(),
-                            actual_ty.to_string(),
-                            span,
-                        ));
-                        Expression { kind: ExpressionKind::None, ty: actual_ty }
-                    }
-                }
-            }
-            (Type::Name(_), Type::Record(_)) => {
-                let actual_ty = actual.ty.clone();
-                match self.cast_record(annotation, annotation, actual, &actual_ty, ast_types, span) {
-                    Ok(casted) => casted,
-                    Err(_) => {
-                        self.errors.push(Error::type_mismatch(
-                            annotation.to_string(),
-                            actual_ty.to_string(),
-                            span,
-                        ));
-                        Expression { kind: ExpressionKind::None, ty: actual_ty }
-                    }
-                }
-            }
-            (Type::Record(_), Type::Name(_)) => {
-                let actual_ty = actual.ty.clone();
-                match self.cast_record(annotation, annotation, actual, &actual_ty, ast_types, span) {
-                    Ok(casted) => casted,
-                    Err(_) => {
-                        self.errors.push(Error::type_mismatch(
-                            annotation.to_string(),
-                            actual_ty.to_string(),
-                            span,
-                        ));
-                        Expression { kind: ExpressionKind::None, ty: actual_ty }
-                    }
-                }
-            }
-            (Type::Name(_), Type::Name(_)) => {
+            (Type::Record(_) | Type::Name(_), Type::Record(_) | Type::Name(_)) => {
                 let actual_ty = actual.ty.clone();
                 match self.cast_record(annotation, annotation, actual, &actual_ty, ast_types, span) {
                     Ok(casted) => casted,
