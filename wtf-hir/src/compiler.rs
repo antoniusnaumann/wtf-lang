@@ -147,12 +147,12 @@ impl HirCompiler {
         }
         let type_ = match declaration {
             ast::Declaration::Record(record) => {
-                let mut fields = HashMap::new();
+                let mut fields = Vec::new();
                 for field in &record.fields {
-                    fields.insert(
+                    fields.push((
                         field.name.to_string(),
                         self.compile_type_annotation(&field.type_annotation, ast_types),
-                    );
+                    ));
                 }
                 Type::Record(fields)
             }
@@ -196,12 +196,12 @@ impl HirCompiler {
             ast::Declaration::Variant(variants) => {
                 let mut cases = HashMap::new();
                 for variant in &variants.cases {
-                    let mut fields = HashMap::new();
+                    let mut fields = Vec::new();
                     for field in &variant.associated_types {
-                        fields.insert(
+                        fields.push((
                             field.name.clone(),
                             self.compile_type_annotation(&field.type_annotation, ast_types),
-                        );
+                        ));
                     }
                     cases.insert(variant.name.clone(), fields);
                 }
@@ -885,22 +885,25 @@ impl HirCompiler {
                         name: field.clone(),
                     }
                     .typed(Type::Never),
-                    Type::Record(ref fields) => match fields.get(field) {
-                        Some(member_type) => {
-                            let member_type = member_type.clone();
-                            ExpressionKind::Member {
-                                of: object.into(),
-                                name: field.clone(),
+                    Type::Record(ref fields) => {
+                        // Find the field in the record
+                        match fields.iter().find(|(name, _)| name == field) {
+                            Some((_, member_type)) => {
+                                let member_type = member_type.clone();
+                                ExpressionKind::Member {
+                                    of: object.into(),
+                                    name: field.clone(),
+                                }
+                                .typed(member_type)
                             }
-                            .typed(member_type)
-                        }
-                        None => {
-                            self.errors.push(Error::unknown_field(
-                                field.clone(),
-                                object_ty.to_string(),
-                                expression.span,
-                            ));
-                            Expression::void()
+                            None => {
+                                self.errors.push(Error::unknown_field(
+                                    field.clone(),
+                                    object_ty.to_string(),
+                                    expression.span,
+                                ));
+                                Expression::void()
+                            }
                         }
                     },
                     Type::Meta(ty) => match *ty {
@@ -978,18 +981,18 @@ impl HirCompiler {
                 }
             }
             ast::ExpressionKind::Record { name, members } => {
-                let mut fields = HashMap::new();
+                let mut fields = Vec::new();
                 for member in members {
-                    let name = member.name.clone();
+                    let field_name = member.name.clone();
                     let value = self.compile_expression(&member.element, vars, visible, signatures, ast_types);
-                    fields.insert(name, value);
+                    fields.push((field_name, value));
                 }
                 let ty = match name {
                     Some(name) => todo!("get type {name}"),
                     None => {
-                        let mut field_types = HashMap::new();
+                        let mut field_types = Vec::new();
                         for (name, value) in &fields {
-                            field_types.insert(name.clone(), value.ty.clone());
+                            field_types.push((name.clone(), value.ty.clone()));
                         }
                         Type::Record(field_types)
                     }
@@ -1150,7 +1153,7 @@ impl HirCompiler {
         _span: Span,
     ) -> Result<Expression, String> {
         // Helper function to resolve type to fields
-        let mut resolve_fields = |ty: &Type| -> Result<HashMap<String, Type>, String> {
+        let mut resolve_fields = |ty: &Type| -> Result<Vec<(String, Type)>, String> {
             match ty {
                 Type::Record(fields) => Ok(fields.clone()),
                 Type::Name(name) => {
@@ -1158,12 +1161,12 @@ impl HirCompiler {
                     match ast_types.get(name) {
                         Some((ast::Declaration::Record(record), _)) => {
                             // Convert AST record to Type::Record
-                            let mut fields = HashMap::new();
+                            let mut fields = Vec::new();
                             for field in &record.fields {
-                                fields.insert(
+                                fields.push((
                                     field.name.clone(),
                                     self.compile_type_annotation(&field.type_annotation, ast_types),
-                                );
+                                ));
                             }
                             Ok(fields)
                         }
@@ -1180,7 +1183,12 @@ impl HirCompiler {
 
         // Check if the actual record has all required fields
         for (field_name, expected_field_type) in &expected_fields {
-            match actual_fields.get(field_name) {
+            // Find the field in the actual fields
+            let actual_field_type = actual_fields.iter()
+                .find(|(name, _)| name == field_name)
+                .map(|(_, ty)| ty);
+            
+            match actual_field_type {
                 Some(actual_field_type) => {
                     // Check if the field types are compatible
                     if actual_field_type != expected_field_type {
@@ -1196,17 +1204,26 @@ impl HirCompiler {
             }
         }
 
-        // If we get here, the casting is valid. Create a new record with only the required fields.
+        // If we get here, the casting is valid. 
         if let ExpressionKind::Record(actual_field_exprs) = actual.kind {
-            let mut new_fields = HashMap::new();
+            // For record literals, create a new record with only the required fields.
+            let mut new_fields = Vec::new();
             for (field_name, _) in &expected_fields {
-                if let Some(field_expr) = actual_field_exprs.get(field_name) {
-                    new_fields.insert(field_name.clone(), field_expr.clone());
+                // Find the field expression in the actual record
+                if let Some((_, field_expr)) = actual_field_exprs.iter()
+                    .find(|(name, _)| name == field_name) {
+                    new_fields.push((field_name.clone(), field_expr.clone()));
                 }
             }
             Ok(Expression::record(new_fields, expected_annotation.clone()))
         } else {
-            Err("Expected record expression".to_string())
+            // For non-record expressions (like variable references), 
+            // if the types are compatible, allow the cast as-is
+            // The type compatibility was already checked above
+            Ok(Expression { 
+                kind: actual.kind, 
+                ty: expected_annotation.clone() 
+            })
         }
     }
 
@@ -1607,11 +1624,9 @@ func test_cast() {
     }
 
     #[test]
-    #[ignore] // TODO: This test is skipped because the current implementation has a bug with extra fields
     fn test_record_casting_extra_fields() {
         // This test demonstrates the expected behavior: record casting should succeed
         // when the source record contains all required fields, even with extra fields.
-        // Currently fails due to a bug in the implementation with field ordering.
         let source = r#"
             record point {
                 x: f32,
@@ -1631,6 +1646,6 @@ func test_cast() {
 
         let result = parse_and_compile(source);
         // This should succeed - extra fields should be allowed in record casting
-        assert!(result.is_ok(), "Record casting should succeed when source has all required fields plus extra fields");
+        assert!(result.is_ok(), "Record casting should succeed when source has all required fields plus extra fields: {:?}", result);
     }
 }
