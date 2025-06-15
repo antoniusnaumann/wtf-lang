@@ -63,30 +63,29 @@ test "person record downcasting" {
     assert person_data.age == 25
 }
 
-// FIXME: The following tests are commented out due to a known bug in the current 
-// implementation where record casting with extra fields doesn't work correctly.
-// These tests demonstrate the EXPECTED behavior once the bug is fixed.
+// These tests now work correctly after fixing the record field ordering issue
 
-// test "downcasting with extra fields (currently broken)" {
-//     // This should work but currently fails due to implementation bug
-//     let record_with_extras = {
-//         x: 3.0,
-//         y: 4.0,
-//         z: 5.0  // Extra field - should be ignored
-//     }
-//     
-//     let point: point2d = record_with_extras
-//     assert true
-// }
+test "downcasting with extra fields" {
+    // This should work now that the field ordering bug is fixed
+    let record_with_extras = {
+        x: 3,
+        y: 4,
+        z: 5  // Extra field - should be ignored
+    }
+    
+    let point: point2d = record_with_extras
+    assert point.x == 3
+    assert point.y == 4
+}
 
-// test "employee to person downcasting (currently broken)" {
-//     let employee_record = {
-//         name: "Alice",
-//         age: 30,
-//         department: "Engineering",  // Extra fields
-//         salary: 75000.0
-//     }
-//     
-//     let person_record: person = employee_record
-//     assert true
-// }
+test "employee to person downcasting" {
+    let employee_record = {
+        name: "Alice",
+        age: 30,
+        department: "Engineering",  // Extra fields
+        salary: 75000
+    }
+    
+    let person_record: person = employee_record
+    assert person_record.age == 30
+}
