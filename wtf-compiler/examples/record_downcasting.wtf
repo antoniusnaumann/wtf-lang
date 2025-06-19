@@ -1,4 +1,3 @@
-// TODO: This is currently flaky, as field order is random due to using a hashmap. that should be changed into a Vec of tuples
 package wtf:example@0.1.0
 
 record point2d {

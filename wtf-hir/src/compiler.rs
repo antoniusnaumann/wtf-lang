@@ -462,7 +462,13 @@ impl HirCompiler {
 
                 let expression = if let Some(anno) = &variable_declaration.type_annotation {
                     let annotated_type = self.compile_type_annotation(&anno, ast_types);
-                    self.try_cast(&annotated_type, initial_value, signatures, ast_types, variable_declaration.span)
+                    self.try_cast(
+                        &annotated_type,
+                        initial_value,
+                        signatures,
+                        ast_types,
+                        variable_declaration.span,
+                    )
                 } else {
                     initial_value
                 };
@@ -503,7 +509,13 @@ impl HirCompiler {
                     return Expression::void();
                 }
                 let annotated_type = &vars[binding.id];
-                let value = self.try_cast(annotated_type, comp_val, signatures, ast_types, target.span.to(value.span));
+                let value = self.try_cast(
+                    annotated_type,
+                    comp_val,
+                    signatures,
+                    ast_types,
+                    target.span.to(value.span),
+                );
                 Expression::var_set(binding.id, value)
             }
             ast::Statement::ExpressionStatement(expression) => {
@@ -516,7 +528,10 @@ impl HirCompiler {
                     }
                     None => Expression::void(),
                 };
-                let span = expression.as_ref().map(|e| e.span).unwrap_or(Span { start: 0, end: 0 });
+                let span = expression
+                    .as_ref()
+                    .map(|e| e.span)
+                    .unwrap_or(Span { start: 0, end: 0 });
                 let returned = self.try_cast(&vars.result, returned, signatures, ast_types, span);
                 Expression::return_(returned)
             }
@@ -535,8 +550,13 @@ impl HirCompiler {
                 Expression::throw(value)
             }
             ast::Statement::IfStatement(if_statement) => {
-                let condition =
-                    self.compile_expression(&if_statement.condition, vars, visible, signatures, ast_types);
+                let condition = self.compile_expression(
+                    &if_statement.condition,
+                    vars,
+                    visible,
+                    signatures,
+                    ast_types,
+                );
                 let then = self.compile_block(
                     &if_statement.then_branch,
                     vars,
@@ -581,8 +601,13 @@ impl HirCompiler {
                 Expression::loop_(complete_body.into(), Type::None)
             }
             ast::Statement::ForStatement(for_statement) => {
-                let iterable =
-                    self.compile_expression(&for_statement.iterable, vars, visible, signatures, ast_types);
+                let iterable = self.compile_expression(
+                    &for_statement.iterable,
+                    vars,
+                    visible,
+                    signatures,
+                    ast_types,
+                );
                 let body: Body = match &iterable.ty {
                     Type::List(elem) => {
                         let list_elem = vars.push(*elem.clone());
@@ -668,8 +693,13 @@ impl HirCompiler {
                 Expression::loop_(body, Type::None)
             }
             ast::Statement::Assertion(assert_statement) => {
-                let condition =
-                    self.compile_expression(&assert_statement.condition, vars, visible, signatures, ast_types);
+                let condition = self.compile_expression(
+                    &assert_statement.condition,
+                    vars,
+                    visible,
+                    signatures,
+                    ast_types,
+                );
                 Expression::if_(
                     condition,
                     EMPTY_BODY,
@@ -787,10 +817,20 @@ impl HirCompiler {
                     }
                 };
 
-                self.compile_call(vars, visible, signatures, ast_types, &[left, right], name, Vec::new(), expression.span)
+                self.compile_call(
+                    vars,
+                    visible,
+                    signatures,
+                    ast_types,
+                    &[left, right],
+                    name,
+                    Vec::new(),
+                    expression.span,
+                )
             }
             ast::ExpressionKind::UnaryExpression { operator, operand } => {
-                let operand = self.compile_expression(operand, vars, visible, signatures, ast_types);
+                let operand =
+                    self.compile_expression(operand, vars, visible, signatures, ast_types);
                 let operand_ty = operand.ty.clone();
                 match operator {
                     UnaryOperator::Negate => {
@@ -849,7 +889,16 @@ impl HirCompiler {
                     _ => todo!("call of non-name"),
                 };
 
-                self.compile_call(vars, visible, signatures, ast_types, arguments, &function, Vec::new(), expression.span)
+                self.compile_call(
+                    vars,
+                    visible,
+                    signatures,
+                    ast_types,
+                    arguments,
+                    &function,
+                    Vec::new(),
+                    expression.span,
+                )
             }
             ast::ExpressionKind::MethodCall {
                 receiver,
@@ -864,9 +913,19 @@ impl HirCompiler {
 
                 // TODO: handle calls on resources separately
 
-                let receiver = self.compile_expression(receiver, vars, visible, signatures, ast_types);
+                let receiver =
+                    self.compile_expression(receiver, vars, visible, signatures, ast_types);
 
-                self.compile_call(vars, visible, signatures, ast_types, arguments, method, vec![receiver], expression.span)
+                self.compile_call(
+                    vars,
+                    visible,
+                    signatures,
+                    ast_types,
+                    arguments,
+                    method,
+                    vec![receiver],
+                    expression.span,
+                )
             }
             ast::ExpressionKind::FieldAccess {
                 object,
@@ -905,7 +964,7 @@ impl HirCompiler {
                                 Expression::void()
                             }
                         }
-                    },
+                    }
                     Type::Meta(ty) => match *ty {
                         Type::Enum { ref cases } => {
                             match cases.iter().position(|case| case == field) {
@@ -941,7 +1000,8 @@ impl HirCompiler {
                 }
             }
             ast::ExpressionKind::IndexAccess { collection, index } => {
-                let collection = self.compile_expression(&collection, vars, visible, signatures, ast_types);
+                let collection =
+                    self.compile_expression(&collection, vars, visible, signatures, ast_types);
                 let index = self.compile_expression(index, vars, visible, signatures, ast_types);
                 let collection_ty = collection.ty.clone();
                 match collection_ty {
@@ -984,7 +1044,13 @@ impl HirCompiler {
                 let mut fields = Vec::new();
                 for member in members {
                     let field_name = member.name.clone();
-                    let value = self.compile_expression(&member.element, vars, visible, signatures, ast_types);
+                    let value = self.compile_expression(
+                        &member.element,
+                        vars,
+                        visible,
+                        signatures,
+                        ast_types,
+                    );
                     fields.push((field_name, value));
                 }
                 let ty = match name {
@@ -1042,7 +1108,7 @@ impl HirCompiler {
             Err(mangled_name) => {
                 self.errors
                     .push(Error::unknown_function(mangled_name, span));
-                
+
                 let dummy_signature = FunctionSignature {
                     param_types: args.iter().map(|a| a.ty.clone()).collect(),
                     return_type: Type::None,
@@ -1104,7 +1170,8 @@ impl HirCompiler {
             // Record casting
             (Type::Record(_) | Type::Name(_), Type::Record(_) | Type::Name(_)) => {
                 let actual_ty = actual.ty.clone();
-                match self.cast_record(annotation, annotation, actual, &actual_ty, ast_types, span) {
+                match self.cast_record(annotation, annotation, actual, &actual_ty, ast_types, span)
+                {
                     Ok(casted) => casted,
                     Err(_) => {
                         self.errors.push(Error::type_mismatch(
@@ -1112,7 +1179,10 @@ impl HirCompiler {
                             actual_ty.to_string(),
                             span,
                         ));
-                        Expression { kind: ExpressionKind::None, ty: actual_ty }
+                        Expression {
+                            kind: ExpressionKind::None,
+                            ty: actual_ty,
+                        }
                     }
                 }
             }
@@ -1184,10 +1254,11 @@ impl HirCompiler {
         // Check if the actual record has all required fields
         for (field_name, expected_field_type) in &expected_fields {
             // Find the field in the actual fields
-            let actual_field_type = actual_fields.iter()
+            let actual_field_type = actual_fields
+                .iter()
                 .find(|(name, _)| name == field_name)
                 .map(|(_, ty)| ty);
-            
+
             match actual_field_type {
                 Some(actual_field_type) => {
                     // Check if the field types are compatible
@@ -1204,25 +1275,27 @@ impl HirCompiler {
             }
         }
 
-        // If we get here, the casting is valid. 
+        // If we get here, the casting is valid.
         if let ExpressionKind::Record(actual_field_exprs) = actual.kind {
             // For record literals, create a new record with only the required fields.
             let mut new_fields = Vec::new();
             for (field_name, _) in &expected_fields {
                 // Find the field expression in the actual record
-                if let Some((_, field_expr)) = actual_field_exprs.iter()
-                    .find(|(name, _)| name == field_name) {
+                if let Some((_, field_expr)) = actual_field_exprs
+                    .iter()
+                    .find(|(name, _)| name == field_name)
+                {
                     new_fields.push((field_name.clone(), field_expr.clone()));
                 }
             }
             Ok(Expression::record(new_fields, expected_annotation.clone()))
         } else {
-            // For non-record expressions (like variable references), 
+            // For non-record expressions (like variable references),
             // if the types are compatible, allow the cast as-is
             // The type compatibility was already checked above
-            Ok(Expression { 
-                kind: actual.kind, 
-                ty: expected_annotation.clone() 
+            Ok(Expression {
+                kind: actual.kind,
+                ty: expected_annotation.clone(),
             })
         }
     }
@@ -1375,17 +1448,12 @@ mod tests {
 
         let result = parse_and_compile(source);
 
-        // The behavior may vary - some unknown types might be detected, others might not
-        // depending on where they're used in the compilation pipeline
-        if let Err(errors) = result {
-            assert_eq!(errors.len(), 1);
-            matches!(errors[0].kind, ErrorKind::UnknownIdentifier);
-            println!("Successfully detected unknown type error: {:?}", errors[0]);
-        } else {
-            // If no error is detected, this might be because the type system is permissive
-            // or because the unknown type fallback is working
-            println!("Unknown type test passed without error - type system may be permissive");
-        }
+        let Err(errors) = result else {
+            panic!("Unknown type was accepted")
+        };
+        assert_eq!(errors.len(), 1);
+        matches!(errors[0].kind, ErrorKind::UnknownIdentifier);
+        println!("Successfully detected unknown type error: {:?}", errors[0]);
     }
 
     #[test]
@@ -1424,15 +1492,12 @@ mod tests {
         let errors = result.unwrap_err();
         println!("Collected {} errors: {:?}", errors.len(), errors);
 
-        // With current panic-catching implementation, we might only catch the first error
-        // But we should get at least one error
         assert!(
             errors.len() >= 1,
             "Should detect at least one error, got {} errors",
             errors.len()
         );
 
-        // Check that we have a unknown identifier error (since that's what we're testing)
         let error_types: Vec<_> = errors.iter().map(|e| &e.kind).collect();
 
         let unknown_id_count = error_types
@@ -1470,7 +1535,6 @@ mod tests {
             errors
         );
 
-        // This test focuses on demonstrating error detection across multiple functions
         assert!(
             errors.len() >= 1,
             "Should detect at least one error across multiple functions"
@@ -1487,18 +1551,14 @@ mod tests {
         "#;
 
         let result = parse_and_compile(source);
-        // This should either succeed (if assignment creates a new binding) or fail with assignment error
-        // The exact behavior depends on the language semantics
-        if let Err(errors) = result {
-            if !errors.is_empty() {
-                // If it fails, check that it's for the right reason
-                let _has_assignment_error = errors
-                    .iter()
-                    .any(|e| matches!(e.kind, ErrorKind::ImmutableAssignment { .. }));
-                println!("Assignment errors: {:?}", errors);
-                // Don't assert for now as the semantics might vary
-            }
-        }
+        let Err(errors) = result else {
+            panic!("Assigning to an immutable variable was allowed")
+        };
+
+        let has_assignment_error = errors
+            .iter()
+            .any(|e| matches!(e.kind, ErrorKind::ImmutableAssignment { .. }));
+        assert!(has_assignment_error);
     }
 
     #[test]
@@ -1512,34 +1572,7 @@ mod tests {
         "#;
 
         let result = parse_and_compile(source);
-        // Should either succeed (with implicit conversions) or fail with type mismatch
-        if let Err(errors) = result {
-            println!("Operation errors: {:?}", errors);
-            // Type system may be permissive, so just check it doesn't crash
-        }
-    }
-
-    #[test]
-    fn test_mixed_valid_and_invalid_code() {
-        let source = r#"
-            func valid_function() {
-                var x = 42
-                x + 1
-            }
-            
-            func invalid_function() {
-                unknown_identifier
-            }
-        "#;
-
-        let result = parse_and_compile(source);
-        assert!(result.is_err(), "Should detect errors in invalid function");
-
-        let errors = result.unwrap_err();
-        assert!(!errors.is_empty());
-
-        // Even with errors, we should have tried to compile both functions
-        // (though the result is Err, the valid parts should have been processed)
+        assert!(result.is_err());
     }
 
     #[test]
@@ -1565,7 +1598,7 @@ func example() {
                 error.span.start,
                 error.span.end
             );
-            
+
             // The span should be reasonable (within the source length)
             assert!(
                 error.span.end <= source.len(),
@@ -1595,7 +1628,11 @@ func test_cast() {
         "#;
 
         let result = parse_and_compile(source);
-        assert!(result.is_ok(), "Record casting should succeed when source has all required fields: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "Record casting should succeed when source has all required fields: {:?}",
+            result
+        );
     }
 
     #[test]
@@ -1620,7 +1657,10 @@ func test_cast() {
         "#;
 
         let result = parse_and_compile(source);
-        assert!(result.is_err(), "Record casting should fail when source lacks required fields");
+        assert!(
+            result.is_err(),
+            "Record casting should fail when source lacks required fields"
+        );
     }
 
     #[test]
@@ -1645,7 +1685,6 @@ func test_cast() {
         "#;
 
         let result = parse_and_compile(source);
-        // This should succeed - extra fields should be allowed in record casting
         assert!(result.is_ok(), "Record casting should succeed when source has all required fields plus extra fields: {:?}", result);
     }
 }
