@@ -119,9 +119,9 @@ pub enum ExpressionKind {
     },
     Variant {
         case: String,
-        payloads: HashMap<String, Expression>,
+        payloads: Vec<(String, Expression)>,
     },
-    Record(HashMap<String, Expression>),
+    Record(Vec<(String, Expression)>),
     Member {
         of: Box<Expression>,
         name: String,
@@ -216,10 +216,10 @@ impl Expression {
     fn bool(value: bool) -> Expression {
         ExpressionKind::Bool(value).typed(Type::Bool)
     }
-    fn variant(case: String, payloads: HashMap<String, Expression>, ty: Type) -> Expression {
+    fn variant(case: String, payloads: Vec<(String, Expression)>, ty: Type) -> Expression {
         ExpressionKind::Variant { case, payloads }.typed(ty)
     }
-    fn record(fields: HashMap<String, Expression>, ty: Type) -> Expression {
+    fn record(fields: Vec<(String, Expression)>, ty: Type) -> Expression {
         ExpressionKind::Record(fields).typed(ty)
     }
     fn some(inner: Expression) -> Expression {
