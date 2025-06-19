@@ -258,7 +258,9 @@ impl HirCompiler {
                 "char" => Type::Char,
                 "string" => Type::String,
                 name => match types.get(name) {
-                    Some(ty) => self.compile_type_annotation(annotation, types),
+                    Some((decl, is_export)) => {
+                        self.compile_type_declaration(decl, *is_export, types)
+                    }
                     None => {
                         self.errors.push(Error::unknown_identifier(annotation.span));
 
@@ -1319,7 +1321,13 @@ impl HirCompiler {
             }
         }
 
-        // If we get here, the casting is valid.
+        if actual_fields.len() == expected_fields.len() {
+            return Ok(Expression {
+                kind: actual.kind,
+                ty: expected_annotation.clone(),
+            });
+        }
+
         if let ExpressionKind::Record(actual_field_exprs) = actual.kind {
             // For record literals, create a new record with only the required fields.
             let mut new_fields = Vec::new();
@@ -1334,13 +1342,7 @@ impl HirCompiler {
             }
             Ok(Expression::record(new_fields, expected_annotation.clone()))
         } else {
-            // For non-record expressions (like variable references),
-            // if the types are compatible, allow the cast as-is
-            // The type compatibility was already checked above
-            Ok(Expression {
-                kind: actual.kind,
-                ty: expected_annotation.clone(),
-            })
+            todo!("Introduce a new local (type of the original expression) here, store the expression in that local. Then create a record expression here that creates a new record with only the relevant fields.")
         }
     }
 
