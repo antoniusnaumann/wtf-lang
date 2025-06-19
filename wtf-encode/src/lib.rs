@@ -125,7 +125,6 @@ impl Convert<'_> for (String, hir::Type) {
             hir::Type::Resource { methods } => todo!(),
             hir::Type::Enum { cases } => Type::Enum(cases),
             hir::Type::Variant { cases } => todo!(),
-            hir::Type::Name(_) => todo!(),
             hir::Type::Meta(_) => todo!(),
         };
 
@@ -544,7 +543,6 @@ impl Convert<'_> for hir::Type {
                 Some(TypeRef::Primitive(ty))
             }
             hir::Type::String => Some(TypeRef::Primitive(PrimitiveType::String)),
-            hir::Type::Name(_) => todo!(),
             hir::Type::Meta(_) => todo!(),
         }
     }

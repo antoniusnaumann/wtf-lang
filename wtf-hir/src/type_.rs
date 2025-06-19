@@ -34,7 +34,6 @@ pub enum Type {
         cases: HashMap<String, Vec<(String, Type)>>,
     },
     Tuple(Vec<Type>),
-    Name(String),
     Meta(Box<Type>),
 }
 
@@ -120,7 +119,6 @@ impl Display for Type {
                 write!(f, ")")?
             }
             Type::Char => write!(f, "char")?,
-            Type::Name(name) => write!(f, "{name}")?,
             Type::Meta(ty) => write!(f, "meta({ty})")?,
         };
 
@@ -170,13 +168,6 @@ pub fn unify(a: &Type, b: &Type) -> Type {
         }
         (Type::Variant { cases: cases_a }, Type::Variant { cases: cases_b }) => {
             todo!("compare cases_a and cases_b")
-        }
-        (Type::Name(name_a), Type::Name(name_b)) => {
-            if name_a == name_b {
-                a.clone()
-            } else {
-                todo!("resolve names and compare types")
-            }
         }
         (a, b) => panic!("incompatible types {a} and {b}"),
     }
