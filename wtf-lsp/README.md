@@ -68,13 +68,33 @@ The language server currently supports:
 - `textDocument/didChange` 
 - `textDocument/didClose`
 - `textDocument/publishDiagnostics`
+- `textDocument/codeAction` (new: provides quick fixes)
 
 ## Error Types
 
 The language server detects and reports:
 
-1. **Parser Errors**: Syntax errors, unexpected tokens, malformed constructs
-2. **HIR Compilation Errors**: Type errors, semantic errors (when HIR compilation fails)
+1. **Parser Errors**: Syntax errors, unexpected tokens, malformed constructs (shown as ERROR severity)
+2. **HIR Compilation Errors**: Type errors, semantic errors (when HIR compilation fails, shown as ERROR severity)
+
+## Code Actions (Quick Fixes)
+
+The language server now provides automatic fixes for common errors:
+
+### Unknown Field Errors
+- Suggests common field names when accessing non-existent fields
+- Provides quick-fix actions to replace the field name
+
+### Keyword Errors  
+- Maps keywords from other programming languages to WTF equivalents:
+  - `def`, `fn`, `fun`, `function` → `func`
+  - `struct` → `record`
+  - `class` → `resource`, `record`
+  - `union` → `variant`
+  - `const` → `let`
+  - `mut`, `mutable` → `var`
+- Extracts expected keywords from error messages
+- Provides quick-fix actions to correct the keyword
 
 ## Development
 
