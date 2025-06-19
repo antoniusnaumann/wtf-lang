@@ -545,6 +545,7 @@ impl HirCompiler {
                     self.try_cast(
                         &annotated_type,
                         initial_value,
+                        vars,
                         signatures,
                         types,
                         variable_declaration.span,
@@ -588,10 +589,11 @@ impl HirCompiler {
                     ));
                     return Expression::void();
                 }
-                let annotated_type = &vars[binding.id];
+                let annotated_type = vars[binding.id].clone();
                 let value = self.try_cast(
-                    annotated_type,
+                    &annotated_type,
                     comp_val,
+                    vars,
                     signatures,
                     types,
                     target.span.to(value.span),
@@ -612,7 +614,8 @@ impl HirCompiler {
                     .as_ref()
                     .map(|e| e.span)
                     .unwrap_or(Span { start: 0, end: 0 });
-                let returned = self.try_cast(&vars.result, returned, signatures, types, span);
+                let result_type = vars.result.clone();
+                let returned = self.try_cast(&result_type, returned, vars, signatures, types, span);
                 Expression::return_(returned)
             }
             ast::Statement::BreakStatement(expression) => {
@@ -1187,7 +1190,7 @@ impl HirCompiler {
         };
 
         for (arg, expected) in args.iter_mut().zip(signature.param_types.iter()) {
-            *arg = self.try_cast(expected, arg.clone(), signatures, types, span);
+            *arg = self.try_cast(expected, arg.clone(), vars, signatures, types, span);
         }
 
         Expression::call(function.clone(), args, signature.return_type.clone())
@@ -1197,6 +1200,7 @@ impl HirCompiler {
         &mut self,
         annotation: &Type,
         mut actual: Expression,
+        vars: &mut VarCollector,
         signatures: &HashMap<String, FunctionSignature>,
         types: &HashMap<String, Type>,
         span: Span,
@@ -1244,6 +1248,7 @@ impl HirCompiler {
                     expected_fields,
                     actual.clone(),
                     actual_fields,
+                    vars,
                     types,
                     span,
                 ) {
@@ -1294,6 +1299,7 @@ impl HirCompiler {
         expected_fields: &[(String, Type)],
         actual: Expression,
         actual_fields: &[(String, Type)],
+        vars: &mut VarCollector,
         types: &HashMap<String, Type>,
         _span: Span,
     ) -> Result<Expression, String> {
@@ -1342,7 +1348,31 @@ impl HirCompiler {
             }
             Ok(Expression::record(new_fields, expected_annotation.clone()))
         } else {
-            todo!("Introduce a new local (type of the original expression) here, store the expression in that local. Then create a record expression here that creates a new record with only the relevant fields.")
+            // When the actual expression is not a record literal (e.g., a variable reference),
+            // we need to store it in a local and create a new record from the required fields.
+            
+            // Create a local variable to store the actual expression
+            let local_var = vars.push(actual.ty.clone());
+            
+            // Store the actual expression in the local variable
+            let store_expr = Expression::var_set(local_var, actual.clone());
+            
+            // Create field access expressions for each required field
+            let mut new_fields = Vec::new();
+            for (field_name, field_type) in expected_fields {
+                let field_access = ExpressionKind::Member {
+                    of: Expression::var_get(local_var, actual.ty.clone()).into(),
+                    name: field_name.clone(),
+                }.typed(field_type.clone());
+                
+                new_fields.push((field_name.clone(), field_access));
+            }
+            
+            // Create the new record with only the required fields
+            let new_record = Expression::record(new_fields, expected_annotation.clone());
+            
+            // Combine the storage and record creation
+            Ok(Expression::multiple([store_expr, new_record]))
         }
     }
 
