@@ -6,7 +6,122 @@ record point {
 }
 
 func double_point(p: point) -> point {
-    nonexistent(32)
-    nonexistent(32 + 7)
     return { x: p.x * 2, y: p.y * 2 }
 }
+
+record point2d {
+    x: s32,
+    y: s32
+}
+
+record person {
+    name: string,
+    age: s32
+}
+
+export func main() -> s64 {
+    let point_data = {
+        x: 1,
+        y: 0,
+        z: 7,
+    }
+    
+    let point_2d: point2d = point_data
+    // FIXME: does not work currently
+    // let my_point = double_point(point_2d)
+
+    if  point_2d.x == 1 {
+        return point_2d.y
+    }
+
+    return 42
+}
+
+// test "call function with record" {
+//     let p = {
+//         x: 21,
+//         y: 13,
+//     }
+
+//     let double = p.double_point()
+
+//     assert double.x == 42
+//     assert double.y == 26
+// }
+
+test "basic record downcasting from anonymous record to named type" {
+    let anonymous_record = {
+        x: 5,
+        y: 7
+    }
+    
+    let typed_point: point2d = anonymous_record
+
+    assert typed_point.x == anonymous_record.x
+    assert typed_point.y == anonymous_record.y
+
+    assert typed_point.x == 5
+    assert typed_point.y == 7
+}
+
+test "exact field matching works" {
+    let p_data = {
+        x: 10,
+        y: 20
+    }
+    
+    let p2d: point2d = p_data
+    
+    assert p2d.x == 10
+    assert p2d.y == 20
+
+    assert p2d.x == p_data.x
+    assert p2d.y == p_data.y
+}
+
+test "downcasting with extra fields" {
+    let record_with_extras = {
+        x: 3,
+        y: 4,
+        z: 5  // Extra field - should be ignored
+    }
+    
+    let point: point2d = record_with_extras
+    assert point.x == 3
+    assert point.y == 4
+}
+
+test "downcasting with different field order" {
+    let record_with_reverse_order = {
+        y: 4,
+        x: 3
+    }
+    
+    let point: point2d = record_with_reverse_order
+    assert point.x == 3
+    assert point.y == 4
+}
+
+// FIXME: currently fails
+test "record with string field" {
+    let person_data = {
+        name: "Bob",
+        age: 25
+    }
+    
+    let person_record: person = person_data
+
+    assert person_record.age == 25
+}
+
+// test "employee to person downcasting" {
+//     let employee_record = {
+//         name: "Alice",
+//         age: 30,
+//         department: "Engineering",  
+//         salary: 75000
+//     }
+    
+//     let person_record: person = employee_record
+//     assert person_record.age == 30
+// }

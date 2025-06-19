@@ -1327,53 +1327,38 @@ impl HirCompiler {
             }
         }
 
-        if actual_fields.len() == expected_fields.len() {
+        // No cast needed if field order is exactly the same
+        if actual_fields.len() == expected_fields.len()
+            && actual_fields
+                .iter()
+                .zip(expected_fields.iter())
+                .all(|((a, _), (b, _))| a == b)
+        {
             return Ok(Expression {
                 kind: actual.kind,
                 ty: expected_annotation.clone(),
             });
         }
 
-        if let ExpressionKind::Record(actual_field_exprs) = actual.kind {
-            // For record literals, create a new record with only the required fields.
-            let mut new_fields = Vec::new();
-            for (field_name, _) in expected_fields {
-                // Find the field expression in the actual record
-                if let Some((_, field_expr)) = actual_field_exprs
-                    .iter()
-                    .find(|(name, _)| name == field_name)
-                {
-                    new_fields.push((field_name.clone(), field_expr.clone()));
-                }
+        let actual_ty = actual.ty.clone();
+
+        let local_var = vars.push(actual.ty.clone());
+        let store_expr = Expression::var_set(local_var, actual);
+
+        let mut new_fields = Vec::new();
+        for (field_name, field_type) in expected_fields {
+            let field_access = ExpressionKind::Member {
+                of: Expression::var_get(local_var, actual_ty.clone()).into(),
+                name: field_name.clone(),
             }
-            Ok(Expression::record(new_fields, expected_annotation.clone()))
-        } else {
-            // When the actual expression is not a record literal (e.g., a variable reference),
-            // we need to store it in a local and create a new record from the required fields.
-            
-            // Create a local variable to store the actual expression
-            let local_var = vars.push(actual.ty.clone());
-            
-            // Store the actual expression in the local variable
-            let store_expr = Expression::var_set(local_var, actual.clone());
-            
-            // Create field access expressions for each required field
-            let mut new_fields = Vec::new();
-            for (field_name, field_type) in expected_fields {
-                let field_access = ExpressionKind::Member {
-                    of: Expression::var_get(local_var, actual.ty.clone()).into(),
-                    name: field_name.clone(),
-                }.typed(field_type.clone());
-                
-                new_fields.push((field_name.clone(), field_access));
-            }
-            
-            // Create the new record with only the required fields
-            let new_record = Expression::record(new_fields, expected_annotation.clone());
-            
-            // Combine the storage and record creation
-            Ok(Expression::multiple([store_expr, new_record]))
+            .typed(field_type.clone());
+
+            new_fields.push((field_name.clone(), field_access));
         }
+
+        let new_record = Expression::record(new_fields, expected_annotation.clone());
+
+        Ok(Expression::multiple([store_expr, new_record]))
     }
 
     fn find_signature(
