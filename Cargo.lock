@@ -2110,6 +2110,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tower-lsp",
+ "wtf-ast",
  "wtf-error",
  "wtf-hir",
  "wtf-parser",
