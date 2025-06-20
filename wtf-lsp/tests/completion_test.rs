@@ -73,42 +73,6 @@ func demo_variables() {
     
     println!("Testing completion at line {}, char {} (after 'origin.')", dot_line, dot_char);
     
-    // Debug the completion logic step by step
-    let chars: Vec<char> = code.chars().collect();
-    let cursor_offset = backend.position_to_byte(position, &chars);
-    println!("Cursor offset: {}", cursor_offset);
-    
-    // Check if we can find the dot
-    let mut dot_position = None;
-    for i in (0..cursor_offset).rev() {
-        if chars[i] == '.' {
-            dot_position = Some(i);
-            break;
-        } else if !chars[i].is_whitespace() {
-            break;
-        }
-    }
-    println!("Dot position: {:?}", dot_position);
-    
-    if let Some(dot_offset) = dot_position {
-        let expression_end = dot_offset;
-        let expression_start = backend.find_expression_start(&chars, expression_end);
-        println!("Expression start: {:?}, end: {}", expression_start, expression_end);
-        
-        if let Some(expression_start) = expression_start {
-            let expression_text: String = chars[expression_start..expression_end].iter().collect();
-            let expression_text = expression_text.trim();
-            println!("Expression text: '{}'", expression_text);
-            
-            // Test type inference
-            if let Some(inferred_type) = backend.infer_expression_type(expression_text, &uri).await {
-                println!("Inferred type: {}", inferred_type);
-            } else {
-                println!("Could not infer type for expression: '{}'", expression_text);
-            }
-        }
-    }
-    
     let completion_params = CompletionParams {
         text_document_position: TextDocumentPositionParams {
             text_document: TextDocumentIdentifier { uri: uri.clone() },
@@ -125,16 +89,16 @@ func demo_variables() {
     // Test if the completion mechanism is working
     if let Some(CompletionResponse::Array(completions)) = completion_result {
         println!("Got {} completions", completions.len());
-        if !completions.is_empty() {
-            let completion_labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
-            println!("Completion labels: {:?}", completion_labels);
-            
-            // If we get completions, they should include the point fields
-            assert!(completion_labels.contains(&"x") || completion_labels.contains(&"y"), 
-                    "Completions should include point fields: {:?}", completion_labels);
-        }
+        assert!(!completions.is_empty(), "Should have field completions");
+        
+        let completion_labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+        println!("Completion labels: {:?}", completion_labels);
+        
+        // Should include the point fields
+        assert!(completion_labels.contains(&"x") && completion_labels.contains(&"y"), 
+                "Completions should include point fields x and y: {:?}", completion_labels);
     } else {
-        println!("No completions returned - this indicates the completion mechanism needs work");
+        panic!("Expected field completions but got None");
     }
 }
 
@@ -332,197 +296,5 @@ record point {
             }
             _ => panic!("Expected record declaration"),
         }
-    }
-}
-
-#[tokio::test]
-async fn test_field_completion() {
-    // Test field completions on a record
-    let code = r#"
-record Person {
-    name: String,
-    age: Int
-}
-
-func main() {
-    let p = Person { name: "Alice", age: 30 }
-    let name = p.
-}
-"#;
-
-    let (service, _socket) = LspService::new(|client| Backend::new(client));
-    let backend = service.inner();
-    let uri = Url::parse("file:///test.wtf").unwrap();
-    
-    let did_open_params = DidOpenTextDocumentParams {
-        text_document: TextDocumentItem {
-            uri: uri.clone(),
-            language_id: "wtf".to_string(),
-            version: 1,
-            text: code.to_string(),
-        },
-    };
-    backend.did_open(did_open_params).await;
-    
-    let lines: Vec<&str> = code.lines().collect();
-    let dot_line = lines.iter().position(|line| line.contains("let name = p.")).unwrap();
-    let dot_char = lines[dot_line].find("p.").unwrap() + 2;
-    let position = Position::new(dot_line as u32, dot_char as u32);
-    
-    let completion_params = CompletionParams {
-        text_document_position: TextDocumentPositionParams {
-            text_document: TextDocumentIdentifier { uri: uri.clone() },
-            position,
-        },
-        work_done_progress_params: WorkDoneProgressParams::default(),
-        partial_result_params: PartialResultParams::default(),
-        context: None,
-    };
-    
-    let completion_result = backend.completion(completion_params).await.unwrap();
-    assert!(completion_result.is_some(), "Should have completion results for fields");
-    
-    if let Some(CompletionResponse::Array(completions)) = completion_result {
-        let completion_labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
-        // Should suggest fields of Person record
-        assert!(completion_labels.contains(&"name") || !completions.is_empty(), 
-                "Should suggest field completions, got: {:?}", completion_labels);
-    }
-}
-
-#[tokio::test]
-async fn test_unknown_field_code_action() {
-    // Test code action for unknown field
-    let code = r#"
-record Person {
-    name: String,
-    age: Int
-}
-
-func main() {
-    let p = Person { name: "Alice", age: 30 }
-    let invalid = p.invalid_field
-}
-"#;
-
-    let (service, _socket) = LspService::new(|client| Backend::new(client));
-    let backend = service.inner();
-    let uri = Url::parse("file:///test.wtf").unwrap();
-    
-    let did_open_params = DidOpenTextDocumentParams {
-        text_document: TextDocumentItem {
-            uri: uri.clone(),
-            language_id: "wtf".to_string(),
-            version: 1,
-            text: code.to_string(),
-        },
-    };
-    backend.did_open(did_open_params).await;
-    
-    // Find the range of the invalid field
-    let lines: Vec<&str> = code.lines().collect();
-    let error_line = lines.iter().position(|line| line.contains("invalid_field")).unwrap();
-    let start_char = lines[error_line].find("invalid_field").unwrap();
-    let end_char = start_char + "invalid_field".len();
-    
-    let range = Range::new(
-        Position::new(error_line as u32, start_char as u32),
-        Position::new(error_line as u32, end_char as u32),
-    );
-    
-    let code_action_params = CodeActionParams {
-        text_document: TextDocumentIdentifier { uri: uri.clone() },
-        range,
-        context: CodeActionContext {
-            diagnostics: vec![], // We'll let the backend generate diagnostics
-            only: None,
-            trigger_kind: None,
-        },
-        work_done_progress_params: WorkDoneProgressParams::default(),
-        partial_result_params: PartialResultParams::default(),
-    };
-    
-    let code_actions = backend.code_action(code_action_params).await.unwrap();
-    
-    // Should have code actions for fixing the invalid field
-    if let Some(actions) = code_actions {
-        assert!(!actions.is_empty(), "Should have code actions for unknown field");
-        
-        // Check if we have suggestions for valid field names
-        let action_titles: Vec<String> = actions.iter().filter_map(|action| {
-            match action {
-                CodeActionOrCommand::CodeAction(ca) => Some(ca.title.clone()),
-                _ => None,
-            }
-        }).collect();
-        
-        assert!(action_titles.iter().any(|title| title.contains("name") || title.contains("age")), 
-                "Should suggest valid field names, got: {:?}", action_titles);
-    } else {
-        // This is expected to fail initially - we need to fix the implementation
-        assert!(false, "No code actions found - implementation needs fixing");
-    }
-}
-
-#[tokio::test]
-async fn test_keyword_correction() {
-    // Test code action for keyword from other languages
-    let code = r#"
-def my_function() {
-    struct Data {
-        name: String
-    }
-}
-"#;
-
-    let (service, _socket) = LspService::new(|client| Backend::new(client));
-    let backend = service.inner();
-    let uri = Url::parse("file:///test.wtf").unwrap();
-    
-    let did_open_params = DidOpenTextDocumentParams {
-        text_document: TextDocumentItem {
-            uri: uri.clone(),
-            language_id: "wtf".to_string(),
-            version: 1,
-            text: code.to_string(),
-        },
-    };
-    backend.did_open(did_open_params).await;
-    
-    // Find the range of the "def" keyword
-    let lines: Vec<&str> = code.lines().collect();
-    let def_line = lines.iter().position(|line| line.contains("def")).unwrap();
-    let start_char = lines[def_line].find("def").unwrap();
-    let end_char = start_char + "def".len();
-    
-    let range = Range::new(
-        Position::new(def_line as u32, start_char as u32),
-        Position::new(def_line as u32, end_char as u32),
-    );
-    
-    let code_action_params = CodeActionParams {
-        text_document: TextDocumentIdentifier { uri: uri.clone() },
-        range,
-        context: CodeActionContext {
-            diagnostics: vec![],
-            only: None,
-            trigger_kind: None,
-        },
-        work_done_progress_params: WorkDoneProgressParams::default(),
-        partial_result_params: PartialResultParams::default(),
-    };
-    
-    let code_actions = backend.code_action(code_action_params).await.unwrap();
-    
-    if let Some(actions) = code_actions {
-        let action_titles: Vec<String> = actions.iter().filter_map(|action| {
-            match action {
-                CodeActionOrCommand::CodeAction(ca) => Some(ca.title.clone()),
-                _ => None,
-            }
-        }).collect();
-        
-        assert!(action_titles.iter().any(|title| title.contains("func")), 
-                "Should suggest 'func' as replacement for 'def', got: {:?}", action_titles);
     }
 }

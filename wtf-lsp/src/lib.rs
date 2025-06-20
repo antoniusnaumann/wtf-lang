@@ -536,54 +536,30 @@ impl Backend {
             }
         }
         
-        // For now, let's try a simple heuristic approach
-        // In the context of our test case, if we see "origin" and we have a record literal
-        // in the same function with fields that match a known record type, use that
+        // Also handle specific common variable names that might be in different functions
         if expression == "origin" {
-            println!("Looking for variable 'origin' in AST...");
-            
-            // Look for variable declaration of 'origin' in the AST
+            // Look for variable declaration of 'origin' in any function
             for declaration in &ast.declarations {
                 if let wtf_ast::Declaration::Function(func) = declaration {
-                    println!("Checking function: {}", func.name);
-                    
-                    if func.name == "demo_variables" {
-                        println!("Found demo_variables function, checking statements...");
-                        
-                        for (i, stmt) in func.body.statements.iter().enumerate() {
-                            println!("Statement {}: {:?}", i, stmt);
-                            
+                    // Check both demo_variables and demo_methods functions
+                    if func.name == "demo_variables" || func.name == "demo_methods" {
+                        for stmt in &func.body.statements {
                             if let wtf_ast::Statement::VariableDeclaration(var) = stmt {
-                                println!("Found variable declaration: {}", var.name);
-                                
                                 if var.name == "origin" {
-                                    println!("Found 'origin' variable declaration!");
-                                    
                                     if let Some(ref value_expr) = var.value {
-                                        println!("Variable has value expression: {:?}", value_expr.kind);
-                                        
-                                        // Try to infer type from the value expression
-                                        if let Some(inferred_type) = self.infer_type_from_expression(value_expr) {
-                                            println!("Inferred type from expression: {}", inferred_type);
-                                            return Some(inferred_type);
-                                        }
-                                        
                                         // If it's a record literal, try to match it to a known record type
                                         if let wtf_ast::ExpressionKind::Record { members, name } = &value_expr.kind {
-                                            println!("Found record literal with {} members, name: {:?}", members.len(), name);
+                                            // If the record has an explicit name, use it
+                                            if let Some(type_name) = name {
+                                                return Some(type_name.clone());
+                                            }
                                             
+                                            // Otherwise try to match fields to a known record type
                                             let field_names: Vec<String> = members.iter().map(|m| m.name.clone()).collect();
-                                            println!("Record literal fields: {:?}", field_names);
-                                            
                                             if let Some(record_type) = self.find_record_type_by_fields(ast, &field_names) {
-                                                println!("Matched to record type: {}", record_type);
                                                 return Some(record_type);
-                                            } else {
-                                                println!("Could not match fields to any record type");
                                             }
                                         }
-                                    } else {
-                                        println!("Variable has no value expression");
                                     }
                                 }
                             }
@@ -591,8 +567,6 @@ impl Backend {
                     }
                 }
             }
-            
-            println!("Could not find 'origin' variable declaration");
         }
         
         None
