@@ -8,6 +8,8 @@ A Language Server Protocol (LSP) implementation for the WTF programming language
 - **HIR Error Detection**: High-level intermediate representation compilation errors
 - **Document Synchronization**: Support for opening, editing, and closing WTF files
 - **Position Mapping**: Accurate mapping of byte offsets to line/character positions
+- **Auto-completion**: Method completion with "." trigger supporting UFCS and structural typing
+- **Code Actions**: Quick fixes for common programming errors
 
 ## Installation
 
@@ -68,7 +70,8 @@ The language server currently supports:
 - `textDocument/didChange` 
 - `textDocument/didClose`
 - `textDocument/publishDiagnostics`
-- `textDocument/codeAction` (new: provides quick fixes)
+- `textDocument/codeAction` (provides quick fixes for common errors)
+- `textDocument/completion` (method auto-completion with "." trigger)
 
 ## Error Types
 
@@ -82,8 +85,8 @@ The language server detects and reports:
 The language server now provides automatic fixes for common errors:
 
 ### Unknown Field Errors
-- Suggests common field names when accessing non-existent fields
-- Provides quick-fix actions to replace the field name
+- Uses real AST type information to suggest actual field names from record/resource types
+- Provides quick-fix actions to replace the field name with correct alternatives
 
 ### Keyword Errors  
 - Maps keywords from other programming languages to WTF equivalents:
@@ -93,8 +96,56 @@ The language server now provides automatic fixes for common errors:
   - `union` → `variant`
   - `const` → `let`
   - `mut`, `mutable` → `var`
-- Extracts expected keywords from error messages
+  - `elif`, `elseif` → `else if`
+  - `switch`, `case` → `match`
 - Provides quick-fix actions to correct the keyword
+
+## Auto-completion
+
+The language server provides intelligent method completion when typing "." after an expression:
+
+### UFCS (Uniform Function Call Syntax) Support
+- Any function where the first parameter matches the type can be called as a method
+- Example: `func get_name(p: Person) -> String` can be called as `person.get_name()`
+
+### Structural Typing Support
+- For record types, methods that work with structurally compatible types are suggested
+- A method expecting `{name: String}` will be available on any record with at least a `name: String` field
+
+### Resource Methods
+- Direct methods defined on resource types are automatically suggested
+- Full method signatures are shown with parameter names and return types
+
+### Example
+
+```wtf
+record Person {
+    name: String,
+    age: Int,
+    email: String
+}
+
+func get_name_length(person: Person) -> Int {
+    person.name.length()
+}
+
+func format_contact(p: Person) -> String {
+    "${p.name} <${p.email}>"
+}
+
+func main() {
+    let person = Person {
+        name: "Alice",
+        age: 30,
+        email: "alice@example.com"
+    }
+    
+    // Typing "person." will suggest:
+    // - get_name_length(person: Person) -> Int
+    // - format_contact(p: Person) -> String
+    let result = person.■
+}
+```
 
 ## Development
 
