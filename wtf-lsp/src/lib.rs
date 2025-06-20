@@ -12,7 +12,7 @@ pub struct Backend {
     client: Client,
     documents: tokio::sync::RwLock<HashMap<Url, String>>,
     // Store AST for type information access
-    ast_cache: tokio::sync::RwLock<HashMap<Url, wtf_ast::Module>>,
+    pub ast_cache: tokio::sync::RwLock<HashMap<Url, wtf_ast::Module>>,
 }
 
 impl Backend {
