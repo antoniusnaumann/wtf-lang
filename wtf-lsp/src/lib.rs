@@ -5,11 +5,14 @@ use tower_lsp::{Client, LanguageServer};
 use wtf_error::Error as WtfError;
 use wtf_hir;
 use wtf_parser::parser::Parser;
+use wtf_ast;
 
 #[derive(Debug)]
 pub struct Backend {
     client: Client,
     documents: tokio::sync::RwLock<HashMap<Url, String>>,
+    // Store AST for type information access
+    ast_cache: tokio::sync::RwLock<HashMap<Url, wtf_ast::Module>>,
 }
 
 impl Backend {
@@ -17,10 +20,11 @@ impl Backend {
         Self {
             client,
             documents: tokio::sync::RwLock::new(HashMap::new()),
+            ast_cache: tokio::sync::RwLock::new(HashMap::new()),
         }
     }
 
-    pub async fn validate_document(&self, _uri: &Url, text: &str) -> Vec<Diagnostic> {
+    pub async fn validate_document(&self, uri: &Url, text: &str) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
 
         // Parse the document and collect parser errors
@@ -41,6 +45,9 @@ impl Backend {
             let diagnostic = self.wtf_error_to_diagnostic(&error, source_chars);
             diagnostics.push(diagnostic);
         } else if let Ok(ast) = parse_result {
+            // Cache the AST for later use in code actions
+            self.ast_cache.write().await.insert(uri.clone(), ast.clone());
+            
             // If parsing succeeded, try HIR compilation to find HIR-level errors
             match wtf_hir::compile(ast) {
                 Ok(_hir) => {
@@ -99,17 +106,17 @@ impl Backend {
         Position::new(line, character)
     }
 
-    fn generate_code_actions_for_diagnostic(&self, diagnostic: &Diagnostic, _text: &str, uri: &Url) -> Option<Vec<CodeActionOrCommand>> {
-        let _message = &diagnostic.message;
+    async fn generate_code_actions_for_diagnostic(&self, diagnostic: &Diagnostic, text: &str, uri: &Url) -> Option<Vec<CodeActionOrCommand>> {
+        let message = &diagnostic.message;
         let mut actions = Vec::new();
 
         // Parse different error types and generate appropriate actions
-        if _message.contains("Unknown field") {
-            if let Some(field_actions) = self.generate_unknown_field_actions(diagnostic, _text, uri) {
+        if message.contains("Unknown field") || message.contains("does not exist on type") {
+            if let Some(field_actions) = self.generate_unknown_field_actions(diagnostic, text, uri).await {
                 actions.extend(field_actions);
             }
-        } else if _message.contains("Expected") && (_message.contains("but found") || _message.contains("keyword")) {
-            if let Some(keyword_actions) = self.generate_keyword_actions(diagnostic, _text, uri) {
+        } else if message.contains("Expected") && (message.contains("but found") || message.contains("keyword")) {
+            if let Some(keyword_actions) = self.generate_keyword_actions(diagnostic, text, uri) {
                 actions.extend(keyword_actions);
             }
         }
@@ -121,17 +128,42 @@ impl Backend {
         }
     }
 
-    fn generate_unknown_field_actions(&self, diagnostic: &Diagnostic, _text: &str, uri: &Url) -> Option<Vec<CodeActionOrCommand>> {
+    async fn generate_unknown_field_actions(&self, diagnostic: &Diagnostic, _text: &str, uri: &Url) -> Option<Vec<CodeActionOrCommand>> {
         // Extract field name and type name from the error message
+        let message = &diagnostic.message;
+        
+        // Parse the error message to extract type information
         // Format: "Field 'field_name' does not exist on type 'type_name' at (start, end)"
-        let _message = &diagnostic.message;
+        let type_name = if let Some(start) = message.find("on type '") {
+            let after_type = &message[start + 9..];
+            if let Some(end) = after_type.find("'") {
+                Some(&after_type[..end])
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let Some(type_name) = type_name else {
+            return None;
+        };
+
+        // Get the cached AST to find actual field names
+        let ast_cache = self.ast_cache.read().await;
+        let Some(ast) = ast_cache.get(uri) else {
+            return None;
+        };
+
+        // Find the type declaration and extract its fields
+        let field_names = self.get_type_fields(ast, type_name);
         
-        // For now, provide some common field suggestions
-        // In a real implementation, this would query the type system for available fields
-        let common_fields = vec!["id", "name", "value", "data", "type", "status", "result"];
-        
+        if field_names.is_empty() {
+            return None;
+        }
+
         let mut actions = Vec::new();
-        for field in common_fields {
+        for field in field_names {
             let action = CodeActionOrCommand::CodeAction(CodeAction {
                 title: format!("Change to '{}'", field),
                 kind: Some(CodeActionKind::QUICKFIX),
@@ -141,7 +173,7 @@ impl Backend {
                         let mut changes = HashMap::new();
                         changes.insert(uri.clone(), vec![TextEdit {
                             range: diagnostic.range,
-                            new_text: field.to_string(),
+                            new_text: field,
                         }]);
                         changes
                     }),
@@ -156,7 +188,6 @@ impl Backend {
     }
 
     fn generate_keyword_actions(&self, diagnostic: &Diagnostic, text: &str, uri: &Url) -> Option<Vec<CodeActionOrCommand>> {
-        let _message = &diagnostic.message;
         let mut actions = Vec::new();
 
         // Extract the problematic token from the range
@@ -170,6 +201,7 @@ impl Backend {
             // Map common keywords from other languages to WTF equivalents
             let keyword_mappings = self.get_keyword_mappings();
             
+            // Only show similar tokens from other languages, not expected tokens
             if let Some(wtf_keywords) = keyword_mappings.get(&found_token.as_str()) {
                 for wtf_keyword in wtf_keywords {
                     let action = CodeActionOrCommand::CodeAction(CodeAction {
@@ -190,13 +222,6 @@ impl Backend {
                         ..Default::default()
                     });
                     actions.push(action);
-                }
-            }
-            
-            // Also try to extract expected keywords from the error message
-            if _message.contains("Expected") {
-                if let Some(expected_actions) = self.extract_expected_keywords(diagnostic, uri, &found_token) {
-                    actions.extend(expected_actions);
                 }
             }
         }
@@ -238,69 +263,46 @@ impl Backend {
         mappings
     }
 
-    fn extract_expected_keywords(&self, diagnostic: &Diagnostic, uri: &Url, found_token: &str) -> Option<Vec<CodeActionOrCommand>> {
-        let _message = &diagnostic.message;
+    fn get_type_fields(&self, ast: &wtf_ast::Module, type_name: &str) -> Vec<String> {
+        let mut field_names = Vec::new();
         
-        // Try to extract expected tokens from error message
-        // Format: "Expected 'keyword' but found 'token'"
-        if let Some(start) = _message.find("Expected ") {
-            let after_expected = &_message[start + 9..];
-            if let Some(end) = after_expected.find(" but found") {
-                let expected_part = &after_expected[..end];
-                
-                // Handle different expected formats
-                let expected_keywords = if expected_part.starts_with("one of: [") {
-                    // Format: "one of: ['func', 'let', ...]"
-                    self.parse_expected_list(expected_part)
-                } else if expected_part.starts_with('\'') && expected_part.ends_with('\'') {
-                    // Format: "'func'"
-                    vec![expected_part.trim_matches('\'').to_string()]
-                } else {
-                    vec![]
-                };
-                
-                let mut actions = Vec::new();
-                for expected in expected_keywords {
-                    let action = CodeActionOrCommand::CodeAction(CodeAction {
-                        title: format!("Change '{}' to '{}'", found_token, expected),
-                        kind: Some(CodeActionKind::QUICKFIX),
-                        diagnostics: Some(vec![diagnostic.clone()]),
-                        edit: Some(WorkspaceEdit {
-                            changes: Some({
-                                let mut changes = HashMap::new();
-                                changes.insert(uri.clone(), vec![TextEdit {
-                                    range: diagnostic.range,
-                                    new_text: expected,
-                                }]);
-                                changes
-                            }),
-                            ..Default::default()
-                        }),
-                        ..Default::default()
-                    });
-                    actions.push(action);
+        for declaration in &ast.declarations {
+            match declaration {
+                wtf_ast::Declaration::Record(record) if record.name == type_name => {
+                    for field in &record.fields {
+                        field_names.push(field.name.clone());
+                    }
+                    break;
                 }
-                
-                return if actions.is_empty() { None } else { Some(actions) };
+                wtf_ast::Declaration::Resource(resource) if resource.name == type_name => {
+                    for field in &resource.fields {
+                        field_names.push(field.name.clone());
+                    }
+                    break;
+                }
+                wtf_ast::Declaration::Export(export) => {
+                    // Check exported declarations
+                    match export.item.as_ref() {
+                        wtf_ast::Declaration::Record(record) if record.name == type_name => {
+                            for field in &record.fields {
+                                field_names.push(field.name.clone());
+                            }
+                            break;
+                        }
+                        wtf_ast::Declaration::Resource(resource) if resource.name == type_name => {
+                            for field in &resource.fields {
+                                field_names.push(field.name.clone());
+                            }
+                            break;
+                        }
+                        _ => continue,
+                    }
+                }
+                _ => continue,
             }
         }
         
-        None
-    }
-
-    fn parse_expected_list(&self, expected_part: &str) -> Vec<String> {
-        // Parse "one of: ['func', 'let', ...]" format
-        if let Some(start) = expected_part.find('[') {
-            if let Some(end) = expected_part.find(']') {
-                let list_content = &expected_part[start + 1..end];
-                return list_content
-                    .split(',')
-                    .map(|s| s.trim().trim_matches('\'').trim_matches('"').to_string())
-                    .filter(|s| !s.is_empty())
-                    .collect();
-            }
-        }
-        vec![]
+        field_names
     }
 
     fn position_to_byte(&self, position: Position, chars: &[char]) -> usize {
@@ -389,6 +391,9 @@ impl LanguageServer for Backend {
         // Remove the document from storage
         self.documents.write().await.remove(&uri);
         
+        // Remove the cached AST
+        self.ast_cache.write().await.remove(&uri);
+        
         // Clear diagnostics
         self.client
             .publish_diagnostics(uri, Vec::new(), None)
@@ -420,7 +425,7 @@ impl LanguageServer for Backend {
         
         // Generate code actions for each relevant diagnostic
         for diagnostic in relevant_diagnostics {
-            if let Some(mut diagnostic_actions) = self.generate_code_actions_for_diagnostic(&diagnostic, text, uri) {
+            if let Some(mut diagnostic_actions) = self.generate_code_actions_for_diagnostic(&diagnostic, text, uri).await {
                 actions.append(&mut diagnostic_actions);
             }
         }
