@@ -171,12 +171,101 @@ impl Backend {
                 actions.extend(keyword_actions);
             }
         }
+        
+        // Check for potential field access errors based on code structure
+        if let Some(field_actions) = self.detect_and_fix_field_access_errors(diagnostic, text, uri).await {
+            actions.extend(field_actions);
+        }
 
         if actions.is_empty() {
             None
         } else {
             Some(actions)
         }
+    }
+    
+    async fn detect_and_fix_field_access_errors(&self, diagnostic: &Diagnostic, text: &str, uri: &Url) -> Option<Vec<CodeActionOrCommand>> {
+        // Extract the text around the diagnostic range
+        let chars: Vec<char> = text.chars().collect();
+        let start_offset = self.position_to_byte(diagnostic.range.start, &chars);
+        let end_offset = self.position_to_byte(diagnostic.range.end, &chars);
+        
+        if start_offset >= chars.len() || end_offset > chars.len() {
+            return None;
+        }
+        
+        // Look for patterns like "variable.unknown_field" in the surrounding code
+        let line_start = chars[..start_offset].iter().rposition(|&c| c == '\n').map(|pos| pos + 1).unwrap_or(0);
+        let line_end = chars[start_offset..].iter().position(|&c| c == '\n').map(|pos| start_offset + pos).unwrap_or(chars.len());
+        
+        if line_end <= line_start {
+            return None;
+        }
+        
+        let line_text: String = chars[line_start..line_end].iter().collect();
+        
+        // Look for dot notation patterns: "identifier.something"
+        if let Some(dot_pos) = line_text.rfind('.') {
+            let after_dot = &line_text[dot_pos + 1..].trim();
+            
+            // Check if this looks like an identifier after a dot
+            if after_dot.chars().all(|c| c.is_alphanumeric() || c == '_') && !after_dot.is_empty() {
+                // Find the identifier before the dot
+                let before_dot = &line_text[..dot_pos];
+                if let Some(space_pos) = before_dot.rfind(char::is_whitespace) {
+                    let identifier = before_dot[space_pos..].trim();
+                    
+                    // Try to infer the type of the identifier
+                    if let Some(type_name) = self.infer_expression_type(identifier, uri).await {
+                        // Get valid field names for this type
+                        let ast_cache = self.ast_cache.read().await;
+                        if let Some(ast) = ast_cache.get(uri) {
+                            let field_names = self.get_type_fields(ast, &type_name);
+                            drop(ast_cache);
+                            
+                            if !field_names.is_empty() {
+                                // Generate field suggestions
+                                let mut actions = Vec::new();
+                                for field in field_names {
+                                    let action = CodeActionOrCommand::CodeAction(CodeAction {
+                                        title: format!("Change to '{}'", field),
+                                        kind: Some(CodeActionKind::QUICKFIX),
+                                        diagnostics: Some(vec![diagnostic.clone()]),
+                                        edit: Some(WorkspaceEdit {
+                                            changes: Some({
+                                                let mut changes = HashMap::new();
+                                                // Calculate the range for the field name after the dot
+                                                let field_start_pos = Position::new(
+                                                    diagnostic.range.start.line,
+                                                    diagnostic.range.start.character.saturating_sub(line_start as u32) + (dot_pos + 1) as u32
+                                                );
+                                                let field_end_pos = Position::new(
+                                                    diagnostic.range.start.line,
+                                                    field_start_pos.character + after_dot.len() as u32
+                                                );
+                                                let field_range = Range::new(field_start_pos, field_end_pos);
+                                                
+                                                changes.insert(uri.clone(), vec![TextEdit {
+                                                    range: field_range,
+                                                    new_text: field,
+                                                }]);
+                                                changes
+                                            }),
+                                            ..Default::default()
+                                        }),
+                                        ..Default::default()
+                                    });
+                                    actions.push(action);
+                                }
+                                return Some(actions);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        None
     }
 
     async fn generate_unknown_field_actions(&self, diagnostic: &Diagnostic, _text: &str, uri: &Url) -> Option<Vec<CodeActionOrCommand>> {
@@ -536,35 +625,11 @@ impl Backend {
             }
         }
         
-        // Also handle specific common variable names that might be in different functions
-        if expression == "origin" {
-            // Look for variable declaration of 'origin' in any function
-            for declaration in &ast.declarations {
-                if let wtf_ast::Declaration::Function(func) = declaration {
-                    // Check both demo_variables and demo_methods functions
-                    if func.name == "demo_variables" || func.name == "demo_methods" {
-                        for stmt in &func.body.statements {
-                            if let wtf_ast::Statement::VariableDeclaration(var) = stmt {
-                                if var.name == "origin" {
-                                    if let Some(ref value_expr) = var.value {
-                                        // If it's a record literal, try to match it to a known record type
-                                        if let wtf_ast::ExpressionKind::Record { members, name } = &value_expr.kind {
-                                            // If the record has an explicit name, use it
-                                            if let Some(type_name) = name {
-                                                return Some(type_name.clone());
-                                            }
-                                            
-                                            // Otherwise try to match fields to a known record type
-                                            let field_names: Vec<String> = members.iter().map(|m| m.name.clone()).collect();
-                                            if let Some(record_type) = self.find_record_type_by_fields(ast, &field_names) {
-                                                return Some(record_type);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+        // Look for the variable declaration in any function (not just specific function names)
+        for declaration in &ast.declarations {
+            if let wtf_ast::Declaration::Function(func) = declaration {
+                if let Some(found_type) = self.find_identifier_in_function(expression, func, ast) {
+                    return Some(found_type);
                 }
             }
         }
@@ -636,7 +701,7 @@ impl Backend {
                     }
                     
                     // Check variables in function body (simplified - would need full traversal)
-                    if let Some(found_type) = self.find_identifier_in_block(&func.body, identifier) {
+                    if let Some(found_type) = self.find_identifier_in_block(&func.body, identifier, ast) {
                         return Some(found_type);
                     }
                 }
@@ -647,7 +712,23 @@ impl Backend {
         None
     }
 
-    fn find_identifier_in_block(&self, block: &wtf_ast::Block, identifier: &str) -> Option<String> {
+    fn find_identifier_in_function(&self, identifier: &str, func: &wtf_ast::FunctionDeclaration, ast: &wtf_ast::Module) -> Option<String> {
+        // Check function parameters
+        for param in &func.parameters {
+            if param.name == identifier {
+                return Some(self.type_annotation_to_string(&param.type_annotation));
+            }
+        }
+        
+        // Check variables in function body
+        if let Some(found_type) = self.find_identifier_in_block(&func.body, identifier, ast) {
+            return Some(found_type);
+        }
+        
+        None
+    }
+
+    fn find_identifier_in_block(&self, block: &wtf_ast::Block, identifier: &str, ast: &wtf_ast::Module) -> Option<String> {
         for stmt in &block.statements {
             match stmt {
                 wtf_ast::Statement::VariableDeclaration(var) => {
@@ -658,7 +739,7 @@ impl Backend {
                         
                         // Try to infer type from the initializer expression
                         if let Some(ref init_expr) = var.value {
-                            return self.infer_type_from_expression(init_expr);
+                            return self.infer_type_from_expression(init_expr, ast);
                         }
                     }
                 }
@@ -669,13 +750,19 @@ impl Backend {
         None
     }
 
-    fn infer_type_from_expression(&self, expr: &wtf_ast::Expression) -> Option<String> {
+    fn infer_type_from_expression(&self, expr: &wtf_ast::Expression, ast: &wtf_ast::Module) -> Option<String> {
         match &expr.kind {
-            wtf_ast::ExpressionKind::Record { members, .. } => {
+            wtf_ast::ExpressionKind::Record { members, name } => {
+                // If the record has an explicit name, use it
+                if let Some(type_name) = name {
+                    return Some(type_name.clone());
+                }
+                
                 // Try to infer the record type from the field names
                 let field_names: Vec<String> = members.iter().map(|m| m.name.clone()).collect();
-                // For now, we can't access the AST here, so return None
-                // This is a limitation that would need to be fixed with better architecture
+                if let Some(record_type) = self.find_record_type_by_fields(ast, &field_names) {
+                    return Some(record_type);
+                }
                 None
             }
             wtf_ast::ExpressionKind::Literal(lit) => {
