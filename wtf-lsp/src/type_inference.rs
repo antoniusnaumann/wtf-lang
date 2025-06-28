@@ -11,7 +11,7 @@ impl Backend {
         let hir_cache = self.hir_cache.read().await;
         if let Some(hir) = hir_cache.get(uri) {
             // Look for the expression in the HIR variable names
-            if let Some(type_name) = self.find_variable_type_in_hir(hir, expression) {
+            if let Some(type_name) = self.find_variable_type_in_hir(hir, expression, uri).await {
                 return Some(type_name);
             }
         }
@@ -20,13 +20,13 @@ impl Backend {
         self.infer_expression_type_ast(expression, uri).await
     }
 
-    fn find_variable_type_in_hir(&self, hir: &wtf_hir::Module, variable_name: &str) -> Option<String> {
+    async fn find_variable_type_in_hir(&self, hir: &wtf_hir::Module, variable_name: &str, uri: &Url) -> Option<String> {
         // Search through all functions to find a variable with the given name
         for (_, function) in &hir.functions {
             // Check function parameters first
             for param in &function.parameters {
                 if param.name == variable_name {
-                    return Some(self.type_to_string(&param.ty));
+                    return Some(self.type_to_string(&param.ty, uri).await);
                 }
             }
             
@@ -35,7 +35,7 @@ impl Backend {
                 if let Some(var_name) = var_name_opt {
                     if var_name == variable_name {
                         if let Some(var_type) = function.body.vars.get(i) {
-                            return Some(self.type_to_string(var_type));
+                            return Some(self.type_to_string(var_type, uri).await);
                         }
                     }
                 }
@@ -45,12 +45,16 @@ impl Backend {
         None
     }
 
-    fn type_to_string(&self, hir_type: &wtf_hir::Type) -> String {
+    async fn type_to_string(&self, hir_type: &wtf_hir::Type, uri: &Url) -> String {
         match hir_type {
             wtf_hir::Type::Record(fields) => {
-                // For records, we could generate a unique name or use a hash
-                // For now, let's use a simple representation
-                format!("Record_{}", fields.len())
+                // Try to map the HIR record back to an AST record name
+                if let Some(record_name) = self.find_matching_record_name(fields, uri).await {
+                    record_name
+                } else {
+                    // Fallback to generic name
+                    format!("Record_{}", fields.len())
+                }
             },
             wtf_hir::Type::Resource { .. } => "Resource".to_string(),
             wtf_hir::Type::String => "String".to_string(),
@@ -59,10 +63,50 @@ impl Backend {
             },
             wtf_hir::Type::Float { bits } => format!("f{}", bits),
             wtf_hir::Type::Bool => "Bool".to_string(),
-            wtf_hir::Type::List(inner) => format!("List_{}", self.type_to_string(inner)),
-            wtf_hir::Type::Option(inner) => format!("Option_{}", self.type_to_string(inner)),
+            wtf_hir::Type::List(inner) => format!("List_{}", self.type_to_string_sync(inner)),
+            wtf_hir::Type::Option(inner) => format!("Option_{}", self.type_to_string_sync(inner)),
             _ => "Unknown".to_string(),
         }
+    }
+
+    // Synchronous version for recursive calls
+    fn type_to_string_sync(&self, hir_type: &wtf_hir::Type) -> String {
+        match hir_type {
+            wtf_hir::Type::Record(fields) => format!("Record_{}", fields.len()),
+            wtf_hir::Type::Resource { .. } => "Resource".to_string(),
+            wtf_hir::Type::String => "String".to_string(),
+            wtf_hir::Type::Int { signed, bits } => {
+                format!("{}{}", if *signed { "i" } else { "u" }, bits)
+            },
+            wtf_hir::Type::Float { bits } => format!("f{}", bits),
+            wtf_hir::Type::Bool => "Bool".to_string(),
+            wtf_hir::Type::List(inner) => format!("List_{}", self.type_to_string_sync(inner)),
+            wtf_hir::Type::Option(inner) => format!("Option_{}", self.type_to_string_sync(inner)),
+            _ => "Unknown".to_string(),
+        }
+    }
+
+    async fn find_matching_record_name(&self, hir_fields: &[(String, wtf_hir::Type)], uri: &Url) -> Option<String> {
+        let ast_cache = self.ast_cache.read().await;
+        let ast = ast_cache.get(uri)?;
+        
+        // Extract just the field names from HIR
+        let hir_field_names: Vec<&String> = hir_fields.iter().map(|(name, _)| name).collect();
+        
+        // Find a record in AST that has the same field names
+        for declaration in &ast.declarations {
+            if let wtf_ast::Declaration::Record(record) = declaration {
+                let ast_field_names: Vec<&String> = record.fields.iter().map(|f| &f.name).collect();
+                
+                // Check if field names match exactly
+                if hir_field_names.len() == ast_field_names.len() && 
+                   hir_field_names.iter().all(|name| ast_field_names.contains(name)) {
+                    return Some(record.name.clone());
+                }
+            }
+        }
+        
+        None
     }
 
     /// AST-based type inference (improved version of the original)

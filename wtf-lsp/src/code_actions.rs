@@ -126,7 +126,8 @@ impl Backend {
         
         // Parse the error message to extract type information
         // Format: "Field 'field_name' does not exist on type 'type_name' at (start, end)"
-        let type_name = if let Some(start) = message.find("on type '") {
+        // Or: "Field 'field_name' does not exist on type '{x: f32, y: f32}' at (start, end)"
+        let type_info = if let Some(start) = message.find("on type '") {
             let after_type = &message[start + 9..];
             if let Some(end) = after_type.find("'") {
                 Some(&after_type[..end])
@@ -137,19 +138,24 @@ impl Backend {
             None
         };
 
-        let Some(type_name) = type_name else {
+        let Some(type_info) = type_info else {
             return None;
         };
 
-        // Get the cached AST to find actual field names
-        let ast_cache = self.ast_cache.read().await;
-        let Some(ast) = ast_cache.get(uri) else {
-            return None;
+        // Check if this is a record literal type or a named type
+        let field_names = if type_info.starts_with('{') && type_info.ends_with('}') {
+            // This is a record literal like "{x: f32, y: f32}"
+            // Extract field names from the literal
+            self.extract_fields_from_type_literal(type_info)
+        } else {
+            // This is a named type - find it in the AST
+            let ast_cache = self.ast_cache.read().await;
+            let Some(ast) = ast_cache.get(uri) else {
+                return None;
+            };
+            self.get_type_fields(ast, type_info)
         };
 
-        // Find the type declaration and extract its fields
-        let field_names = self.get_type_fields(ast, type_name);
-        
         if field_names.is_empty() {
             return None;
         }
@@ -177,6 +183,22 @@ impl Backend {
         }
 
         Some(actions)
+    }
+
+    fn extract_fields_from_type_literal(&self, type_literal: &str) -> Vec<String> {
+        // Parse "{x: f32, y: f32}" to extract field names ["x", "y"]
+        let inner = type_literal.trim_start_matches('{').trim_end_matches('}');
+        let mut fields = Vec::new();
+        
+        for part in inner.split(',') {
+            let part = part.trim();
+            if let Some(colon_pos) = part.find(':') {
+                let field_name = part[..colon_pos].trim();
+                fields.push(field_name.to_string());
+            }
+        }
+        
+        fields
     }
 
     fn generate_keyword_actions(&self, diagnostic: &Diagnostic, text: &str, uri: &Url) -> Option<Vec<CodeActionOrCommand>> {
