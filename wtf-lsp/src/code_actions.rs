@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use tower_lsp::lsp_types::*;
-use wtf_ast;
 
 use crate::Backend;
 

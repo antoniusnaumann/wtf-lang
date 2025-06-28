@@ -2,9 +2,7 @@ use std::collections::HashMap;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
-use wtf_error::Error as WtfError;
 use wtf_hir;
-use wtf_parser::parser::Parser;
 use wtf_ast;
 
 mod completion;
