@@ -81,18 +81,18 @@ impl Backend {
                     }
                 }
             }
-            return completions;
-        }
-        
-        // 1. Get field completions for declared record types
-        let field_names = self.get_type_fields(ast, type_name);
-        for field in field_names {
-            completions.push(CompletionItem {
-                label: field.clone(),
-                kind: Some(CompletionItemKind::FIELD),
-                detail: Some(format!("Field of {}", type_name)),
-                ..Default::default()
-            });
+            // Don't return early - continue to add UFCS methods for anonymous types too
+        } else {
+            // 1. Get field completions for declared record types
+            let field_names = self.get_type_fields(ast, type_name);
+            for field in field_names {
+                completions.push(CompletionItem {
+                    label: field.clone(),
+                    kind: Some(CompletionItemKind::FIELD),
+                    detail: Some(format!("Field of {}", type_name)),
+                    ..Default::default()
+                });
+            }
         }
         
         // 2. Get method completions for resource types

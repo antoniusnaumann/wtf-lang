@@ -78,11 +78,11 @@ impl Backend {
     pub fn get_ufcs_methods(&self, ast: &wtf_ast::Module, type_name: &str) -> Vec<(String, String)> {
         let mut methods = Vec::new();
         
-        // Find functions where the first parameter matches the type
+        // Find functions where the first parameter matches the type (including structural typing)
         for declaration in &ast.declarations {
             if let wtf_ast::Declaration::Function(func) = declaration {
                 if let Some(first_param) = func.parameters.first() {
-                    if self.type_annotation_matches(Some(&first_param.type_annotation), type_name) {
+                    if self.type_is_structurally_compatible(ast, type_name, Some(&first_param.type_annotation)) {
                         let signature = self.format_function_signature(func);
                         methods.push((func.name.clone(), signature));
                     }
@@ -91,6 +91,39 @@ impl Backend {
         }
         
         methods
+    }
+
+    /// Check if `source_type` is structurally compatible with `target_type_annotation`.
+    /// For structural typing, this means the source type has all fields required by the target type.
+    fn type_is_structurally_compatible(&self, ast: &wtf_ast::Module, source_type: &str, target_type_annotation: Option<&wtf_ast::TypeAnnotation>) -> bool {
+        // First check for exact matches
+        if self.type_annotation_matches(target_type_annotation, source_type) {
+            return true;
+        }
+        
+        // Get the fields of the source type
+        let source_fields = self.get_type_fields(ast, source_type);
+        if source_fields.is_empty() {
+            return false;
+        }
+        
+        // Get the fields required by the target type
+        let target_fields = match target_type_annotation {
+            Some(annotation) => match &annotation.kind {
+                wtf_ast::TypeAnnotationKind::Simple(target_name) => {
+                    self.get_type_fields(ast, target_name)
+                },
+                _ => Vec::new(),
+            },
+            None => Vec::new(),
+        };
+        
+        if target_fields.is_empty() {
+            return false;
+        }
+        
+        // Check if source type has all required fields (structural typing)
+        target_fields.iter().all(|target_field| source_fields.contains(target_field))
     }
 
 

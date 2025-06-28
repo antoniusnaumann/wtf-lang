@@ -368,3 +368,109 @@ func test() {
         }
     }
 }
+
+#[tokio::test]
+async fn test_structural_typing_ufcs_completion() {
+    // Test structural typing support: functions that accept a subset of fields
+    // should be available as methods on records with more fields
+    let code = r#"// Declared record types for function parameters  
+record point2d {
+    x: f32
+    y: f32
+}
+
+record point1d {
+    x: f32
+}
+
+// Functions that accept declared record types
+func process_2d(point: point2d) -> f32 {
+    point.x + point.y
+}
+
+func get_x(p: point1d) -> f32 {
+    p.x
+}
+
+func main() {
+    // Record with x, y, z fields (superset) - using record literal
+    let point3d = {
+        x: 1.0,
+        y: 2.0,
+        z: 3.0
+    }
+    
+    // Should be able to call process_2d and get_x via UFCS since point3d
+    // has all required fields (structural typing)
+    let result = point3d.process_2d  // Should suggest this
+    let x_val = point3d.get_x        // Should suggest this too
+}"#;
+
+    let (service, _socket) = LspService::new(|client| Backend::new(client));
+    let backend = service.inner();
+    let uri = Url::parse("file:///test_structural.wtf").unwrap();
+    
+    let did_open_params = DidOpenTextDocumentParams {
+        text_document: TextDocumentItem {
+            uri: uri.clone(),
+            language_id: "wtf".to_string(),
+            version: 1,
+            text: code.to_string(),
+        },
+    };
+    backend.did_open(did_open_params).await;
+    
+    // Test completion at position after 'point3d.'
+    let lines: Vec<&str> = code.lines().collect();
+    let dot_line = lines.iter().position(|line| line.contains("let result = point3d.process_2d")).unwrap();
+    let dot_char = lines[dot_line].find("point3d.").unwrap() + 8; // Position right after the dot
+    let position = Position::new(dot_line as u32, dot_char as u32);
+    
+    println!("Testing structural typing UFCS completion at line {}, char {}", dot_line, dot_char);
+    
+    let completion_params = CompletionParams {
+        text_document_position: TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier { uri: uri.clone() },
+            position,
+        },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+        context: None,
+    };
+    
+    let completion_result = backend.completion(completion_params).await.unwrap();
+    
+    if let Some(CompletionResponse::Array(completions)) = completion_result {
+        let completion_labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+        
+        // Should include fields x, y, z
+        assert!(completion_labels.contains(&"x"), "Should include field 'x'");
+        assert!(completion_labels.contains(&"y"), "Should include field 'y'");
+        assert!(completion_labels.contains(&"z"), "Should include field 'z'");
+        
+        // Should include UFCS methods that accept subsets of fields
+        assert!(completion_labels.contains(&"process_2d"), 
+                "Should include 'process_2d' function (accepts {{x, y}} subset): {:?}", completion_labels);
+        assert!(completion_labels.contains(&"get_x"), 
+                "Should include 'get_x' function (accepts {{x}} subset): {:?}", completion_labels);
+        
+        // Verify they are marked as UFCS functions
+        let ufcs_completions: Vec<&CompletionItem> = completions.iter()
+            .filter(|c| c.kind == Some(CompletionItemKind::FUNCTION))
+            .collect();
+        
+        let ufcs_labels: Vec<&str> = ufcs_completions.iter().map(|c| c.label.as_str()).collect();
+        assert!(ufcs_labels.contains(&"process_2d"), "process_2d should be a UFCS function");
+        assert!(ufcs_labels.contains(&"get_x"), "get_x should be a UFCS function");
+        
+        // Verify function completions include parentheses
+        for completion in ufcs_completions {
+            if let Some(insert_text) = &completion.insert_text {
+                assert!(insert_text.contains("()"), "UFCS function completion should include parentheses");
+            }
+        }
+        
+    } else {
+        panic!("Expected completions for structural typing test");
+    }
+}
