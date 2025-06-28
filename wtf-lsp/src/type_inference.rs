@@ -52,8 +52,10 @@ impl Backend {
                 if let Some(record_name) = self.find_matching_record_name(fields, uri).await {
                     record_name
                 } else {
-                    // Fallback to generic name
-                    format!("Record_{}", fields.len())
+                    // For anonymous records, create a type identifier that includes the field names
+                    // This allows the completion system to extract the fields later
+                    let field_names: Vec<String> = fields.iter().map(|(name, _)| name.clone()).collect();
+                    format!("AnonymousRecord:{}", field_names.join(","))
                 }
             },
             wtf_hir::Type::Resource { .. } => "Resource".to_string(),
@@ -192,13 +194,13 @@ impl Backend {
     fn extract_record_type_from_expression(&self, expression: &wtf_ast::Expression) -> Option<String> {
         match &expression.kind {
             wtf_ast::ExpressionKind::Record { members, .. } => {
-                // Extract field names to create a type signature
+                // Extract field names to create a type signature for anonymous records
                 let field_names: Vec<String> = members.iter()
                     .map(|field| field.name.clone())
                     .collect();
                 
-                // Use field count and first few field names for type identification
-                Some(format!("Record_{}_{}", field_names.len(), field_names.get(0).unwrap_or(&"unknown".to_string())))
+                // Return an anonymous record type identifier that the completion system can understand
+                Some(format!("AnonymousRecord:{}", field_names.join(",")))
             },
             _ => None,
         }

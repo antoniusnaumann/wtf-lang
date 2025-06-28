@@ -65,7 +65,26 @@ impl Backend {
     fn get_type_completions(&self, ast: &wtf_ast::Module, type_name: &str) -> Vec<CompletionItem> {
         let mut completions = Vec::new();
         
-        // 1. Get field completions for record types
+        // Check if this is an anonymous record type
+        if type_name.starts_with("AnonymousRecord:") {
+            // Extract field names from the anonymous record type identifier
+            if let Some(fields_part) = type_name.strip_prefix("AnonymousRecord:") {
+                if !fields_part.is_empty() {
+                    let field_names: Vec<&str> = fields_part.split(',').collect();
+                    for field in field_names {
+                        completions.push(CompletionItem {
+                            label: field.to_string(),
+                            kind: Some(CompletionItemKind::FIELD),
+                            detail: Some("Field of anonymous record".to_string()),
+                            ..Default::default()
+                        });
+                    }
+                }
+            }
+            return completions;
+        }
+        
+        // 1. Get field completions for declared record types
         let field_names = self.get_type_fields(ast, type_name);
         for field in field_names {
             completions.push(CompletionItem {
@@ -83,6 +102,7 @@ impl Backend {
                 label: method_name.clone(),
                 kind: Some(CompletionItemKind::METHOD),
                 detail: Some(signature),
+                insert_text: Some(format!("{}()", method_name)),
                 ..Default::default()
             });
         }
@@ -94,6 +114,7 @@ impl Backend {
                 label: method_name.clone(),
                 kind: Some(CompletionItemKind::FUNCTION),
                 detail: Some(format!("UFCS: {}", signature)),
+                insert_text: Some(format!("{}()", method_name)),
                 ..Default::default()
             });
         }

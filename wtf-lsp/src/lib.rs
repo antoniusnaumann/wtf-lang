@@ -32,6 +32,17 @@ impl Backend {
 
     // Methods that are shared across modules and needed for AST operations
     pub fn get_type_fields(&self, ast: &wtf_ast::Module, type_name: &str) -> Vec<String> {
+        // Check if this is an anonymous record type
+        if type_name.starts_with("AnonymousRecord:") {
+            if let Some(fields_part) = type_name.strip_prefix("AnonymousRecord:") {
+                if !fields_part.is_empty() {
+                    return fields_part.split(',').map(|s| s.to_string()).collect();
+                }
+            }
+            return Vec::new();
+        }
+        
+        // Handle declared record/resource types
         for declaration in &ast.declarations {
             match declaration {
                 wtf_ast::Declaration::Record(record) if record.name == type_name => {
