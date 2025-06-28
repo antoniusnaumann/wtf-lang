@@ -657,35 +657,59 @@ impl Backend {
     }
 
     fn find_record_type_by_fields(&self, ast: &wtf_ast::Module, field_names: &[String]) -> Option<String> {
-        // Find a record type that has all the specified fields
+        if field_names.is_empty() {
+            return None;
+        }
+        
+        let mut exact_matches = Vec::new();
+        let mut partial_matches = Vec::new();
+        
+        // Collect all potential matches
         for declaration in &ast.declarations {
             match declaration {
                 wtf_ast::Declaration::Record(record) => {
                     let record_fields: Vec<String> = record.fields.iter().map(|f| f.name.clone()).collect();
-                    
-                    // Check if all fields in field_names exist in this record
-                    let all_fields_match = field_names.iter().all(|field| record_fields.contains(field));
-                    
-                    if all_fields_match && !field_names.is_empty() {
-                        return Some(record.name.clone());
-                    }
+                    self.evaluate_record_match(&record.name, &record_fields, field_names, &mut exact_matches, &mut partial_matches);
                 }
                 wtf_ast::Declaration::Export(export) => {
                     if let wtf_ast::Declaration::Record(record) = export.item.as_ref() {
                         let record_fields: Vec<String> = record.fields.iter().map(|f| f.name.clone()).collect();
-                        
-                        let all_fields_match = field_names.iter().all(|field| record_fields.contains(field));
-                        
-                        if all_fields_match && !field_names.is_empty() {
-                            return Some(record.name.clone());
-                        }
+                        self.evaluate_record_match(&record.name, &record_fields, field_names, &mut exact_matches, &mut partial_matches);
                     }
                 }
                 _ => continue,
             }
         }
         
+        // Prefer exact matches first (same number of fields)
+        if !exact_matches.is_empty() {
+            // Among exact matches, return the first one (they're equivalent)
+            return Some(exact_matches[0].clone());
+        }
+        
+        // If no exact matches, find the most specific partial match (fewest extra fields)
+        if !partial_matches.is_empty() {
+            // Sort by number of fields (ascending) to get the most specific match
+            partial_matches.sort_by_key(|(_, field_count)| *field_count);
+            return Some(partial_matches[0].0.clone());
+        }
+        
         None
+    }
+    
+    fn evaluate_record_match(&self, record_name: &str, record_fields: &[String], field_names: &[String], exact_matches: &mut Vec<String>, partial_matches: &mut Vec<(String, usize)>) {
+        // Check if all fields in field_names exist in this record
+        let all_fields_match = field_names.iter().all(|field| record_fields.contains(field));
+        
+        if all_fields_match {
+            if record_fields.len() == field_names.len() {
+                // Exact match: same number of fields
+                exact_matches.push(record_name.to_string());
+            } else {
+                // Partial match: record has more fields than the literal
+                partial_matches.push((record_name.to_string(), record_fields.len()));
+            }
+        }
     }
 
     fn find_identifier_type(&self, identifier: &str, ast: &wtf_ast::Module) -> Option<String> {
