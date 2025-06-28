@@ -370,6 +370,220 @@ func test() {
 }
 
 #[tokio::test]
+async fn test_identifier_completion() {
+    let code = r#"record point {
+    x: f64
+    y: f64
+}
+
+func distance(p1: point, p2: point) -> f64 {
+    0.0
+}
+
+func magnitude(point: point) -> f64 {
+    0.0  
+}
+
+func test_function() {
+    let p1 = { x: 1.0, y: 2.0 }
+    let p2 = { x: 3.0, y: 4.0 }
+    
+    // Testing identifier completion here - cursor after 'let result = '
+    let result = dis
+}
+"#;
+
+    let (service, _socket) = LspService::new(|client| Backend::new(client));
+    let backend = service.inner();
+    let uri = Url::parse("file:///test_identifier.wtf").unwrap();
+    
+    let did_open_params = DidOpenTextDocumentParams {
+        text_document: TextDocumentItem {
+            uri: uri.clone(),
+            language_id: "wtf".to_string(),
+            version: 1,
+            text: code.to_string(),
+        },
+    };
+    backend.did_open(did_open_params).await;
+    
+    // Validate document to populate AST cache
+    let diagnostics = backend.validate_document(&uri, code).await;
+    println!("Diagnostics: {:?}", diagnostics);
+    
+    // Test completion at position after 'let result = dis' - should suggest 'distance' function
+    let lines: Vec<&str> = code.lines().collect();
+    let target_line = lines.iter().position(|line| line.contains("let result = dis")).unwrap();
+    let target_char = lines[target_line].find("dis").unwrap() + 3; // Position at end of 'dis'
+    let position = Position::new(target_line as u32, target_char as u32);
+    
+    println!("Testing identifier completion at line {}, char {} (after 'dis')", target_line, target_char);
+    
+    let completion_params = CompletionParams {
+        text_document_position: TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier { uri: uri.clone() },
+            position,
+        },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+        context: None,
+    };
+    
+    let completion_result = backend.completion(completion_params).await.unwrap();
+    println!("Identifier completion result: {:?}", completion_result);
+    
+    // Check if identifier completions work
+    if let Some(CompletionResponse::Array(completions)) = completion_result {
+        let completion_labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+        println!("Identifier completion labels: {:?}", completion_labels);
+        
+        // Should include function names
+        assert!(completion_labels.contains(&"distance"), "Should suggest 'distance' function: {:?}", completion_labels);
+        assert!(completion_labels.contains(&"magnitude"), "Should suggest 'magnitude' function: {:?}", completion_labels);
+        
+        // Should include type names
+        assert!(completion_labels.contains(&"point"), "Should suggest 'point' type: {:?}", completion_labels);
+        
+        // Check that function completions include parentheses
+        let distance_completion = completions.iter().find(|c| c.label == "distance").unwrap();
+        assert!(distance_completion.insert_text.as_ref().unwrap().contains("()"), 
+                "Function completion should include parentheses");
+        
+    } else {
+        panic!("Expected identifier completions but got None");
+    }
+}
+
+#[tokio::test]
+async fn test_ufcs_transformation_actions() {
+    let code = r#"record point {
+    x: f64
+    y: f64
+}
+
+func distance(p1: point, p2: point) -> f64 {
+    0.0
+}
+
+func magnitude(point: point) -> f64 {
+    0.0  
+}
+
+func test_transformations() {
+    let p1 = { x: 1.0, y: 2.0 }
+    let p2 = { x: 3.0, y: 4.0 }
+    
+    // Method call that should transform to function call
+    let result1 = p1.distance(p2)
+    
+    // Function call that should transform to method call  
+    let result2 = magnitude(p1)
+}
+"#;
+
+    let (service, _socket) = LspService::new(|client| Backend::new(client));
+    let backend = service.inner();
+    let uri = Url::parse("file:///test_ufcs.wtf").unwrap();
+    
+    let did_open_params = DidOpenTextDocumentParams {
+        text_document: TextDocumentItem {
+            uri: uri.clone(),
+            language_id: "wtf".to_string(),
+            version: 1,
+            text: code.to_string(),
+        },
+    };
+    backend.did_open(did_open_params).await;
+    
+    // Validate document to populate AST cache
+    let diagnostics = backend.validate_document(&uri, code).await;
+    println!("Diagnostics: {:?}", diagnostics);
+    
+    // Test UFCS to function transformation for 'p1.distance(p2)'
+    let lines: Vec<&str> = code.lines().collect();
+    let method_line = lines.iter().position(|line| line.contains("p1.distance(p2)")).unwrap();
+    let start_char = lines[method_line].find("p1.distance(p2)").unwrap();
+    let end_char = start_char + "p1.distance(p2)".len();
+    
+    let method_range = Range::new(
+        Position::new(method_line as u32, start_char as u32),
+        Position::new(method_line as u32, end_char as u32),
+    );
+    
+    let code_action_params = CodeActionParams {
+        text_document: TextDocumentIdentifier { uri: uri.clone() },
+        range: method_range,
+        context: CodeActionContext {
+            diagnostics: vec![], // No diagnostics needed for refactoring actions
+            only: None,
+            trigger_kind: None,
+        },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+    };
+    
+    let code_actions = backend.code_action(code_action_params).await.unwrap();
+    println!("UFCS transformation actions: {:?}", code_actions);
+    
+    // Should have code action to convert method call to function call
+    if let Some(actions) = code_actions {
+        let action_titles: Vec<String> = actions.iter().filter_map(|action| {
+            match action {
+                CodeActionOrCommand::CodeAction(ca) => Some(ca.title.clone()),
+                _ => None,
+            }
+        }).collect();
+        println!("UFCS action titles: {:?}", action_titles);
+        
+        assert!(action_titles.iter().any(|title| title.contains("Convert to function call")), 
+                "Should have action to convert method call to function call: {:?}", action_titles);
+    } else {
+        println!("No UFCS transformation actions found");
+    }
+    
+    // Test function to UFCS transformation for 'magnitude(p1)'
+    let function_line = lines.iter().position(|line| line.contains("magnitude(p1)")).unwrap();
+    let start_char = lines[function_line].find("magnitude(p1)").unwrap();
+    let end_char = start_char + "magnitude(p1)".len();
+    
+    let function_range = Range::new(
+        Position::new(function_line as u32, start_char as u32),
+        Position::new(function_line as u32, end_char as u32),
+    );
+    
+    let code_action_params2 = CodeActionParams {
+        text_document: TextDocumentIdentifier { uri: uri.clone() },
+        range: function_range,
+        context: CodeActionContext {
+            diagnostics: vec![],
+            only: None,
+            trigger_kind: None,
+        },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+    };
+    
+    let code_actions2 = backend.code_action(code_action_params2).await.unwrap();
+    println!("Function to UFCS transformation actions: {:?}", code_actions2);
+    
+    // Should have code action to convert function call to method call
+    if let Some(actions) = code_actions2 {
+        let action_titles: Vec<String> = actions.iter().filter_map(|action| {
+            match action {
+                CodeActionOrCommand::CodeAction(ca) => Some(ca.title.clone()),
+                _ => None,
+            }
+        }).collect();
+        println!("Function to UFCS action titles: {:?}", action_titles);
+        
+        assert!(action_titles.iter().any(|title| title.contains("Convert to method call")), 
+                "Should have action to convert function call to method call: {:?}", action_titles);
+    } else {
+        println!("No function to UFCS transformation actions found");
+    }
+}
+
+#[tokio::test]
 async fn test_structural_typing_ufcs_completion() {
     // Test structural typing support: functions that accept a subset of fields
     // should be available as methods on records with more fields

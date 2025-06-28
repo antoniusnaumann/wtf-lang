@@ -18,6 +18,11 @@ impl Backend {
             }
         }
         
+        // Add UFCS transformation actions (not dependent on diagnostics)
+        if let Some(mut ufcs_actions) = self.generate_ufcs_transformation_actions(&params.range, text, uri).await {
+            all_actions.append(&mut ufcs_actions);
+        }
+        
         if all_actions.is_empty() {
             None
         } else {
@@ -278,5 +283,224 @@ impl Backend {
         mappings
     }
 
+    async fn generate_ufcs_transformation_actions(&self, range: &Range, text: &str, uri: &Url) -> Option<Vec<CodeActionOrCommand>> {
+        let chars: Vec<char> = text.chars().collect();
+        let line_start = self.find_line_start(range.start.line, &chars);
+        let line_end = self.find_line_end(range.start.line, &chars);
+        
+        if line_end <= line_start {
+            return None;
+        }
+        
+        let line_text: String = chars[line_start..line_end].iter().collect();
+        let mut actions = Vec::new();
+        
+        // Check for method call pattern: obj.method(args)
+        if let Some(method_call) = self.parse_method_call(&line_text) {
+            if let Some(action) = self.create_ufcs_to_function_action(&method_call, range, uri).await {
+                actions.push(action);
+            }
+        }
+        
+        // Check for function call pattern: function(obj, args) where first arg could be receiver
+        if let Some(function_call) = self.parse_function_call(&line_text, uri).await {
+            if let Some(action) = self.create_function_to_ufcs_action(&function_call, range, uri).await {
+                actions.push(action);
+            }
+        }
+        
+        if actions.is_empty() {
+            None
+        } else {
+            Some(actions)
+        }
+    }
 
+    fn parse_method_call(&self, line_text: &str) -> Option<MethodCallInfo> {
+        // Look for pattern: receiver.method(arguments)
+        // Find the rightmost pattern that looks like "identifier.method("
+        
+        let mut best_match = None;
+        let mut search_pos = 0;
+        
+        while let Some(dot_pos) = line_text[search_pos..].find('.') {
+            let absolute_dot_pos = search_pos + dot_pos;
+            
+            // Check if this is followed by a valid identifier and then parentheses
+            let after_dot = &line_text[absolute_dot_pos + 1..];
+            if let Some(paren_pos) = after_dot.find('(') {
+                let method_name = after_dot[..paren_pos].trim();
+                if method_name.chars().all(|c| c.is_alphanumeric() || c == '_') && !method_name.is_empty() {
+                    // Found a potential method call, extract the receiver
+                    let before_dot = &line_text[..absolute_dot_pos];
+                    
+                    // Extract the rightmost identifier before the dot
+                    let receiver = if let Some(space_pos) = before_dot.rfind(char::is_whitespace) {
+                        before_dot[space_pos..].trim()
+                    } else {
+                        before_dot.trim()
+                    };
+                    
+                    // Make sure receiver is a valid identifier
+                    if receiver.chars().all(|c| c.is_alphanumeric() || c == '_') && !receiver.is_empty() {
+                        // Extract arguments (simple parsing - doesn't handle nested parens perfectly)
+                        if let Some(close_paren) = after_dot.rfind(')') {
+                            let args_text = &after_dot[paren_pos + 1..close_paren].trim();
+                            
+                            best_match = Some(MethodCallInfo {
+                                receiver: receiver.to_string(),
+                                method_name: method_name.to_string(),
+                                arguments: if args_text.is_empty() { 
+                                    Vec::new() 
+                                } else { 
+                                    args_text.split(',').map(|s| s.trim().to_string()).collect() 
+                                },
+                                full_text: line_text.to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+            
+            search_pos = absolute_dot_pos + 1;
+        }
+        
+        best_match
+    }
+
+    async fn parse_function_call(&self, line_text: &str, uri: &Url) -> Option<FunctionCallInfo> {
+        // Look for pattern: function_name(arg1, arg2, ...)
+        // Where arg1 could be used as a receiver for UFCS
+        
+        // Find the rightmost pattern that looks like "identifier("
+        let paren_pos = line_text.rfind('(')?;
+        
+        // Extract function name (look backwards from the paren to find the identifier)
+        let before_paren = &line_text[..paren_pos];
+        let function_name = if let Some(space_pos) = before_paren.rfind(char::is_whitespace) {
+            before_paren[space_pos..].trim()
+        } else {
+            before_paren.trim()
+        };
+        
+        // Check if function name is a valid identifier
+        if !function_name.chars().all(|c| c.is_alphanumeric() || c == '_') || function_name.is_empty() {
+            return None;
+        }
+        
+        // Check if this function exists in the AST
+        let ast_cache = self.ast_cache.read().await;
+        let ast = ast_cache.get(uri)?;
+        
+        let function_exists = ast.declarations.iter().any(|decl| {
+            matches!(decl, wtf_ast::Declaration::Function(f) if f.name == function_name)
+        });
+        
+        if !function_exists {
+            return None;
+        }
+        
+        // Extract arguments
+        let close_paren = line_text.rfind(')')?;
+        let args_text = &line_text[paren_pos + 1..close_paren].trim();
+        let arguments: Vec<String> = if args_text.is_empty() {
+            Vec::new()
+        } else {
+            args_text.split(',').map(|s| s.trim().to_string()).collect()
+        };
+        
+        // Only offer transformation if there's at least one argument to use as receiver
+        if arguments.is_empty() {
+            return None;
+        }
+        
+        Some(FunctionCallInfo {
+            function_name: function_name.to_string(),
+            arguments,
+            full_text: line_text.to_string(),
+        })
+    }
+
+    async fn create_ufcs_to_function_action(&self, method_call: &MethodCallInfo, range: &Range, uri: &Url) -> Option<CodeActionOrCommand> {
+        // Transform: receiver.method(args) -> method(receiver, args)
+        let mut new_args = vec![method_call.receiver.clone()];
+        new_args.extend(method_call.arguments.iter().cloned());
+        
+        let new_text = if new_args.len() == 1 {
+            format!("{}({})", method_call.method_name, new_args[0])
+        } else {
+            format!("{}({})", method_call.method_name, new_args.join(", "))
+        };
+        
+        let text_edit = TextEdit {
+            range: *range,
+            new_text,
+        };
+        
+        Some(CodeActionOrCommand::CodeAction(CodeAction {
+            title: format!("Convert to function call: {}(...)", method_call.method_name),
+            kind: Some(CodeActionKind::REFACTOR_REWRITE),
+            edit: Some(WorkspaceEdit {
+                changes: Some({
+                    let mut changes = std::collections::HashMap::new();
+                    changes.insert(uri.clone(), vec![text_edit]);
+                    changes
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }))
+    }
+
+    async fn create_function_to_ufcs_action(&self, function_call: &FunctionCallInfo, range: &Range, uri: &Url) -> Option<CodeActionOrCommand> {
+        // Transform: function(receiver, args) -> receiver.function(args)
+        if function_call.arguments.is_empty() {
+            return None;
+        }
+        
+        let receiver = &function_call.arguments[0];
+        let remaining_args = &function_call.arguments[1..];
+        
+        let new_text = if remaining_args.is_empty() {
+            format!("{}.{}()", receiver, function_call.function_name)
+        } else {
+            format!("{}.{}({})", receiver, function_call.function_name, remaining_args.join(", "))
+        };
+        
+        let text_edit = TextEdit {
+            range: *range,
+            new_text,
+        };
+        
+        Some(CodeActionOrCommand::CodeAction(CodeAction {
+            title: format!("Convert to method call: {}.{}(...)", receiver, function_call.function_name),
+            kind: Some(CodeActionKind::REFACTOR_REWRITE),
+            edit: Some(WorkspaceEdit {
+                changes: Some({
+                    let mut changes = std::collections::HashMap::new();
+                    changes.insert(uri.clone(), vec![text_edit]);
+                    changes
+                }),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }))
+    }
+
+
+}
+
+#[derive(Debug)]
+struct MethodCallInfo {
+    receiver: String,
+    method_name: String,
+    arguments: Vec<String>,
+    full_text: String,
+}
+
+#[derive(Debug)]
+struct FunctionCallInfo {
+    function_name: String,
+    arguments: Vec<String>,
+    full_text: String,
 }
