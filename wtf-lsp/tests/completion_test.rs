@@ -184,3 +184,187 @@ func main() {
         println!("No code actions returned - this may be expected if no diagnostics are available");
     }
 }
+
+#[tokio::test]
+async fn test_anonymous_type_completion() {
+    // Test case 1: Anonymous record type (no declared type matches these fields)
+    let code = r#"func test_anonymous() {
+    // Anonymous record without corresponding declared type
+    let point = {
+        x: 1.0,
+        y: 2.0,
+        z: 3.0
+    }
+    
+    // Should be able to complete fields here: point.
+    let x_val = point.x
+    let invalid = point.unknown_field
+}
+
+// Only declared record has x, y (no z)
+record point2d {
+    x: f64
+    y: f64
+}"#;
+
+    let (service, _socket) = LspService::new(|client| Backend::new(client));
+    let backend = service.inner();
+    let uri = Url::parse("file:///test_anonymous.wtf").unwrap();
+    
+    let did_open_params = DidOpenTextDocumentParams {
+        text_document: TextDocumentItem {
+            uri: uri.clone(),
+            language_id: "wtf".to_string(),
+            version: 1,
+            text: code.to_string(),
+        },
+    };
+    backend.did_open(did_open_params).await;
+    
+    // Test completion at position after 'point.' - should show x, y, z fields
+    let lines: Vec<&str> = code.lines().collect();
+    let dot_line = lines.iter().position(|line| line.contains("let x_val = point.x")).unwrap();
+    let dot_char = lines[dot_line].find("point.").unwrap() + 6; // Position right after the dot
+    let position = Position::new(dot_line as u32, dot_char as u32);
+    
+    println!("Testing anonymous type completion at line {}, char {} (after 'point.')", dot_line, dot_char);
+    
+    let completion_params = CompletionParams {
+        text_document_position: TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier { uri: uri.clone() },
+            position,
+        },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+        context: None,
+    };
+    
+    let completion_result = backend.completion(completion_params).await.unwrap();
+    println!("Anonymous type completion result: {:?}", completion_result);
+    
+    // Test if the completion mechanism is working for anonymous types
+    if let Some(CompletionResponse::Array(completions)) = completion_result {
+        println!("Got {} completions for anonymous type", completions.len());
+        
+        let completion_labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+        println!("Anonymous type completion labels: {:?}", completion_labels);
+        
+        // Should include the anonymous record fields x, y, z
+        assert!(completion_labels.contains(&"x"), "Should suggest 'x' field for anonymous type");
+        assert!(completion_labels.contains(&"y"), "Should suggest 'y' field for anonymous type");
+        assert!(completion_labels.contains(&"z"), "Should suggest 'z' field for anonymous type");
+    } else {
+        println!("No completions for anonymous type - this indicates the issue!");
+    }
+
+    // Test code actions for unknown field
+    let diagnostics = backend.validate_document(&uri, code).await;
+    println!("Diagnostics for unknown field: {:?}", diagnostics);
+    
+    // Find position of unknown_field
+    let error_line = lines.iter().position(|line| line.contains("unknown_field")).unwrap();
+    let start_char = lines[error_line].find("unknown_field").unwrap();
+    let end_char = start_char + "unknown_field".len();
+    
+    let range = Range::new(
+        Position::new(error_line as u32, start_char as u32),
+        Position::new(error_line as u32, end_char as u32),
+    );
+    
+    let code_action_params = CodeActionParams {
+        text_document: TextDocumentIdentifier { uri: uri.clone() },
+        range,
+        context: CodeActionContext {
+            diagnostics: diagnostics.clone(),
+            only: None,
+            trigger_kind: None,
+        },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+    };
+    
+    let code_actions = backend.code_action(code_action_params).await.unwrap();
+    println!("Code actions for unknown field: {:?}", code_actions);
+    
+    // Should have code actions suggesting valid field names
+    if let Some(actions) = code_actions {
+        println!("Got {} code actions for unknown field", actions.len());
+        assert!(!actions.is_empty(), "Should have code actions for field suggestions on anonymous type");
+    } else {
+        println!("No code actions for unknown field - this indicates the issue!");
+    }
+}
+
+#[tokio::test]
+async fn test_function_completion_with_parentheses() {
+    let code = r#"record point {
+    x: f64
+    y: f64
+}
+
+func add_points(a: point, b: point) -> point {
+    { x: a.x + b.x, y: a.y + b.y }
+}
+
+func test() {
+    let p1 = { x: 1.0, y: 2.0 }
+    // Function completion should add parentheses: p1.add_points
+    let result = p1.add_points
+}"#;
+
+    let (service, _socket) = LspService::new(|client| Backend::new(client));
+    let backend = service.inner();
+    let uri = Url::parse("file:///test_function_completion.wtf").unwrap();
+    
+    let did_open_params = DidOpenTextDocumentParams {
+        text_document: TextDocumentItem {
+            uri: uri.clone(),
+            language_id: "wtf".to_string(),
+            version: 1,
+            text: code.to_string(),
+        },
+    };
+    backend.did_open(did_open_params).await;
+    
+    // Test completion at position after 'p1.'
+    let lines: Vec<&str> = code.lines().collect();
+    let dot_line = lines.iter().position(|line| line.contains("let result = p1.add_points")).unwrap();
+    let dot_char = lines[dot_line].find("p1.").unwrap() + 3; // Position right after the dot
+    let position = Position::new(dot_line as u32, dot_char as u32);
+    
+    println!("Testing function completion at line {}, char {} (after 'p1.')", dot_line, dot_char);
+    
+    let completion_params = CompletionParams {
+        text_document_position: TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier { uri: uri.clone() },
+            position,
+        },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+        context: None,
+    };
+    
+    let completion_result = backend.completion(completion_params).await.unwrap();
+    println!("Function completion result: {:?}", completion_result);
+    
+    // Check if function completions include parentheses
+    if let Some(CompletionResponse::Array(completions)) = completion_result {
+        let function_completions: Vec<&CompletionItem> = completions.iter()
+            .filter(|c| c.kind == Some(CompletionItemKind::FUNCTION) || c.kind == Some(CompletionItemKind::METHOD))
+            .collect();
+        
+        println!("Function completions: {:?}", function_completions);
+        
+        for completion in function_completions {
+            println!("Function completion: label='{}', insert_text={:?}", 
+                     completion.label, completion.insert_text);
+            
+            if completion.label.contains("add_points") {
+                // Check if it includes parentheses or has proper insert text
+                if let Some(insert_text) = &completion.insert_text {
+                    assert!(insert_text.contains("()"), "Function completion should include parentheses");
+                }
+            }
+        }
+    }
+}
