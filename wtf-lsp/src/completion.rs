@@ -1,3 +1,20 @@
+//! Completion Module
+//! 
+//! Provides intelligent auto-completion features for the WTF Language Server.
+//! 
+//! This module implements context-aware code completion including:
+//! - Field completion for record/resource types after dot notation
+//! - Method completion via UFCS (Uniform Function Call Syntax)
+//! - Identifier completion for functions, types, and variables
+//! - Keyword completion for top-level language constructs
+//! - Structural typing support for compatible method suggestions
+//! 
+//! The completion system integrates with HIR for accurate type information
+//! and falls back to AST analysis when necessary. It handles both declared
+//! types and anonymous record literals with equal intelligence.
+//! 
+//! See docs/completion.md for detailed implementation documentation.
+
 use tower_lsp::lsp_types::*;
 use wtf_ast;
 

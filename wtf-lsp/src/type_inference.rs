@@ -1,3 +1,20 @@
+//! Type Inference Module
+//! 
+//! Provides accurate type resolution for completion and code action features.
+//! 
+//! This module bridges syntax analysis and semantic understanding through:
+//! - HIR-based type inference using compiler type checking results
+//! - AST-based fallback inference for error recovery scenarios
+//! - Anonymous record type handling with synthetic type names
+//! - Structural typing compatibility checking for UFCS methods
+//! - Variable name preservation in HIR for LSP features
+//! 
+//! The type inference system prioritizes accuracy through HIR integration
+//! while maintaining robustness through AST fallbacks, enabling intelligent
+//! language features even in the presence of compilation errors.
+//! 
+//! See docs/type_inference.md for detailed implementation documentation.
+
 use tower_lsp::lsp_types::*;
 use wtf_ast;
 use wtf_hir;

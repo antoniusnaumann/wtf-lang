@@ -147,6 +147,19 @@ func main() {
 }
 ```
 
+## Documentation
+
+### For Developers
+- **`ARCHITECTURE.md`**: Comprehensive architectural overview
+- **`docs/completion.md`**: Auto-completion implementation details
+- **`docs/diagnostics.md`**: Error detection and reporting
+- **`docs/code_actions.md`**: Quick fixes and refactoring
+- **`docs/type_inference.md`**: HIR-based type resolution
+- **`docs/testing.md`**: Testing strategies and guidelines
+
+### For LLM Assistants
+The documentation includes specific guidance for AI assistants working with this codebase, covering common patterns, implementation guidelines, and potential pitfalls.
+
 ## Development
 
 Run the language server in development mode:
@@ -170,6 +183,19 @@ The language server is built on:
 - **wtf-parser**: WTF language parser for syntax analysis
 - **wtf-hir**: High-level IR compiler for semantic analysis
 - **wtf-error**: Error types and formatting
+
+### Modular Design
+
+The LSP implementation is organized into focused modules:
+
+- **`lib.rs`**: Backend core and shared state management
+- **`completion.rs`**: Auto-completion and IntelliSense features
+- **`diagnostics.rs`**: Error detection and reporting
+- **`code_actions.rs`**: Quick fixes and refactoring capabilities
+- **`type_inference.rs`**: HIR-based type resolution with AST fallbacks
+- **`main.rs`**: Binary entry point
+
+See `ARCHITECTURE.md` for comprehensive architectural documentation.
 
 ## Examples
 

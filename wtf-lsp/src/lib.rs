@@ -1,3 +1,21 @@
+//! WTF Language Server
+//! 
+//! A Language Server Protocol (LSP) implementation for the WTF programming language.
+//! 
+//! This crate provides intelligent language support including:
+//! - Real-time syntax and semantic error detection
+//! - Context-aware auto-completion with UFCS and structural typing
+//! - Quick fixes and refactoring actions
+//! - HIR-based type inference with AST fallbacks
+//! 
+//! The language server is organized into specialized modules:
+//! - `completion`: Auto-completion and IntelliSense features
+//! - `diagnostics`: Error detection and reporting
+//! - `code_actions`: Quick fixes and refactoring capabilities
+//! - `type_inference`: Accurate type resolution using HIR and AST
+//! 
+//! See ARCHITECTURE.md and docs/ for comprehensive documentation.
+
 use std::collections::HashMap;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;

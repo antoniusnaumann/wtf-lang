@@ -1,3 +1,20 @@
+//! Diagnostics Module
+//! 
+//! Handles error detection and reporting for the WTF Language Server.
+//! 
+//! This module integrates with the WTF compiler pipeline to provide real-time
+//! error reporting including:
+//! - Syntax error detection via the WTF parser
+//! - Semantic error detection via HIR compilation
+//! - Precise position mapping from byte offsets to LSP positions
+//! - Proper diagnostic severity classification and source attribution
+//! - Graceful error handling and recovery strategies
+//! 
+//! The diagnostics system ensures consistent error reporting with ERROR severity
+//! for all WTF language issues, enabling proper IDE integration and user experience.
+//! 
+//! See docs/diagnostics.md for detailed implementation documentation.
+
 use tower_lsp::lsp_types::*;
 use wtf_error::Error as WtfError;
 use wtf_hir;

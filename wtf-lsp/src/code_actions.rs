@@ -1,3 +1,20 @@
+//! Code Actions Module
+//! 
+//! Provides intelligent quick fixes and refactoring capabilities for the WTF Language Server.
+//! 
+//! This module implements contextual code actions including:
+//! - Error correction actions for unknown fields and cross-language keywords
+//! - UFCS transformation actions (method ↔ function call conversion)
+//! - Variable mutability changes (let ↔ var transformations)
+//! - Assignment error fixes (shadowing and mutability solutions)
+//! - Smart pattern detection and precise text edit generation
+//! 
+//! Code actions are triggered by diagnostics or user selections and provide
+//! both error fixes and code improvement suggestions. The module ensures
+//! reliable text replacement through careful range calculation.
+//! 
+//! See docs/code_actions.md for detailed implementation documentation.
+
 use std::collections::HashMap;
 use tower_lsp::lsp_types::*;
 
