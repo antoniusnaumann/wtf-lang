@@ -44,6 +44,7 @@ pub struct Parameter {
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionBody {
     pub vars: Vec<Type>,
+    pub var_names: Vec<Option<String>>, // For LSP: retain variable names where available
     pub body: Body,
 }
 
@@ -318,6 +319,8 @@ impl Display for Module {
                 write!(f, "  {}: {ty}", VarId(i))?;
                 if let Some(param) = function.parameters.get(i) {
                     write!(f, " (param {})", param.name)?;
+                } else if let Some(var_name) = function.body.var_names.get(i).and_then(|n| n.as_ref()) {
+                    write!(f, " (var {})", var_name)?;
                 }
                 writeln!(f, "")?;
             }
@@ -331,6 +334,9 @@ impl Display for Module {
                 write!(f, "Locals:")?;
                 for (i, ty) in test.body.vars.iter().enumerate() {
                     write!(f, " {i}: {ty}")?;
+                    if let Some(var_name) = test.body.var_names.get(i).and_then(|n| n.as_ref()) {
+                        write!(f, " ({})", var_name)?;
+                    }
                 }
                 write!(f, "\n")?;
                 match &test.name {

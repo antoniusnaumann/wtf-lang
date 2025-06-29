@@ -8,6 +8,8 @@ A Language Server Protocol (LSP) implementation for the WTF programming language
 - **HIR Error Detection**: High-level intermediate representation compilation errors
 - **Document Synchronization**: Support for opening, editing, and closing WTF files
 - **Position Mapping**: Accurate mapping of byte offsets to line/character positions
+- **Auto-completion**: Method completion with "." trigger supporting UFCS and structural typing
+- **Code Actions**: Quick fixes for common programming errors
 
 ## Installation
 
@@ -68,13 +70,95 @@ The language server currently supports:
 - `textDocument/didChange` 
 - `textDocument/didClose`
 - `textDocument/publishDiagnostics`
+- `textDocument/codeAction` (provides quick fixes for common errors)
+- `textDocument/completion` (method auto-completion with "." trigger)
 
 ## Error Types
 
 The language server detects and reports:
 
-1. **Parser Errors**: Syntax errors, unexpected tokens, malformed constructs
-2. **HIR Compilation Errors**: Type errors, semantic errors (when HIR compilation fails)
+1. **Parser Errors**: Syntax errors, unexpected tokens, malformed constructs (shown as ERROR severity)
+2. **HIR Compilation Errors**: Type errors, semantic errors (when HIR compilation fails, shown as ERROR severity)
+
+## Code Actions (Quick Fixes)
+
+The language server now provides automatic fixes for common errors:
+
+### Unknown Field Errors
+- Uses real AST type information to suggest actual field names from record/resource types
+- Provides quick-fix actions to replace the field name with correct alternatives
+
+### Keyword Errors  
+- Maps keywords from other programming languages to WTF equivalents:
+  - `def`, `fn`, `fun`, `function` → `func`
+  - `struct` → `record`
+  - `class` → `resource`, `record`
+  - `union` → `variant`
+  - `const` → `let`
+  - `mut`, `mutable` → `var`
+  - `elif`, `elseif` → `else if`
+  - `switch`, `case` → `match`
+- Provides quick-fix actions to correct the keyword
+
+## Auto-completion
+
+The language server provides intelligent method completion when typing "." after an expression:
+
+### UFCS (Uniform Function Call Syntax) Support
+- Any function where the first parameter matches the type can be called as a method
+- Example: `func get_name(p: Person) -> String` can be called as `person.get_name()`
+
+### Structural Typing Support
+- For record types, methods that work with structurally compatible types are suggested
+- A method expecting `{name: String}` will be available on any record with at least a `name: String` field
+
+### Resource Methods
+- Direct methods defined on resource types are automatically suggested
+- Full method signatures are shown with parameter names and return types
+
+### Example
+
+```wtf
+record Person {
+    name: String,
+    age: Int,
+    email: String
+}
+
+func get_name_length(person: Person) -> Int {
+    person.name.length()
+}
+
+func format_contact(p: Person) -> String {
+    "${p.name} <${p.email}>"
+}
+
+func main() {
+    let person = Person {
+        name: "Alice",
+        age: 30,
+        email: "alice@example.com"
+    }
+    
+    // Typing "person." will suggest:
+    // - get_name_length(person: Person) -> Int
+    // - format_contact(p: Person) -> String
+    let result = person.■
+}
+```
+
+## Documentation
+
+### For Developers
+- **`ARCHITECTURE.md`**: Comprehensive architectural overview
+- **`docs/completion.md`**: Auto-completion implementation details
+- **`docs/diagnostics.md`**: Error detection and reporting
+- **`docs/code_actions.md`**: Quick fixes and refactoring
+- **`docs/type_inference.md`**: HIR-based type resolution
+- **`docs/testing.md`**: Testing strategies and guidelines
+
+### For LLM Assistants
+The documentation includes specific guidance for AI assistants working with this codebase, covering common patterns, implementation guidelines, and potential pitfalls.
 
 ## Development
 
@@ -99,6 +183,19 @@ The language server is built on:
 - **wtf-parser**: WTF language parser for syntax analysis
 - **wtf-hir**: High-level IR compiler for semantic analysis
 - **wtf-error**: Error types and formatting
+
+### Modular Design
+
+The LSP implementation is organized into focused modules:
+
+- **`lib.rs`**: Backend core and shared state management
+- **`completion.rs`**: Auto-completion and IntelliSense features
+- **`diagnostics.rs`**: Error detection and reporting
+- **`code_actions.rs`**: Quick fixes and refactoring capabilities
+- **`type_inference.rs`**: HIR-based type resolution with AST fallbacks
+- **`main.rs`**: Binary entry point
+
+See `ARCHITECTURE.md` for comprehensive architectural documentation.
 
 ## Examples
 

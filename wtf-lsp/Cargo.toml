@@ -13,3 +13,4 @@ wtf-parser = { path = "../wtf-parser" }
 wtf-hir = { path = "../wtf-hir" }  
 wtf-error = { path = "../wtf-error" }
 wtf-tokens = { path = "../wtf-tokens" }
+wtf-ast = { path = "../wtf-ast" }

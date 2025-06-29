@@ -419,7 +419,7 @@ impl HirCompiler {
         let mut visible = Visible::new(types);
 
         for (name, ty) in &parameters {
-            let param = vars.push(ty.clone());
+            let param = vars.push_named(ty.clone(), Some(name.clone()));
             visible.bind(name.clone(), param, false);
         }
 
@@ -442,6 +442,7 @@ impl HirCompiler {
             return_type,
             body: FunctionBody {
                 vars: vars.vars,
+                var_names: vars.var_names,
                 body: block.into(),
             },
             is_export,
@@ -554,7 +555,7 @@ impl HirCompiler {
                     initial_value
                 };
 
-                let var = vars.push(expression.ty.clone());
+                let var = vars.push_named(expression.ty.clone(), Some(variable_declaration.name.clone()));
                 visible.bind(
                     variable_declaration.name.clone(),
                     var,
@@ -1404,6 +1405,7 @@ impl HirCompiler {
 
 struct VarCollector {
     vars: Vec<Type>,
+    var_names: Vec<Option<String>>, // For LSP: retain variable names where available
     /// The return type of the current function scope
     result: Type,
 }
@@ -1412,6 +1414,7 @@ impl VarCollector {
     fn new(result: Type) -> Self {
         Self {
             vars: Vec::new(),
+            var_names: Vec::new(),
             result,
         }
     }
@@ -1419,6 +1422,14 @@ impl VarCollector {
     fn push(&mut self, ty: Type) -> VarId {
         let id = VarId(self.vars.len());
         self.vars.push(ty);
+        self.var_names.push(None);
+        id
+    }
+
+    fn push_named(&mut self, ty: Type, name: Option<String>) -> VarId {
+        let id = VarId(self.vars.len());
+        self.vars.push(ty);
+        self.var_names.push(name);
         id
     }
 }
