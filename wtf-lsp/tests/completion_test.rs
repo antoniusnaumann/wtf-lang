@@ -857,5 +857,34 @@ func test() {
                 }
             });
         assert!(mutable_action.is_some(), "Should offer make variable mutable fix");
+        
+        // Verify the shadowing action produces the correct text edit
+        if let Some(shadow_action) = shadow_action {
+            if let CodeActionOrCommand::CodeAction(ca) = shadow_action {
+                if let Some(edit) = &ca.edit {
+                    if let Some(changes) = &edit.changes {
+                        if let Some(text_edits) = changes.get(&uri) {
+                            assert_eq!(text_edits.len(), 1, "Should have exactly one text edit");
+                            let text_edit = &text_edits[0];
+                            
+                            // Verify the range covers the entire assignment line
+                            assert_eq!(text_edit.range.start.line, assignment_line as u32, "Range should be on assignment line");
+                            assert_eq!(text_edit.range.start.character, 0, "Range should start at beginning of line");
+                            assert_eq!(text_edit.range.end.line, assignment_line as u32, "Range should end on assignment line");
+                            assert_eq!(text_edit.range.end.character, lines[assignment_line].len() as u32, "Range should end at end of line");
+                            
+                            // Verify the replacement text
+                            let expected_text = format!("let {}", lines[assignment_line]);
+                            assert_eq!(text_edit.new_text, expected_text, "Replacement text should prepend 'let ' to the assignment");
+                            
+                            println!("✅ Shadowing action text edit verified:");
+                            println!("   Range: {:?}", text_edit.range);
+                            println!("   Original: '{}'", lines[assignment_line]);
+                            println!("   Replacement: '{}'", text_edit.new_text);
+                        }
+                    }
+                }
+            }
+        }
     }
 }

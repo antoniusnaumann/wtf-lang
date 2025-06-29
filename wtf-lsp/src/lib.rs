@@ -275,6 +275,7 @@ impl LanguageServer for Backend {
 #[cfg(test)]
 mod tests {
     use wtf_ast::{TypeAnnotation, TypeAnnotationKind};
+    use crate::Backend;
 
     #[tokio::test]
     async fn test_keyword_mappings_logic() {

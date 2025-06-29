@@ -613,9 +613,11 @@ impl Backend {
                                 edit: Some(WorkspaceEdit {
                                     changes: Some({
                                         let mut changes = HashMap::new();
+                                        // Calculate the correct range for the assignment line
+                                        // We want to replace the entire line content, not the entire file
                                         let assignment_range = Range::new(
-                                            Position::new(range.start.line, line_start as u32),
-                                            Position::new(range.start.line, line_end as u32)
+                                            Position::new(range.start.line, 0),
+                                            Position::new(range.start.line, (line_end - line_start) as u32)
                                         );
                                         let new_text = format!("let {}", line_text);
                                         changes.insert(uri.clone(), vec![TextEdit {
