@@ -357,6 +357,16 @@ impl Backend {
                         if let Some(close_paren) = after_dot.rfind(')') {
                             let args_text = &after_dot[paren_pos + 1..close_paren].trim();
                             
+                            // Calculate the start position of the receiver
+                            let receiver_start = if let Some(space_pos) = before_dot.rfind(char::is_whitespace) {
+                                space_pos + 1
+                            } else {
+                                0
+                            };
+                            
+                            // Calculate the end position (after the closing parenthesis)
+                            let expr_end = absolute_dot_pos + 1 + close_paren + 1;
+                            
                             best_match = Some(MethodCallInfo {
                                 receiver: receiver.to_string(),
                                 method_name: method_name.to_string(),
@@ -365,7 +375,9 @@ impl Backend {
                                 } else { 
                                     args_text.split(',').map(|s| s.trim().to_string()).collect() 
                                 },
-                                full_text: line_text.to_string(),
+                                full_text: line_text[receiver_start..expr_end].to_string(),
+                                start_col: receiver_start,
+                                end_col: expr_end,
                             });
                         }
                     }
@@ -424,10 +436,22 @@ impl Backend {
             return None;
         }
         
+        // Calculate the start position of the function name
+        let function_start = if let Some(space_pos) = before_paren.rfind(char::is_whitespace) {
+            space_pos + 1
+        } else {
+            0
+        };
+        
+        // End position is after the closing parenthesis
+        let expr_end = close_paren + 1;
+        
         Some(FunctionCallInfo {
             function_name: function_name.to_string(),
             arguments,
-            full_text: line_text.to_string(),
+            full_text: line_text[function_start..expr_end].to_string(),
+            start_col: function_start,
+            end_col: expr_end,
         })
     }
 
@@ -442,8 +466,14 @@ impl Backend {
             format!("{}({})", method_call.method_name, new_args.join(", "))
         };
         
+        // Calculate the proper range for the method call expression
+        let expression_range = Range::new(
+            Position::new(range.start.line, method_call.start_col as u32),
+            Position::new(range.start.line, method_call.end_col as u32)
+        );
+        
         let text_edit = TextEdit {
-            range: *range,
+            range: expression_range,
             new_text,
         };
         
@@ -477,8 +507,14 @@ impl Backend {
             format!("{}.{}({})", receiver, function_call.function_name, remaining_args.join(", "))
         };
         
+        // Calculate the proper range for the function call expression
+        let expression_range = Range::new(
+            Position::new(range.start.line, function_call.start_col as u32),
+            Position::new(range.start.line, function_call.end_col as u32)
+        );
+        
         let text_edit = TextEdit {
-            range: *range,
+            range: expression_range,
             new_text,
         };
         
@@ -619,7 +655,13 @@ impl Backend {
                                             Position::new(range.start.line, 0),
                                             Position::new(range.start.line, (line_end - line_start) as u32)
                                         );
-                                        let new_text = format!("let {}", line_text);
+                                        
+                                        // Extract indentation from the original line and preserve it
+                                        let indent_end = line_text.len() - line_text.trim_start().len();
+                                        let indentation = &line_text[..indent_end];
+                                        let assignment_part = line_text.trim_start();
+                                        let new_text = format!("{}let {}", indentation, assignment_part);
+                                        
                                         changes.insert(uri.clone(), vec![TextEdit {
                                             range: assignment_range,
                                             new_text,
@@ -711,6 +753,8 @@ struct MethodCallInfo {
     method_name: String,
     arguments: Vec<String>,
     full_text: String,
+    start_col: usize,
+    end_col: usize,
 }
 
 #[derive(Debug)]
@@ -718,6 +762,8 @@ struct FunctionCallInfo {
     function_name: String,
     arguments: Vec<String>,
     full_text: String,
+    start_col: usize,
+    end_col: usize,
 }
 
 #[derive(Debug)]
