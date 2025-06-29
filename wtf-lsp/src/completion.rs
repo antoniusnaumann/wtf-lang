@@ -159,6 +159,11 @@ impl Backend {
         
         let mut completions = Vec::new();
         
+        // Check if we're at the top level and add keyword completions
+        if self.is_top_level_context(text, position) {
+            completions.extend(self.get_top_level_keyword_completions());
+        }
+        
         // Add function names
         for declaration in &ast.declarations {
             if let wtf_ast::Declaration::Function(func) = declaration {
@@ -249,14 +254,14 @@ impl Backend {
         trimmed.chars().all(|c| c.is_alphanumeric() || c == '_') && !trimmed.is_empty()
     }
 
-    async fn get_variables_in_scope(&self, position: Position, uri: &Url) -> Option<Vec<(String, String)>> {
+    async fn get_variables_in_scope(&self, _position: Position, uri: &Url) -> Option<Vec<(String, String)>> {
         let hir_cache = self.hir_cache.read().await;
         let hir = hir_cache.get(uri)?;
         
         let mut variables = Vec::new();
         
         // Get variables from all functions (simplified - doesn't handle scope properly)
-        for (func_name, function) in &hir.functions {
+        for (_func_name, function) in &hir.functions {
             // Add function parameters
             for param in &function.parameters {
                 let type_str = format!("{:?}", param.ty); // Simple type representation
@@ -273,6 +278,83 @@ impl Backend {
         }
         
         Some(variables)
+    }
+
+    fn is_top_level_context(&self, text: &str, position: Position) -> bool {
+        let chars: Vec<char> = text.chars().collect();
+        let line_start = self.find_line_start(position.line, &chars);
+        
+        // Check if we're at the beginning of the file or after a top-level declaration
+        // Simple heuristic: if we're not inside braces at line start, we're at top level
+        let before_line: String = chars[..line_start].iter().collect();
+        
+        // Count braces to determine nesting level
+        let mut brace_count = 0;
+        let mut in_string = false;
+        let mut escape_next = false;
+        
+        for ch in before_line.chars() {
+            if escape_next {
+                escape_next = false;
+                continue;
+            }
+            
+            match ch {
+                '\\' if in_string => escape_next = true,
+                '"' => in_string = !in_string,
+                '{' if !in_string => brace_count += 1,
+                '}' if !in_string => brace_count -= 1,
+                _ => {}
+            }
+        }
+        
+        // We're at top level if brace count is 0
+        brace_count == 0
+    }
+
+    fn get_top_level_keyword_completions(&self) -> Vec<CompletionItem> {
+        vec![
+            CompletionItem {
+                label: "func".to_string(),
+                kind: Some(CompletionItemKind::KEYWORD),
+                detail: Some("Function declaration".to_string()),
+                insert_text: Some("func $1($2) {\n    $0\n}".to_string()),
+                insert_text_format: Some(InsertTextFormat::SNIPPET),
+                ..Default::default()
+            },
+            CompletionItem {
+                label: "record".to_string(),
+                kind: Some(CompletionItemKind::KEYWORD),
+                detail: Some("Record type declaration".to_string()),
+                insert_text: Some("record $1 {\n    $0\n}".to_string()),
+                insert_text_format: Some(InsertTextFormat::SNIPPET),
+                ..Default::default()
+            },
+            CompletionItem {
+                label: "resource".to_string(),
+                kind: Some(CompletionItemKind::KEYWORD),
+                detail: Some("Resource type declaration".to_string()),
+                insert_text: Some("resource $1 {\n    $0\n}".to_string()),
+                insert_text_format: Some(InsertTextFormat::SNIPPET),
+                ..Default::default()
+            },
+            CompletionItem {
+                label: "enum".to_string(),
+                kind: Some(CompletionItemKind::KEYWORD),
+                detail: Some("Enum declaration".to_string()),
+                insert_text: Some("enum $1 {\n    $0\n}".to_string()),
+                insert_text_format: Some(InsertTextFormat::SNIPPET),
+                ..Default::default()
+            },
+            CompletionItem {
+                label: "variant".to_string(),
+                kind: Some(CompletionItemKind::KEYWORD),
+                detail: Some("Variant declaration".to_string()),
+                insert_text: Some("variant $1 {\n    $0\n}".to_string()),
+                insert_text_format: Some(InsertTextFormat::SNIPPET),
+                ..Default::default()
+            },
+        ]
     }
 
 

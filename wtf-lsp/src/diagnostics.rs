@@ -139,24 +139,4 @@ impl Backend {
         
         Position::new(line as u32, character as u32)
     }
-
-    pub fn position_to_byte(&self, position: Position, chars: &[char]) -> usize {
-        let mut current_line = 0;
-        let mut current_character = 0;
-        
-        for (i, &ch) in chars.iter().enumerate() {
-            if current_line == position.line && current_character == position.character {
-                return i;
-            }
-            
-            if ch == '\n' {
-                current_line += 1;
-                current_character = 0;
-            } else {
-                current_character += 1;
-            }
-        }
-        
-        chars.len()
-    }
 }

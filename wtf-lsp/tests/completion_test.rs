@@ -688,3 +688,174 @@ func main() {
         panic!("Expected completions for structural typing test");
     }
 }
+
+#[tokio::test]
+async fn test_new_features() {
+    // Test all three new features requested:
+    // 1. Top-level keyword completion
+    // 2. Let/var transformation actions
+    // 3. Assignment to immutable variable fixes
+    
+    let code = r#"// Test top-level context for keyword completion
+
+let x = 5
+x = 10  // This should trigger assignment to immutable actions
+
+func test() {
+    var y = 20
+    let z = 30
+}
+"#;
+
+    let (service, _socket) = LspService::new(|client| Backend::new(client));
+    let backend = service.inner();
+    let uri = Url::parse("file:///test_new_features.wtf").unwrap();
+    
+    let did_open_params = DidOpenTextDocumentParams {
+        text_document: TextDocumentItem {
+            uri: uri.clone(),
+            language_id: "wtf".to_string(),
+            version: 1,
+            text: code.to_string(),
+        },
+    };
+    backend.did_open(did_open_params).await;
+    
+    // Test 1: Top-level keyword completion
+    let position = Position::new(0, 0); // At the beginning of the file
+    let completion_params = CompletionParams {
+        text_document_position: TextDocumentPositionParams {
+            text_document: TextDocumentIdentifier { uri: uri.clone() },
+            position,
+        },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+        context: None,
+    };
+    
+    let completion_result = backend.completion(completion_params).await.unwrap();
+    if let Some(CompletionResponse::Array(completions)) = completion_result {
+        let keyword_completions: Vec<_> = completions.iter()
+            .filter(|c| c.kind == Some(CompletionItemKind::KEYWORD))
+            .collect();
+        
+        assert!(!keyword_completions.is_empty(), "Should have keyword completions at top level");
+        
+        let func_completion = keyword_completions.iter()
+            .find(|c| c.label == "func");
+        assert!(func_completion.is_some(), "Should suggest 'func' keyword at top level");
+        
+        let record_completion = keyword_completions.iter()
+            .find(|c| c.label == "record");
+        assert!(record_completion.is_some(), "Should suggest 'record' keyword at top level");
+    }
+    
+    // Test 2: Let/var transformation actions
+    let lines: Vec<&str> = code.lines().collect();
+    let var_line = lines.iter().position(|line| line.trim().starts_with("var y")).unwrap();
+    let let_line = lines.iter().position(|line| line.trim().starts_with("let z")).unwrap();
+    
+    // Test var to let transformation
+    let var_range = Range::new(
+        Position::new(var_line as u32, 4), // Position of 'var'
+        Position::new(var_line as u32, 7)
+    );
+    
+    let code_action_params = CodeActionParams {
+        text_document: TextDocumentIdentifier { uri: uri.clone() },
+        range: var_range,
+        context: CodeActionContext {
+            diagnostics: vec![],
+            only: None,
+            trigger_kind: None,
+        },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+    };
+    
+    let code_actions = backend.code_action(code_action_params).await.unwrap();
+    if let Some(actions) = code_actions {
+        let var_to_let_action = actions.iter()
+            .find(|action| {
+                if let CodeActionOrCommand::CodeAction(ca) = action {
+                    ca.title.contains("Change 'var' to 'let'")
+                } else {
+                    false
+                }
+            });
+        assert!(var_to_let_action.is_some(), "Should offer var to let transformation");
+    }
+    
+    // Test let to var transformation  
+    let let_range = Range::new(
+        Position::new(let_line as u32, 4), // Position of 'let'
+        Position::new(let_line as u32, 7)
+    );
+    
+    let code_action_params = CodeActionParams {
+        text_document: TextDocumentIdentifier { uri: uri.clone() },
+        range: let_range,
+        context: CodeActionContext {
+            diagnostics: vec![],
+            only: None,
+            trigger_kind: None,
+        },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+    };
+    
+    let code_actions = backend.code_action(code_action_params).await.unwrap();
+    if let Some(actions) = code_actions {
+        let let_to_var_action = actions.iter()
+            .find(|action| {
+                if let CodeActionOrCommand::CodeAction(ca) = action {
+                    ca.title.contains("Change 'let' to 'var'")
+                } else {
+                    false
+                }
+            });
+        assert!(let_to_var_action.is_some(), "Should offer let to var transformation");
+    }
+    
+    // Test 3: Assignment to immutable variable fixes
+    let assignment_line = lines.iter().position(|line| line.contains("x = 10")).unwrap();
+    let assignment_range = Range::new(
+        Position::new(assignment_line as u32, 0),
+        Position::new(assignment_line as u32, lines[assignment_line].len() as u32)
+    );
+    
+    let code_action_params = CodeActionParams {
+        text_document: TextDocumentIdentifier { uri: uri.clone() },
+        range: assignment_range,
+        context: CodeActionContext {
+            diagnostics: vec![],
+            only: None,
+            trigger_kind: None,
+        },
+        work_done_progress_params: WorkDoneProgressParams::default(),
+        partial_result_params: PartialResultParams::default(),
+    };
+    
+    let code_actions = backend.code_action(code_action_params).await.unwrap();
+    if let Some(actions) = code_actions {
+        let shadow_action = actions.iter()
+            .find(|action| {
+                if let CodeActionOrCommand::CodeAction(ca) = action {
+                    ca.title.contains("variable declaration") && ca.title.contains("shadow")
+                } else {
+                    false
+                }
+            });
+        assert!(shadow_action.is_some(), "Should offer shadowing assignment fix");
+        
+        let mutable_action = actions.iter()
+            .find(|action| {
+                if let CodeActionOrCommand::CodeAction(ca) = action {
+                    ca.title.contains("mutable") && ca.title.contains("'x'")
+                } else {
+                    false
+                }
+            });
+        assert!(mutable_action.is_some(), "Should offer make variable mutable fix");
+    }
+}

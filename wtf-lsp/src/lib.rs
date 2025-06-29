@@ -189,6 +189,25 @@ impl Backend {
         }
         chars.len()
     }
+
+    pub fn position_to_byte(&self, position: Position, chars: &[char]) -> usize {
+        let line_start = self.find_line_start(position.line, chars);
+        let mut byte_pos = line_start;
+        let mut char_count = 0;
+        
+        for &ch in &chars[line_start..] {
+            if char_count >= position.character as usize {
+                break;
+            }
+            if ch == '\n' {
+                break;
+            }
+            byte_pos += 1;
+            char_count += 1;
+        }
+        
+        byte_pos.min(chars.len())
+    }
 }
 
 #[tower_lsp::async_trait]
@@ -255,16 +274,13 @@ impl LanguageServer for Backend {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use tower_lsp::lsp_types::*;
-    use tower_lsp::LspService;
     use wtf_ast::{TypeAnnotation, TypeAnnotationKind};
 
     #[tokio::test]
     async fn test_keyword_mappings_logic() {
         // Create a mock client for testing
-        let (service, socket) = tower_lsp::LspService::new(|client| Backend::new(client));
-        let backend = service.inner().clone();
+        let (_service, _socket) = tower_lsp::LspService::new(|client| Backend::new(client));
+        let backend = _service.inner();
         let mappings = backend.get_keyword_mappings();
         
         // Test some basic mappings
@@ -278,8 +294,8 @@ mod tests {
     #[test]
     fn test_type_annotation_formatting() {
         // Create a mock client for testing
-        let (service, socket) = tower_lsp::LspService::new(|client| Backend::new(client));
-        let backend = service.inner().clone();
+        let (_service, _socket) = tower_lsp::LspService::new(|client| Backend::new(client));
+        let backend = _service.inner();
         
         let simple_annotation = TypeAnnotation {
             kind: TypeAnnotationKind::Simple("String".to_string()),

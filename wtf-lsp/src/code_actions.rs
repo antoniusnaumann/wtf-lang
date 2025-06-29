@@ -23,6 +23,16 @@ impl Backend {
             all_actions.append(&mut ufcs_actions);
         }
         
+        // Add let/var transformation actions (not dependent on diagnostics)
+        if let Some(mut var_actions) = self.generate_variable_mutability_actions(&params.range, text, uri).await {
+            all_actions.append(&mut var_actions);
+        }
+        
+        // Add assignment to immutable variable fixes
+        if let Some(mut assignment_actions) = self.generate_assignment_to_immutable_actions(&params.range, text, uri).await {
+            all_actions.append(&mut assignment_actions);
+        }
+        
         if all_actions.is_empty() {
             None
         } else {
@@ -487,6 +497,209 @@ impl Backend {
         }))
     }
 
+    async fn generate_variable_mutability_actions(&self, range: &Range, text: &str, uri: &Url) -> Option<Vec<CodeActionOrCommand>> {
+        let chars: Vec<char> = text.chars().collect();
+        let line_start = self.find_line_start(range.start.line, &chars);
+        let line_end = self.find_line_end(range.start.line, &chars);
+        
+        if line_end <= line_start {
+            return None;
+        }
+        
+        let line_text: String = chars[line_start..line_end].iter().collect();
+        let mut actions = Vec::new();
+        
+        // Check if the line contains a variable declaration with let or var
+        if let Some(let_pos) = line_text.find("let ") {
+            // Check if the cursor is on or near the let keyword
+            let let_line_pos = let_pos as u32;
+            if range.start.character <= let_line_pos + 3 && range.end.character >= let_line_pos {
+                // Offer to change let to var
+                let action = CodeActionOrCommand::CodeAction(CodeAction {
+                    title: "Change 'let' to 'var'".to_string(),
+                    kind: Some(CodeActionKind::REFACTOR_REWRITE),
+                    edit: Some(WorkspaceEdit {
+                        changes: Some({
+                            let mut changes = HashMap::new();
+                            let var_range = Range::new(
+                                Position::new(range.start.line, let_line_pos),
+                                Position::new(range.start.line, let_line_pos + 3)
+                            );
+                            changes.insert(uri.clone(), vec![TextEdit {
+                                range: var_range,
+                                new_text: "var".to_string(),
+                            }]);
+                            changes
+                        }),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                });
+                actions.push(action);
+            }
+        }
+        
+        if let Some(var_pos) = line_text.find("var ") {
+            // Check if the cursor is on or near the var keyword
+            let var_line_pos = var_pos as u32;
+            if range.start.character <= var_line_pos + 3 && range.end.character >= var_line_pos {
+                // Offer to change var to let
+                let action = CodeActionOrCommand::CodeAction(CodeAction {
+                    title: "Change 'var' to 'let'".to_string(),
+                    kind: Some(CodeActionKind::REFACTOR_REWRITE),
+                    edit: Some(WorkspaceEdit {
+                        changes: Some({
+                            let mut changes = HashMap::new();
+                            let let_range = Range::new(
+                                Position::new(range.start.line, var_line_pos),
+                                Position::new(range.start.line, var_line_pos + 3)
+                            );
+                            changes.insert(uri.clone(), vec![TextEdit {
+                                range: let_range,
+                                new_text: "let".to_string(),
+                            }]);
+                            changes
+                        }),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                });
+                actions.push(action);
+            }
+        }
+        
+        if actions.is_empty() {
+            None
+        } else {
+            Some(actions)
+        }
+    }
+
+    async fn generate_assignment_to_immutable_actions(&self, range: &Range, text: &str, uri: &Url) -> Option<Vec<CodeActionOrCommand>> {
+        let chars: Vec<char> = text.chars().collect();
+        let line_start = self.find_line_start(range.start.line, &chars);
+        let line_end = self.find_line_end(range.start.line, &chars);
+        
+        if line_end <= line_start {
+            return None;
+        }
+        
+        let line_text: String = chars[line_start..line_end].iter().collect();
+        
+        // Look for assignment pattern: identifier = value
+        if let Some(equals_pos) = line_text.find(" = ") {
+            let before_equals = line_text[..equals_pos].trim();
+            
+            // Check if this looks like a simple assignment (not a declaration)
+            if !before_equals.contains("let") && !before_equals.contains("var") {
+                // Extract the variable name
+                let var_name = if let Some(space_pos) = before_equals.rfind(char::is_whitespace) {
+                    before_equals[space_pos..].trim()
+                } else {
+                    before_equals
+                };
+                
+                // Check if variable name is valid
+                if var_name.chars().all(|c| c.is_alphanumeric() || c == '_') && !var_name.is_empty() {
+                    // Look for the original declaration of this variable in the text
+                    if let Some(declaration_info) = self.find_variable_declaration(text, var_name) {
+                        if declaration_info.is_immutable {
+                            let mut actions = Vec::new();
+                            
+                            // Action 1: Change assignment to variable declaration (shadowing)
+                            let shadow_action = CodeActionOrCommand::CodeAction(CodeAction {
+                                title: format!("Change assignment to variable declaration (shadow '{}')", var_name),
+                                kind: Some(CodeActionKind::QUICKFIX),
+                                edit: Some(WorkspaceEdit {
+                                    changes: Some({
+                                        let mut changes = HashMap::new();
+                                        let assignment_range = Range::new(
+                                            Position::new(range.start.line, line_start as u32),
+                                            Position::new(range.start.line, line_end as u32)
+                                        );
+                                        let new_text = format!("let {}", line_text);
+                                        changes.insert(uri.clone(), vec![TextEdit {
+                                            range: assignment_range,
+                                            new_text,
+                                        }]);
+                                        changes
+                                    }),
+                                    ..Default::default()
+                                }),
+                                ..Default::default()
+                            });
+                            actions.push(shadow_action);
+                            
+                            // Action 2: Make original variable mutable
+                            let mutable_action = CodeActionOrCommand::CodeAction(CodeAction {
+                                title: format!("Make '{}' mutable (change 'let' to 'var')", var_name),
+                                kind: Some(CodeActionKind::QUICKFIX),
+                                edit: Some(WorkspaceEdit {
+                                    changes: Some({
+                                        let mut changes = HashMap::new();
+                                        let let_range = Range::new(
+                                            Position::new(declaration_info.line, declaration_info.let_start_col),
+                                            Position::new(declaration_info.line, declaration_info.let_start_col + 3)
+                                        );
+                                        changes.insert(uri.clone(), vec![TextEdit {
+                                            range: let_range,
+                                            new_text: "var".to_string(),
+                                        }]);
+                                        changes
+                                    }),
+                                    ..Default::default()
+                                }),
+                                ..Default::default()
+                            });
+                            actions.push(mutable_action);
+                            
+                            return Some(actions);
+                        }
+                    }
+                }
+            }
+        }
+        
+        None
+    }
+
+    fn find_variable_declaration(&self, text: &str, var_name: &str) -> Option<VariableDeclarationInfo> {
+        let lines: Vec<&str> = text.lines().collect();
+        
+        for (line_num, line) in lines.iter().enumerate() {
+            // Look for patterns like "let var_name = " or "var var_name = "
+            if let Some(let_pos) = line.find("let ") {
+                let after_let = &line[let_pos + 4..];
+                if let Some(equals_pos) = after_let.find(" = ") {
+                    let declared_name = after_let[..equals_pos].trim();
+                    if declared_name == var_name {
+                        return Some(VariableDeclarationInfo {
+                            line: line_num as u32,
+                            let_start_col: let_pos as u32,
+                            is_immutable: true,
+                        });
+                    }
+                }
+            }
+            
+            if let Some(var_pos) = line.find("var ") {
+                let after_var = &line[var_pos + 4..];
+                if let Some(equals_pos) = after_var.find(" = ") {
+                    let declared_name = after_var[..equals_pos].trim();
+                    if declared_name == var_name {
+                        return Some(VariableDeclarationInfo {
+                            line: line_num as u32,
+                            let_start_col: var_pos as u32,
+                            is_immutable: false,
+                        });
+                    }
+                }
+            }
+        }
+        
+        None
+    }
+
 
 }
 
@@ -503,4 +716,11 @@ struct FunctionCallInfo {
     function_name: String,
     arguments: Vec<String>,
     full_text: String,
+}
+
+#[derive(Debug)]
+struct VariableDeclarationInfo {
+    line: u32,
+    let_start_col: u32,
+    is_immutable: bool,
 }
